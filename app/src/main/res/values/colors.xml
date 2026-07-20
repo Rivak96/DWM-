@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tesla-inspired neutral dark palette: near-black, flat gray surfaces,
+         white text, gray secondary, colour reserved for interactive accents. -->
+    <color name="bg">#292B2E</color>
+    <color name="surface">#3B3E43</color>
+    <color name="accent">#3E6AE1</color>
+    <color name="accent2">#8E8E93</color>
+    <color name="textPrimary">#F2F2F2</color>
+    <color name="textDim">#A5A8AD</color>
+</resources>

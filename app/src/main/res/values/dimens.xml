@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Google Design-for-Driving: min touch target 76dp, spacing >= 24dp. -->
+    <dimen name="touch_min">76dp</dimen>
+    <dimen name="gap">18dp</dimen>
+    <dimen name="dock_icon">52dp</dimen>
+    <dimen name="drawer_icon">52dp</dimen>
+    <dimen name="tile_height">104dp</dimen>
+</resources>

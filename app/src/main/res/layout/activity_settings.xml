@@ -1,0 +1,433 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <!-- Tesla-style left sidebar -->
+    <LinearLayout
+        android:layout_width="185dp"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingEnd="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="12dp"
+            android:paddingBottom="14dp"
+            android:tag="accent"
+            android:text="Settings"
+            android:textColor="@color/textPrimary"
+            android:textSize="17sp" />
+
+        <Button android:id="@+id/navDisplay" style="@style/NavItem" android:text="Display" />
+        <Button android:id="@+id/navCockpit" style="@style/NavItem" android:text="Cockpit" />
+        <Button android:id="@+id/navOverlay" style="@style/NavItem" android:text="Overlay" />
+        <Button android:id="@+id/navVehicle" style="@style/NavItem" android:text="Vehicle" />
+        <Button android:id="@+id/navSystem" style="@style/NavItem" android:text="System" />
+        <Button android:id="@+id/navAbout" style="@style/NavItem" android:text="About" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <Button
+            android:id="@+id/close"
+            style="@style/ChipButton"
+            android:layout_marginStart="0dp"
+            android:text="Close" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:background="#14FFFFFF" />
+
+    <!-- Content pane -->
+    <ScrollView
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="18dp"
+            android:paddingEnd="4dp">
+
+            <!-- DISPLAY -->
+            <LinearLayout
+                android:id="@+id/secDisplay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView style="@style/SectionHeader" android:text="Theme" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btnThemeTesla" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Tesla" />
+                    <Button android:id="@+id/btnThemeMidnight" style="@style/ChipButton" android:text="Midnight" />
+                    <Button android:id="@+id/btnThemeLight" style="@style/ChipButton" android:text="Light" />
+                </LinearLayout>
+
+                <TextView style="@style/SectionHeader" android:text="Accent colour" />
+
+                <LinearLayout
+                    android:id="@+id/accentRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingBottom="4dp" />
+
+                <TextView style="@style/SectionHeader" android:text="Wallpaper" />
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <Button android:id="@+id/btnWallDefault" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Flat" />
+                        <Button android:id="@+id/btnWallBlue" style="@style/ChipButton" android:text="Midnight" />
+                        <Button android:id="@+id/btnWallCarbon" style="@style/ChipButton" android:text="Carbon" />
+                        <Button android:id="@+id/btnWallCustom" style="@style/ChipButton" android:text="Pick image…" />
+                    </LinearLayout>
+                </HorizontalScrollView>
+
+                <TextView style="@style/SectionHeader" android:text="Text size" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btnTextCompact" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Compact" />
+                    <Button android:id="@+id/btnTextNormal" style="@style/ChipButton" android:text="Normal" />
+                    <Button android:id="@+id/btnTextLarge" style="@style/ChipButton" android:text="Large" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- COCKPIT -->
+            <LinearLayout
+                android:id="@+id/secCockpit"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView style="@style/SectionHeader" android:text="Cockpit mode" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btnModeDash" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Dashboard" />
+                    <Button android:id="@+id/btnModeOverlay" style="@style/ChipButton" android:text="Solo + overlays" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/modeHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="8dp"
+                    android:text=""
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+
+                <TextView style="@style/SectionHeader" android:text="Startup" />
+
+                <Switch
+                    android:id="@+id/swAutoLoad"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="44dp"
+                    android:text="Auto-load cockpit windows on start"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <TextView style="@style/SectionHeader" android:text="CarPlay" />
+
+                <TextView
+                    android:id="@+id/carplayLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="CarPlay app: not set"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <Button android:id="@+id/btnCarplay" style="@style/ChipButton" android:layout_marginStart="0dp" android:layout_marginTop="8dp" android:text="Pick CarPlay app" />
+
+                <TextView style="@style/SectionHeader" android:text="Favourite apps" />
+
+                <Switch
+                    android:id="@+id/swFavGrid"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="44dp"
+                    android:text="Show favourites grid on home"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <Button android:id="@+id/btnManageFavs" style="@style/ChipButton" android:layout_marginStart="0dp" android:layout_marginTop="4dp" android:text="Manage favourites" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="8dp"
+                    android:text="The favourites you save here show as a big grid on the DWM home screen and in the dock. Long-press any icon on home to reorder or remove."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+
+                <TextView style="@style/SectionHeader" android:text="Window title-bar fix" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btnCompOff" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Off" />
+                    <Button android:id="@+id/btnCompSmall" style="@style/ChipButton" android:text="Small" />
+                    <Button android:id="@+id/btnCompMed" style="@style/ChipButton" android:text="Medium" />
+                    <Button android:id="@+id/btnCompLarge" style="@style/ChipButton" android:text="Large" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="8dp"
+                    android:text="Windowed apps get a system title bar that crops their bottom edge (e.g. CarPlay's play/pause row). This grows each window to compensate — increase it if bottoms are still cut off. Fullscreen base apps are never affected."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <!-- OVERLAY -->
+            <LinearLayout
+                android:id="@+id/secOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView style="@style/SectionHeader" android:text="Floating pill" />
+
+                <Switch
+                    android:id="@+id/swOverlay"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="44dp"
+                    android:text="Start floating pill on launch / boot"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingTop="6dp">
+
+                    <Button android:id="@+id/btnGrantOverlay" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Grant overlay" />
+                    <Button android:id="@+id/btnStartOverlay" style="@style/ChipButton" android:text="Start" />
+                    <Button android:id="@+id/btnStopOverlay" style="@style/ChipButton" android:text="Stop" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="8dp"
+                    android:text="The pill floats over CarPlay. Tap it for clock + favourite apps in floating windows; drag to move — it snaps to the edge."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+
+                <TextView style="@style/SectionHeader" android:text="Overlay panels" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btnPanelsOn" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Show over apps" />
+                    <Button android:id="@+id/btnPanelsOff" style="@style/ChipButton" android:text="Hide" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="8dp"
+                    android:text="Floats your gauges, camera and web panels ON TOP of everything — e.g. CarPlay fullscreen with the front camera and TPMS overlaid. Drag the blue MOVE grip (top-left) to reposition and the RESIZE grip (bottom-right) to size — changes save automatically."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+
+                <TextView style="@style/SectionHeader" android:text="Keep app windows on top" />
+
+                <Switch
+                    android:id="@+id/swPinWindows"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="44dp"
+                    android:text="Auto-raise app windows above the fullscreen app"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <Button android:id="@+id/btnRaiseNow" style="@style/ChipButton" android:layout_marginStart="0dp" android:layout_marginTop="4dp" android:text="Raise windows now" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="8dp"
+                    android:text="A windowed app (e.g. the AUX camera) sinks behind the fullscreen app when you tap it. Auto-raise brings it back every few seconds (it may briefly steal focus). True overlay panels — gauges, and the Camera2 live camera if your deck exposes it — never sink and don't need this."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <!-- VEHICLE -->
+            <LinearLayout
+                android:id="@+id/secVehicle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView style="@style/SectionHeader" android:text="OBD-II engine data" />
+
+                <TextView
+                    android:id="@+id/obdLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="OBD dongle: not set"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <Button android:id="@+id/btnObdPick" style="@style/ChipButton" android:layout_marginStart="0dp" android:layout_marginTop="8dp" android:text="Pick paired OBD dongle" />
+
+                <TextView style="@style/SectionHeader" android:text="Cameras" />
+
+                <Button android:id="@+id/btnCamScan" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Scan camera inputs" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="8dp"
+                    android:text="Wired analog cameras usually show through the deck's AUX app — add a 'Camera app (AUX)' panel in the layout editor."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <!-- SYSTEM -->
+            <LinearLayout
+                android:id="@+id/secSystem"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView style="@style/SectionHeader" android:text="Android settings" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btnBt" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Bluetooth" />
+                    <Button android:id="@+id/btnWifi" style="@style/ChipButton" android:text="Wi-Fi" />
+                    <Button android:id="@+id/btnDisplay" style="@style/ChipButton" android:text="Display" />
+                    <Button android:id="@+id/btnAllSettings" style="@style/ChipButton" android:text="All settings" />
+                </LinearLayout>
+
+                <TextView style="@style/SectionHeader" android:text="Launcher" />
+
+                <Button
+                    android:id="@+id/btnDefaultLauncher"
+                    style="@style/ChipButton"
+                    android:layout_marginStart="0dp"
+                    android:text="Set DWM as default launcher" />
+            </LinearLayout>
+
+            <!-- ABOUT -->
+            <LinearLayout
+                android:id="@+id/secAbout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView style="@style/SectionHeader" android:text="Updates" />
+
+                <TextView
+                    android:id="@+id/updateStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingTop="6dp">
+
+                    <Button android:id="@+id/btnCheckUpdate" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Check for updates" />
+                    <Button android:id="@+id/btnUpdateRepo" style="@style/ChipButton" android:text="Set update repo" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/swAutoUpdate"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:minHeight="44dp"
+                    android:text="Check for updates automatically on start"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="4dp"
+                    android:text="Updates download from your GitHub repo. Android shows a final install confirmation (silent installs need root). You'll be asked once to allow DWM to install apps."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+
+                <TextView style="@style/SectionHeader" android:text="Diagnostics" />
+
+                <TextView
+                    android:id="@+id/diagnostics"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="#10FFFFFF"
+                    android:fontFamily="monospace"
+                    android:padding="10dp"
+                    android:text=""
+                    android:textColor="@color/textPrimary"
+                    android:textSize="11sp" />
+
+                <TextView style="@style/SectionHeader" android:text="About" />
+
+                <TextView
+                    android:id="@+id/aboutText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingBottom="16dp"
+                    android:text="DWM Cockpit"
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

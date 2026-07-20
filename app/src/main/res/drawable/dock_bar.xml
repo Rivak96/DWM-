@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Tesla-style bottom bar: flat translucent black with a hairline top edge. -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#E0101013" />
+        </shape>
+    </item>
+    <item android:gravity="top">
+        <shape android:shape="rectangle">
+            <size android:height="1dp" />
+            <solid android:color="#1AFFFFFF" />
+        </shape>
+    </item>
+</layer-list>

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.DWM" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:textColorPrimary">@color/textPrimary</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowAnimationStyle">@style/DwmWindowAnim</item>
+    </style>
+
+    <style name="DwmWindowAnim" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/fade_in</item>
+        <item name="android:activityOpenExitAnimation">@anim/fade_out</item>
+        <item name="android:activityCloseEnterAnimation">@anim/fade_in</item>
+        <item name="android:activityCloseExitAnimation">@anim/fade_out</item>
+    </style>
+
+    <style name="BigTile">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">@dimen/tile_height</item>
+        <item name="android:minWidth">150dp</item>
+        <item name="android:layout_margin">10dp</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:textColor">@color/textPrimary</item>
+        <item name="android:background">@drawable/tile_button</item>
+    </style>
+
+    <style name="ChipButton">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">42dp</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:textColor">@color/textPrimary</item>
+        <item name="android:background">@drawable/chip_bg</item>
+    </style>
+
+    <!-- Floating top-cluster icon button; ripple + tint applied in code. -->
+    <style name="TopIcon">
+        <item name="android:layout_width">46dp</item>
+        <item name="android:layout_height">46dp</item>
+        <item name="android:background">@android:color/transparent</item>
+        <item name="android:scaleType">centerInside</item>
+        <item name="android:padding">11dp</item>
+    </style>
+
+    <!-- Tesla settings-sidebar item; final look applied in code (selection state). -->
+    <style name="NavItem">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">44dp</item>
+        <item name="android:gravity">start|center_vertical</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+        <item name="android:layout_marginBottom">2dp</item>
+        <item name="android:textColor">@color/textDim</item>
+        <item name="android:background">@android:color/transparent</item>
+    </style>
+
+    <!-- Tesla-style section label: gray, caps, letter-spaced. -->
+    <style name="SectionHeader">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">20dp</item>
+        <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.1</item>
+        <item name="android:textColor">@color/accent2</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+</resources>

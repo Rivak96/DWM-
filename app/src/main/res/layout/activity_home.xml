@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/wallpaper"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="wallpaper"
+        android:scaleType="centerCrop" />
+
+    <!-- Full-bleed canvas: DWM-drawn panels use the WHOLE screen. The floating
+         controls below overlay it and steal no layout space. -->
+    <FrameLayout
+        android:id="@+id/panelHost"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Favourite apps: centred grid on the home screen -->
+    <HorizontalScrollView
+        android:id="@+id/favGridScroll"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/favGrid"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
+    <!-- Floating top controls: clock left, icon cluster right, all translucent -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="14dp"
+        android:paddingTop="8dp"
+        android:paddingRight="14dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/clock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-light"
+                android:text="00:00"
+                android:textColor="#F2F2F2"
+                android:textSize="30sp" />
+
+            <TextView
+                android:id="@+id/date"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="@color/textDim"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/cluster"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingLeft="6dp"
+            android:paddingTop="4dp"
+            android:paddingRight="6dp"
+            android:paddingBottom="4dp">
+
+            <ImageButton android:id="@+id/btnBluetooth" style="@style/TopIcon" android:contentDescription="Bluetooth" android:src="@drawable/ic_bt" />
+            <ImageButton android:id="@+id/btnWifi" style="@style/TopIcon" android:contentDescription="Wi-Fi" android:src="@drawable/ic_wifi" />
+            <ImageButton android:id="@+id/btnApps" style="@style/TopIcon" android:contentDescription="Apps" android:src="@drawable/ic_apps" />
+            <ImageButton android:id="@+id/btnLayout" style="@style/TopIcon" android:contentDescription="Edit layout" android:src="@drawable/ic_edit" />
+            <ImageButton android:id="@+id/btnReload" style="@style/TopIcon" android:contentDescription="Reload" android:src="@drawable/ic_reload" />
+            <ImageButton android:id="@+id/btnOverlays" style="@style/TopIcon" android:contentDescription="Overlay panels" android:src="@drawable/ic_layers" />
+            <ImageButton android:id="@+id/btnSettings" style="@style/TopIcon" android:contentDescription="Settings" android:src="@drawable/ic_settings" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Tiny handle to hide/show the floating top controls -->
+    <Button
+        android:id="@+id/topToggle"
+        android:layout_width="56dp"
+        android:layout_height="22dp"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="2dp"
+        android:minWidth="0dp"
+        android:minHeight="0dp"
+        android:padding="0dp"
+        android:text="⌃"
+        android:textSize="12sp" />
+
+    <!-- Tesla-style bottom bar: full-width, flat, hairline top edge; collapsible -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/dockToggle"
+            android:layout_width="64dp"
+            android:layout_height="26dp"
+            android:layout_marginBottom="4dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:text="⌄"
+            android:textSize="13sp" />
+
+        <HorizontalScrollView
+            android:id="@+id/dockScroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/dock_bar"
+            android:fillViewport="true"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/dock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp" />
+        </HorizontalScrollView>
+    </LinearLayout>
+</FrameLayout>
