@@ -1,7 +1,7 @@
 {
-  "versionCode": 14,
-  "versionName": "0.9.4",
-  "tag": "v0.9.4",
+  "versionCode": 15,
+  "versionName": "0.9.5",
+  "tag": "v0.9.5",
   "apk": "app-release.apk",
-  "notes": "In-app updater added: check + one-tap install from GitHub."
+  "notes": "Overlay fixes: mute-overlays (keeps CarPlay music), auto-start overlays in Solo mode, polished overlay menu, smarter Camera2 auto-detect."
 }

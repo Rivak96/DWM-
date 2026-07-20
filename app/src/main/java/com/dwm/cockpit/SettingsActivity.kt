@@ -115,6 +115,15 @@ class SettingsActivity : DwmActivity() {
         findViewById<Button>(R.id.btnRaiseNow).setOnClickListener {
             LaunchEngine.raiseWindows(this, Prefs.panels(this))
         }
+        val swMute = findViewById<Switch>(R.id.swMuteOverlays)
+        swMute.isChecked = Prefs.muteOverlays(this)
+        swMute.setOnCheckedChangeListener { _, v ->
+            Prefs.setMuteOverlays(this, v)
+            if (OverlayPanelsService.isRunning) {
+                OverlayPanelsService.stop(this)
+                OverlayPanelsService.start(this)
+            }
+        }
 
         // -- Vehicle ------------------------------------------------------
         findViewById<Button>(R.id.btnObdPick).setOnClickListener { pickObd() }

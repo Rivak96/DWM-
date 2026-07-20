@@ -108,6 +108,18 @@ class OverlayService : Service() {
             LaunchEngine.raiseWindows(this, Prefs.panels(this))
             collapse()
         }
+        val btnMute = view.findViewById<Button>(R.id.btnMute)
+        btnMute.text = if (Prefs.muteOverlays(this)) "Muted ✓" else "Mute"
+        btnMute.setOnClickListener {
+            val newVal = !Prefs.muteOverlays(this)
+            Prefs.setMuteOverlays(this, newVal)
+            btnMute.text = if (newVal) "Muted ✓" else "Mute"
+            // reapply to running overlay panels
+            if (OverlayPanelsService.isRunning) {
+                OverlayPanelsService.stop(this)
+                Handler(Looper.getMainLooper()).postDelayed({ OverlayPanelsService.start(this) }, 400)
+            }
+        }
 
         Ui.skin(this, view)
         collapse()

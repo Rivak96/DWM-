@@ -5,32 +5,36 @@
     android:layout_height="wrap_content"
     android:background="@drawable/overlay_bg"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:padding="6dp">
 
+    <!-- Collapsed handle -->
     <TextView
         android:id="@+id/handle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:paddingLeft="12dp"
-        android:paddingTop="7dp"
-        android:paddingRight="12dp"
-        android:paddingBottom="7dp"
+        android:paddingLeft="14dp"
+        android:paddingTop="9dp"
+        android:paddingRight="14dp"
+        android:paddingBottom="9dp"
         android:text="≡  DWM"
         android:textColor="#3E6AE1"
         android:textSize="14sp"
         android:textStyle="bold" />
 
+    <!-- Expanded menu -->
     <LinearLayout
         android:id="@+id/expanded"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:minWidth="200dp"
+        android:minWidth="264dp"
         android:orientation="vertical"
-        android:paddingLeft="6dp"
-        android:paddingTop="6dp"
-        android:paddingRight="6dp"
+        android:paddingLeft="12dp"
+        android:paddingTop="4dp"
+        android:paddingRight="12dp"
+        android:paddingBottom="12dp"
         android:visibility="gone">
 
+        <!-- Clock header -->
         <TextView
             android:id="@+id/clock"
             android:layout_width="wrap_content"
@@ -38,52 +42,64 @@
             android:fontFamily="sans-serif-light"
             android:text="--:--:--"
             android:textColor="#F2F2F2"
-            android:textSize="20sp" />
+            android:textSize="30sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="10dp"
+            android:background="#1FFFFFFF" />
+
+        <!-- Favourites -->
+        <TextView style="@style/OverlayLabel" android:text="Favourites" />
 
         <LinearLayout
             android:id="@+id/favRow"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:paddingTop="10dp"
-            android:paddingBottom="6dp" />
+            android:paddingTop="6dp"
+            android:paddingBottom="10dp" />
 
-        <Button
-            android:id="@+id/btnOpenCockpit"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Open Cockpit" />
-
-        <Button
-            android:id="@+id/btnOverlays"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Toggle overlays" />
-
-        <Button
-            android:id="@+id/btnRaise"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Raise windows" />
+        <!-- Controls -->
+        <TextView style="@style/OverlayLabel" android:text="Overlay panels" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="6dp">
 
-            <Button
-                android:id="@+id/btnCollapse"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Collapse" />
+            <Button android:id="@+id/btnOverlays" style="@style/OverlayBtn" android:layout_marginStart="0dp" android:text="Show / hide" />
+            <Button android:id="@+id/btnMute" style="@style/OverlayBtn" android:text="Mute" />
+        </LinearLayout>
 
-            <Button
-                android:id="@+id/btnStop"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Stop" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="8dp">
+
+            <Button android:id="@+id/btnRaise" style="@style/OverlayBtn" android:layout_marginStart="0dp" android:text="Raise windows" />
+            <Button android:id="@+id/btnOpenCockpit" style="@style/OverlayBtn" android:text="Cockpit" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="4dp"
+            android:background="#1FFFFFFF" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="8dp">
+
+            <Button android:id="@+id/btnCollapse" style="@style/OverlayBtn" android:layout_marginStart="0dp" android:text="Collapse" />
+            <Button android:id="@+id/btnStop" style="@style/OverlayBtn" android:text="Close pill" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

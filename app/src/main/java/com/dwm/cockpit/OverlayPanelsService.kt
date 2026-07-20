@@ -196,9 +196,7 @@ class OverlayPanelsService : Service() {
         PanelType.CAMERA -> if (p.camId != null) CameraPanel(this, p.camId, p.pkg) else null
         PanelType.WEB, PanelType.HTML -> {
             val wv = WebView(this)
-            wv.settings.javaScriptEnabled = true
-            wv.settings.domStorageEnabled = true
-            wv.setBackgroundColor(0x00000000)
+            Ui.configureWeb(wv, Prefs.muteOverlays(this))
             if (p.type == PanelType.HTML)
                 wv.loadDataWithBaseURL(null, p.html ?: "", "text/html", "utf-8", null)
             else wv.loadUrl(p.url ?: "about:blank")

@@ -66,7 +66,17 @@ class CameraPanel(
         val mgr = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         val ids = runCatching { mgr.cameraIdList }.getOrDefault(emptyArray())
         if (ids.isEmpty()) { status.text = "No camera devices exposed"; return }
-        val id = camIdPref?.takeIf { it in ids } ?: ids.first()
+        // Prefer the configured id; else auto-pick: a wired analog input usually
+        // reports as EXTERNAL, then a BACK cam, else the first device.
+        val id = camIdPref?.takeIf { it in ids } ?: run {
+            fun facing(cid: String) = runCatching {
+                mgr.getCameraCharacteristics(cid)
+                    .get(android.hardware.camera2.CameraCharacteristics.LENS_FACING)
+            }.getOrNull()
+            ids.firstOrNull { facing(it) == android.hardware.camera2.CameraCharacteristics.LENS_FACING_EXTERNAL }
+                ?: ids.firstOrNull { facing(it) == android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK }
+                ?: ids.first()
+        }
         status.text = "Opening camera $id…"
         startBg()
         try {

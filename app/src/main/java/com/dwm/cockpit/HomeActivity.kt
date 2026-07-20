@@ -173,6 +173,7 @@ class HomeActivity : DwmActivity() {
             handler.postDelayed({ LaunchEngine.launchLayout(this, Prefs.panels(this)) }, 700)
         }
         if (Prefs.overlayOnStart(this) && canOverlay()) OverlayService.start(this)
+        ensureOverlaysForMode()
 
         if (!didUpdateCheck && Prefs.autoUpdate(this) && Prefs.updateRepo(this).isNotBlank()) {
             didUpdateCheck = true
@@ -236,13 +237,24 @@ class HomeActivity : DwmActivity() {
     }
 
     /** Keep the always-on-top overlay panels in sync with the layout/mode:
-     *  Solo mode → (re)start them with the fresh layout; Dashboard → stop them. */
+     *  Solo mode → (re)start with the fresh layout; Dashboard → stop them.
+     *  Called when the layout actually changed, so a restart is warranted. */
     private fun syncOverlayPanels() {
         if (Prefs.mode(this) == 1 && canOverlay()) {
             OverlayPanelsService.stop(this)
             handler.postDelayed({ OverlayPanelsService.start(this) }, 500)
         } else if (OverlayPanelsService.isRunning) {
             OverlayPanelsService.stop(this)
+        }
+    }
+
+    /** Ensure overlays are up in Solo mode on every launch — without a needless
+     *  restart if they're already running. */
+    private fun ensureOverlaysForMode() {
+        if (Prefs.mode(this) == 1 && canOverlay() && !OverlayPanelsService.isRunning) {
+            handler.postDelayed({
+                if (Prefs.mode(this) == 1 && !OverlayPanelsService.isRunning) OverlayPanelsService.start(this)
+            }, 1600)
         }
     }
 
@@ -357,14 +369,7 @@ class HomeActivity : DwmActivity() {
 
     private fun buildWeb(p: Panel): WebView {
         val wv = WebView(this)
-        wv.settings.javaScriptEnabled = true
-        wv.settings.domStorageEnabled = true
-        wv.settings.mediaPlaybackRequiresUserGesture = false
-        wv.settings.useWideViewPort = true
-        wv.settings.loadWithOverviewMode = true
-        wv.setBackgroundColor(0x00000000)
-        wv.webViewClient = WebViewClient()
-        wv.webChromeClient = WebChromeClient()
+        Ui.configureWeb(wv, Prefs.muteOverlays(this))
         if (p.type == PanelType.HTML) {
             wv.loadDataWithBaseURL(null, p.html ?: DEFAULT_HTML, "text/html", "utf-8", null)
         } else {

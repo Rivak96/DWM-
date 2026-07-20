@@ -130,4 +130,9 @@ object Prefs {
 
     fun autoUpdate(c: Context) = sp(c).getBoolean("auto_update", false)
     fun setAutoUpdate(c: Context, v: Boolean) = sp(c).edit().putBoolean("auto_update", v).apply()
+
+    /** Mute audio from DWM's own overlay panels (web/media) so they never
+     *  interrupt CarPlay music. Default on. */
+    fun muteOverlays(c: Context) = sp(c).getBoolean("mute_overlays", true)
+    fun setMuteOverlays(c: Context, v: Boolean) = sp(c).edit().putBoolean("mute_overlays", v).apply()
 }

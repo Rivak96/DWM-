@@ -286,6 +286,16 @@
 
                 <Button android:id="@+id/btnRaiseNow" style="@style/ChipButton" android:layout_marginStart="0dp" android:layout_marginTop="4dp" android:text="Raise windows now" />
 
+                <Switch
+                    android:id="@+id/swMuteOverlays"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:minHeight="44dp"
+                    android:text="Mute overlay audio (don't interrupt CarPlay music)"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

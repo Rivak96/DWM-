@@ -262,6 +262,26 @@ object Ui {
         if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i), f)
     }
 
+    /** Configure a panel WebView. When [mute] is on, autoplay is blocked and any
+     *  media is muted on load so DWM panels never grab audio from CarPlay. */
+    fun configureWeb(wv: android.webkit.WebView, mute: Boolean) {
+        wv.settings.javaScriptEnabled = true
+        wv.settings.domStorageEnabled = true
+        wv.settings.useWideViewPort = true
+        wv.settings.loadWithOverviewMode = true
+        wv.settings.mediaPlaybackRequiresUserGesture = mute
+        wv.setBackgroundColor(0x00000000)
+        wv.webChromeClient = android.webkit.WebChromeClient()
+        wv.webViewClient = object : android.webkit.WebViewClient() {
+            override fun onPageFinished(view: android.webkit.WebView, url: String?) {
+                if (mute) view.evaluateJavascript(
+                    "document.querySelectorAll('video,audio').forEach(function(m){m.muted=true;try{m.pause()}catch(e){}});",
+                    null
+                )
+            }
+        }
+    }
+
     /** Dialog builder matching the theme. */
     fun dialog(c: Context): AlertDialog.Builder = AlertDialog.Builder(
         c,

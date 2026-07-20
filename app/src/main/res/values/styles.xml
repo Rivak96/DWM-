@@ -36,6 +36,27 @@
         <item name="android:background">@drawable/chip_bg</item>
     </style>
 
+    <!-- Overlay pill menu button + label -->
+    <style name="OverlayBtn">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:minHeight">46dp</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:textColor">@color/textPrimary</item>
+        <item name="android:background">@drawable/chip_bg</item>
+    </style>
+
+    <style name="OverlayLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.1</item>
+        <item name="android:textColor">#9A9AA0</item>
+        <item name="android:textSize">10sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
     <!-- Floating top-cluster icon button; ripple + tint applied in code. -->
     <style name="TopIcon">
         <item name="android:layout_width">46dp</item>
