@@ -565,6 +565,28 @@ User ran Solo mode (CarPlay full + AUX overlaid). Three complaints, all addresse
   (commands provided). Repo must be PUBLIC for no-login auto-update.
 - versionCode 14 / versionName 0.9.4. Lint clean, encoding clean.
 
+## 19. STATUS — Milestone 11 (2026-07-20): on-device overlay fixes — v0.9.5
+User ran v0.9.4 Solo mode (CarPlay + AUX camera). 4 issues:
+1. Overlay interrupts/pauses CarPlay music → `Prefs.muteOverlays` (default ON):
+   `Ui.configureWeb` blocks WebView autoplay + mutes media JS on load; Mute button
+   in the pill menu + Settings→Overlay toggle. HONEST LIMIT: the AUX *app window*
+   grabs audio focus itself — DWM can't stop another app's focus; the real fix is
+   the Camera2 overlay path (no audio, no sink).
+2. Overlay didn't auto-start on launch → `ensureOverlaysForMode()` starts
+   OverlayPanelsService on every Home onStart in Solo mode (no restart if already
+   running).
+3. Window sinks when CarPlay tapped → inherent to freeform windows; mitigations:
+   Raise button + pin. TRUE fix = Camera2 overlay. Improved `CameraPanel`
+   auto-detect: prefer EXTERNAL (analog input) → BACK → first camera id.
+4. Overlay menu polish → rewrote `overlay_panel.xml`: clock header, hairline
+   dividers, CAPS section labels, 2-col themed button grid (Show/hide · Mute ·
+   Raise · Cockpit · Collapse · Close), new `OverlayBtn`/`OverlayLabel` styles.
+- **STILL BLOCKED ON: the "Scan camera inputs" result.** If the analog cam is a
+  Camera2 device, switch AUX-window → Camera2 overlay panel and #1+#3 both vanish.
+- Built + committed (ba05710), NOT yet pushed/released (gh not installed; user
+  pushes + creates release, or sideloads v0.9.5 to test first).
+- versionCode 15 / versionName 0.9.5. Lint + encoding clean.
+
 ### Candidate next features (user asked "what else"; not yet built)
 1. Media now-playing panel + controls (MediaSession; needs notification access).
 2. Host real home-screen **widgets** as panels (AppWidgetHost).
