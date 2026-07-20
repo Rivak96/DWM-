@@ -543,6 +543,28 @@ User ran Solo mode (CarPlay full + AUX overlaid). Three complaints, all addresse
    deck exposes the analog input.
 - Lint clean, encoding clean. versionCode 13 / versionName 0.9.3.
 
+## 18. STATUS — Milestone 10 (2026-07-20): GitHub + in-app self-update — v0.9.4
+- **In-app updater** (`Updater.kt`, framework-only): reads
+  `raw.githubusercontent.com/<repo>/main/version.json` ({versionCode, versionName,
+  tag, apk, notes}), compares `longVersionCode`, downloads the release APK (manual
+  redirect-following HttpURLConnection) and installs via **PackageInstaller**
+  session (no FileProvider/AndroidX). `InstallResultReceiver` launches the system
+  confirm UI on STATUS_PENDING_USER_ACTION. Perm: REQUEST_INSTALL_PACKAGES + a
+  one-time "allow unknown apps" grant. NOT silent (needs root for that).
+- Settings→About: Set update repo (`Prefs.updateRepo` = owner/name), Check for
+  updates, auto-check toggle (`Prefs.autoUpdate`). HomeActivity auto-checks once
+  per process (3s delay) when enabled.
+- APK URL built from repo+tag+asset, so `version.json` needs no hardcoded owner —
+  user only sets owner/name once in the app.
+- Repo scaffolding: `README.md`, `RELEASING.md`, `release.ps1` (bumps version.json
+  from build.gradle + builds), `version.json`, `.gitattributes`.
+- **git initialised + first commit** (118175e, 69 files). SECRETS EXCLUDED &
+  VERIFIED: `keystore.properties`, `*.keystore`, `local.properties`, `.claude/`
+  all gitignored and confirmed absent from tracking. **gh CLI is NOT installed**
+  → the user must create the GitHub repo + push + make releases themselves
+  (commands provided). Repo must be PUBLIC for no-login auto-update.
+- versionCode 14 / versionName 0.9.4. Lint clean, encoding clean.
+
 ### Candidate next features (user asked "what else"; not yet built)
 1. Media now-playing panel + controls (MediaSession; needs notification access).
 2. Host real home-screen **widgets** as panels (AppWidgetHost).
