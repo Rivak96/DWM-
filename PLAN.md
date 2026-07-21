@@ -619,6 +619,27 @@ The camera panel now just TRIES it automatically. If the user sees live video �
 solved. If "Camera not exposed to apps / tap to open" → the analog input is
 firmware-only and the AUX-app fallback (with its audio/sink limits) is the ceiling.
 
+## 21. STATUS — Milestone 13 (2026-07-20): card-dashboard home — v0.10.0/0.10.1
+User showed a reference dashboard mock (light, card-based: state tiles, hero
+action card, favourites) and wanted the home to look/navigate/feel like it.
+Full HomeActivity + activity_home.xml rewrite:
+- 3-column card dashboard: LEFT 2×3 coloured action **tiles** (CarPlay=accent,
+  Overlays=green when active, Bluetooth/WiFi/Apps/Settings neutral) · CENTRE
+  **hero card** with live `LayoutPreview` (new custom View drawing the saved
+  layout as mini blocks) + Launch/Edit buttons · RIGHT **favourites card** (2×N)
+  + **status card** (Overlays On/Off, Floating pill Show, Version→check updates).
+- Colour used as STATE not decoration (matches reference + Tesla restraint).
+- New `Ui.tileBg/primaryBtnBg`, `Ui.GREEN`, `ic_play`, `LayoutPreview.kt`.
+- Dashboard hides when Dashboard-mode canvas panels are present (no overlap).
+- **CRITICAL preservation**: `OverlayService` (floating pill) + `OverlayPanelsService`
+  UNCHANGED — user explicitly asked not to lose the pill. v0.10.1 added a
+  "Floating pill · Show" status row (`startPill()`) for one-tap access from home.
+- Reference mock is LIGHT-themed → tell user Settings>Display>Light for that look.
+- Removed old top icon-cluster + bottom dock (replaced by tiles/favourites).
+- versionCode 18 / 0.10.1. Lint + encoding clean. Pushed + released via gh.
+- NOTE: raw.githubusercontent version.json CDN-caches ~5min after push; verify
+  real value via `gh api .../contents/version.json`.
+
 ### Candidate next features (user asked "what else"; not yet built)
 1. Media now-playing panel + controls (MediaSession; needs notification access).
 2. Host real home-screen **widgets** as panels (AppWidgetHost).
