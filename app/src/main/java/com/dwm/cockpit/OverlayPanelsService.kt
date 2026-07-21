@@ -137,6 +137,30 @@ class OverlayPanelsService : Service() {
                     }
                 )
 
+                // ROTATE button, top-right — only meaningful for the camera feed
+                if (p.type == PanelType.CAMERA && content is CameraPanel) {
+                    val cam: CameraPanel = content
+                    var rot = p.rotation
+                    val rotateBtn = TextView(this).apply {
+                        text = "⟳"
+                        textSize = 16f
+                        setTextColor(0xFFFFFFFF.toInt())
+                        gravity = Gravity.CENTER
+                        background = Ui.gripBg(this@OverlayPanelsService, accent, topLeft = false)
+                        setOnClickListener {
+                            rot = (rot + 90) % 360
+                            cam.setRotationDeg(rot)
+                            persistRotation(index, p, rot)
+                        }
+                    }
+                    card.addView(
+                        rotateBtn,
+                        FrameLayout.LayoutParams(gripPx, gripPx).apply {
+                            gravity = Gravity.TOP or Gravity.END
+                        }
+                    )
+                }
+
                 val w = ((p.r - p.l) * size.x).toInt().coerceAtLeast(Ui.dp(this, 80))
                 val h = ((p.b - p.t) * size.y).toInt().coerceAtLeast(Ui.dp(this, 80))
                 val lp = WindowManager.LayoutParams(
@@ -182,7 +206,7 @@ class OverlayPanelsService : Service() {
         }
         PanelType.SPEED -> gauge("gps_speed").also { speedGauges.add(it) }
         PanelType.OBD -> gauge(p.metric).also { obdGauges.add((p.metric ?: "") to it) }
-        PanelType.CAMERA -> CameraPanel(this, p.camId, p.pkg) // Camera2, app = fallback
+        PanelType.CAMERA -> CameraPanel(this, p.camId, p.pkg, p.rotation) // Camera2, app = fallback
         PanelType.WEB, PanelType.HTML -> {
             val wv = WebView(this)
             Ui.configureWeb(wv, Prefs.muteOverlays(this))
@@ -303,6 +327,15 @@ class OverlayPanelsService : Service() {
         val r = ((lp.x + lp.width).toFloat() / size.x).coerceIn(l, 1f)
         val b = ((lp.y + lp.height).toFloat() / size.y).coerceIn(t, 1f)
         panels[index] = p.withBounds(l, t, r, b)
+        Prefs.savePanels(this, panels)
+    }
+
+    /** Saves camera rotation (identity-checked against a concurrent edit). */
+    private fun persistRotation(index: Int, expected: Panel, rot: Int) {
+        val panels = Prefs.panels(this).toMutableList()
+        val p = panels.getOrNull(index) ?: return
+        if (p.type != expected.type || p.pkg != expected.pkg || p.camId != expected.camId) return
+        panels[index] = p.copy(rotation = rot)
         Prefs.savePanels(this, panels)
     }
 

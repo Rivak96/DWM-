@@ -306,24 +306,39 @@ class LayoutEditorActivity : DwmActivity() {
             chooseType(slot, newFree = false)
             return
         }
-        val items = if (p.type == PanelType.APP) arrayOf(
-            "Reconfigure",
-            if (p.fullscreen) "Open as window instead" else "Open FULLSCREEN (base app)",
-            "Clear slot", "Remove slot"
-        ) else arrayOf("Reconfigure", "Clear slot", "Remove slot")
+        val items = when {
+            p.type == PanelType.APP -> arrayOf(
+                "Reconfigure",
+                if (p.fullscreen) "Open as window instead" else "Open FULLSCREEN (base app)",
+                "Clear slot", "Remove slot"
+            )
+            p.type == PanelType.CAMERA -> arrayOf(
+                "Reconfigure", "Rotate 90° (now ${p.rotation}°)", "Clear slot", "Remove slot"
+            )
+            else -> arrayOf("Reconfigure", "Clear slot", "Remove slot")
+        }
 
         Ui.dialog(this)
             .setTitle(p.displayLabel())
             .setItems(items) { _, which ->
-                if (p.type == PanelType.APP) when (which) {
-                    0 -> reconfigure(slot)
-                    1 -> { slot.panel = p.copy(fullscreen = !p.fullscreen); styleSlot(slot) }
-                    2 -> { slot.panel = null; styleSlot(slot) }
-                    3 -> { inner.removeView(slot.view); slots.remove(slot) }
-                } else when (which) {
-                    0 -> reconfigure(slot)
-                    1 -> { slot.panel = null; styleSlot(slot) }
-                    2 -> { inner.removeView(slot.view); slots.remove(slot) }
+                when {
+                    p.type == PanelType.APP -> when (which) {
+                        0 -> reconfigure(slot)
+                        1 -> { slot.panel = p.copy(fullscreen = !p.fullscreen); styleSlot(slot) }
+                        2 -> { slot.panel = null; styleSlot(slot) }
+                        3 -> { inner.removeView(slot.view); slots.remove(slot) }
+                    }
+                    p.type == PanelType.CAMERA -> when (which) {
+                        0 -> reconfigure(slot)
+                        1 -> { slot.panel = p.copy(rotation = (p.rotation + 90) % 360); styleSlot(slot); Toast.makeText(this, "Rotation ${(p.rotation + 90) % 360}° — Save to apply", Toast.LENGTH_SHORT).show() }
+                        2 -> { slot.panel = null; styleSlot(slot) }
+                        3 -> { inner.removeView(slot.view); slots.remove(slot) }
+                    }
+                    else -> when (which) {
+                        0 -> reconfigure(slot)
+                        1 -> { slot.panel = null; styleSlot(slot) }
+                        2 -> { inner.removeView(slot.view); slots.remove(slot) }
+                    }
                 }
             }
             .show()

@@ -22,7 +22,8 @@ data class Panel(
     val html: String? = null,    // HTML content
     val metric: String? = null,  // OBD metric key: rpm, coolant, speed, throttle, map, intake
     val camId: String? = null,   // CAMERA2 camera id (null = auto)
-    val fullscreen: Boolean = false // APP panel opens fullscreen (base app, e.g. CarPlay)
+    val fullscreen: Boolean = false, // APP panel opens fullscreen (base app, e.g. CarPlay)
+    val rotation: Int = 0        // CAMERA preview rotation: 0/90/180/270
 ) {
     fun withBounds(l: Float, t: Float, r: Float, b: Float) = copy(l = l, t = t, r = r, b = b)
 
@@ -61,6 +62,7 @@ data class Panel(
         metric?.let { put("metric", it) }
         camId?.let { put("camId", it) }
         if (fullscreen) put("fs", true)
+        if (rotation != 0) put("rot", rotation)
     }
 
     companion object {
@@ -76,7 +78,8 @@ data class Panel(
             html = o.optStringOrNull("html"),
             metric = o.optStringOrNull("metric"),
             camId = o.optStringOrNull("camId"),
-            fullscreen = o.optBoolean("fs", false)
+            fullscreen = o.optBoolean("fs", false),
+            rotation = o.optInt("rot", 0)
         )
     }
 }

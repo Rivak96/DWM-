@@ -23,7 +23,8 @@ import android.widget.TextView
 class CameraPanel(
     context: Context,
     private val camIdPref: String?,
-    private val fallbackPkg: String?
+    private val fallbackPkg: String?,
+    rotationDeg: Int = 0
 ) : FrameLayout(context) {
 
     private val texture = TextureView(context)
@@ -32,6 +33,7 @@ class CameraPanel(
     private var session: CameraCaptureSession? = null
     private var bgThread: HandlerThread? = null
     private var bgHandler: Handler? = null
+    private var rotation = ((rotationDeg % 360) + 360) % 360
 
     init {
         setBackgroundColor(Color.BLACK)
@@ -46,8 +48,10 @@ class CameraPanel(
             }
         )
         texture.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-            override fun onSurfaceTextureAvailable(s: android.graphics.SurfaceTexture, w: Int, h: Int) = openCamera()
-            override fun onSurfaceTextureSizeChanged(s: android.graphics.SurfaceTexture, w: Int, h: Int) {}
+            override fun onSurfaceTextureAvailable(s: android.graphics.SurfaceTexture, w: Int, h: Int) {
+                openCamera(); applyTransform()
+            }
+            override fun onSurfaceTextureSizeChanged(s: android.graphics.SurfaceTexture, w: Int, h: Int) = applyTransform()
             override fun onSurfaceTextureDestroyed(s: android.graphics.SurfaceTexture): Boolean {
                 closeCamera(); return true
             }
@@ -56,6 +60,29 @@ class CameraPanel(
         setOnClickListener {
             if (device == null && fallbackPkg != null) LaunchEngine.launchFullscreen(context, fallbackPkg)
         }
+    }
+
+    /** Rotate the live preview by 0/90/180/270°. Applied via a texture matrix so
+     *  the panel rectangle itself stays put. */
+    fun setRotationDeg(deg: Int) {
+        rotation = ((deg % 360) + 360) % 360
+        applyTransform()
+    }
+
+    private fun applyTransform() {
+        val vw = texture.width.toFloat()
+        val vh = texture.height.toFloat()
+        if (vw <= 0f || vh <= 0f) return
+        val m = android.graphics.Matrix()
+        val cx = vw / 2f
+        val cy = vh / 2f
+        m.postRotate(rotation.toFloat(), cx, cy)
+        if (rotation == 90 || rotation == 270) {
+            // scale the rotated frame to cover the (unchanged) view bounds
+            val scale = maxOf(vw / vh, vh / vw)
+            m.postScale(scale, scale, cx, cy)
+        }
+        texture.setTransform(m)
     }
 
     private fun hasPerm() =
@@ -112,6 +139,7 @@ class CameraPanel(
             override fun onConfigured(s: CameraCaptureSession) {
                 session = s
                 runCatching { s.setRepeatingRequest(req.build(), null, bgHandler) }
+                post { applyTransform() }
             }
             override fun onConfigureFailed(s: CameraCaptureSession) {
                 post { status.text = "Preview failed" }

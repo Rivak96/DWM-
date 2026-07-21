@@ -1,7 +1,7 @@
 {
-  "versionCode": 18,
-  "versionName": "0.10.1",
-  "tag": "v0.10.1",
+  "versionCode": 19,
+  "versionName": "0.10.2",
+  "tag": "v0.10.2",
   "apk": "app-release.apk",
-  "notes": "Added a 'Floating pill' row to the home status card so you can show the ≡ DWM pill in one tap. Pill and overlays unchanged."
+  "notes": "Camera rotate: tap the ⟳ button on the camera overlay to rotate the feed 90° (saved). Also in the layout editor: tap a camera tile > Rotate 90°."
 }
