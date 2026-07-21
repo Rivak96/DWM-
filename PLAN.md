@@ -587,6 +587,38 @@ User ran v0.9.4 Solo mode (CarPlay + AUX camera). 4 issues:
   pushes + creates release, or sideloads v0.9.5 to test first).
 - versionCode 15 / versionName 0.9.5. Lint + encoding clean.
 
+## 20. STATUS — Milestone 12 (2026-07-20): overlay UX overhaul — v0.9.6
+gh CLI now installed + authed (Rivak96) → push + `gh release create` fully
+automated from here. On-device feedback (Solo mode, CarPlay + AUX):
+1. Audio interrupt → REMOVED the periodic auto-raise (pinTick) that relaunched
+   windows every 6s and stopped music. Manual "Raise" button kept.
+2. **Camera is now ALWAYS a drawn Camera2 overlay** (`Panel.isWindowedApp` no
+   longer includes CAMERA; overlay/home always build `CameraPanel`). It persists
+   size/position (persistBounds), never grabs audio, never sinks. The app (AUX)
+   is a tap-to-open fallback shown only if the deck doesn't expose the input to
+   Camera2. This is the real fix for the user's #1/#2/#3 re: the camera —
+   contingent on the deck exposing the analog input (CameraPanel auto-detects
+   EXTERNAL→BACK→first id).
+3. Top-edge reach → overlay windows got FLAG_LAYOUT_IN_SCREEN + relaxed move clamp.
+4. Auto-start overlays in Solo mode via `ensureOverlaysForMode()` (already added
+   0.9.5; camera-as-drawn means the service now has panels and won't self-stop).
+5. Home overlap bug fixed: `renderPanels` counts canvas panels and shows the
+   favourites grid ONLY when the canvas is free; grid styled as a rounded tray
+   (clusterBg). Welcome card only when zero favourites.
+- Removed the "keep windows on top" auto-raise switch (kept manual Raise).
+- Camera permission now requested for ALL camera panels (not just camId!=null).
+- versionCode 16 / 0.9.6. Lint + encoding clean. Pushed + released (a937f9a).
+
+### On "external tools/libraries" (user asked)
+Declined by design: Tesla's UI is custom-drawn; no library provides that look, and
+a UI framework (Compose/Material) would slow the old deck. Polish = design work
+(spacing/color/layout/decluttering), done directly. Kept framework-only.
+
+### STILL the key unknown: does the deck expose the analog cam to Camera2?
+The camera panel now just TRIES it automatically. If the user sees live video →
+solved. If "Camera not exposed to apps / tap to open" → the analog input is
+firmware-only and the AUX-app fallback (with its audio/sink limits) is the ceiling.
+
 ### Candidate next features (user asked "what else"; not yet built)
 1. Media now-playing panel + controls (MediaSession; needs notification access).
 2. Host real home-screen **widgets** as panels (AppWidgetHost).
