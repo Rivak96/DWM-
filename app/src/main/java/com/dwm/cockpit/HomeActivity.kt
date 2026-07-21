@@ -267,6 +267,18 @@ class HomeActivity : DwmActivity() {
         iconLbl.second.setTextColor(if (on) 0xFFFFFFFF.toInt() else th.dim)
     }
 
+    /** Show the floating ≡ DWM pill (its favourites/overlays/raise/mute menu). */
+    private fun startPill() {
+        if (!canOverlay()) {
+            startActivity(
+                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+            )
+            return
+        }
+        OverlayService.start(this)
+        Toast.makeText(this, "Floating pill shown — drag it anywhere", Toast.LENGTH_SHORT).show()
+    }
+
     private fun launchCarplay() {
         val panels = Prefs.panels(this)
         val base = panels.firstOrNull { it.isFullscreenApp() }?.pkg ?: Prefs.carplay(this)
@@ -398,6 +410,7 @@ class HomeActivity : DwmActivity() {
 
         val overlaysOn = OverlayPanelsService.isRunning
         row("Overlays", if (overlaysOn) "On" else "Off", if (overlaysOn) Ui.GREEN else th.dim) { toggleOverlays() }
+        row("Floating pill", "Show", th.dim) { startPill() }
         row("Version", "v" + Updater.currentVersionName(this), th.dim) {
             Toast.makeText(this, "Checking for updates…", Toast.LENGTH_SHORT).show()
             Updater.check(this) { result ->
