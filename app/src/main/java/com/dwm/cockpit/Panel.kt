@@ -27,11 +27,11 @@ data class Panel(
     fun withBounds(l: Float, t: Float, r: Float, b: Float) = copy(l = l, t = t, r = r, b = b)
 
     /** True if this panel is launched as a freeform app window (vs drawn by DWM).
-     *  A CAMERA panel that points at a camera app (e.g. AUX) with no live camId is
-     *  launched into its rectangle as a window. */
+     *  CAMERA panels are ALWAYS drawn now (Camera2 overlay, with the app as a
+     *  tap-to-open fallback) so they persist size/position, never grab audio and
+     *  never sink behind the fullscreen app. */
     fun isWindowedApp(): Boolean =
-        (type == PanelType.APP && pkg != null && !fullscreen) ||
-            (type == PanelType.CAMERA && pkg != null && camId == null)
+        type == PanelType.APP && pkg != null && !fullscreen
 
     /** True if this APP panel opens as the fullscreen base app. */
     fun isFullscreenApp(): Boolean = type == PanelType.APP && pkg != null && fullscreen

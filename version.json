@@ -1,7 +1,7 @@
 {
-  "versionCode": 15,
-  "versionName": "0.9.5",
-  "tag": "v0.9.5",
+  "versionCode": 16,
+  "versionName": "0.9.6",
+  "tag": "v0.9.6",
   "apk": "app-release.apk",
-  "notes": "Overlay fixes: mute-overlays (keeps CarPlay music), auto-start overlays in Solo mode, polished overlay menu, smarter Camera2 auto-detect."
+  "notes": "Camera is now a true overlay (persists size/position, no audio interruption, never sinks). Removed the music-stopping auto-raise. Overlays reach the top edge. Overlays auto-start in Solo mode. Cleaner home screen (fixed grid overlap)."
 }

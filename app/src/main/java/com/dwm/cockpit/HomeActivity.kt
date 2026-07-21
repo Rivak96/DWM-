@@ -156,6 +156,9 @@ class HomeActivity : DwmActivity() {
         Ui.skin(this, findViewById(android.R.id.content))
         dockScroll.background = Ui.barBg(this)
         cluster.background = Ui.clusterBg(this)
+        favGrid.background = Ui.clusterBg(this)
+        favGrid.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8))
+        Ui.roundify(favGrid, 24)
         styleTopIcons()
         applyWallpaper()
         buildDock()
@@ -269,14 +272,13 @@ class HomeActivity : DwmActivity() {
         stopLocation(); stopObd()
 
         val panels = Prefs.panels(this)
-        if (panels.isEmpty()) { showEmptyState(); return }
-
-        // Overlay mode: drawn panels live in the always-on-top overlay service
-        // instead of the home canvas, so don't duplicate them here.
+        // Solo mode: drawn panels live in the always-on-top overlay service, so the
+        // home canvas stays a clean launcher (favourites grid).
         val overlayMode = Prefs.mode(this) == 1
+        var canvasPanels = 0
 
         for (p in panels) {
-            if (p.isWindowedApp()) continue
+            if (p.isWindowedApp() || p.isFullscreenApp()) continue
             if (overlayMode && p.isDrawn()) continue
             runCatching {
                 val content = buildPanelView(p) ?: return@runCatching
@@ -297,8 +299,17 @@ class HomeActivity : DwmActivity() {
                 lp.leftMargin = (p.l * w).toInt()
                 lp.topMargin = (p.t * h).toInt()
                 panelHost.addView(card, lp)
+                canvasPanels++
             }
         }
+
+        // Favourites grid shows only when the canvas isn't busy with dashboard
+        // panels — this is the fix for the welcome-card / grid overlap.
+        val favs = Apps.effectiveFavorites(this)
+        val showGrid = Prefs.showFavGrid(this) && favs.isNotEmpty() && canvasPanels == 0
+        favGridScroll.visibility = if (showGrid) View.VISIBLE else View.GONE
+        if (canvasPanels == 0 && favs.isEmpty()) showEmptyState()
+
         startLocation()
         startObd()
     }
@@ -476,7 +487,7 @@ class HomeActivity : DwmActivity() {
     private fun ensurePermissions() {
         val panels = Prefs.panels(this)
         val need = ArrayList<String>()
-        if (panels.any { it.type == PanelType.CAMERA && it.camId != null } && !granted(Manifest.permission.CAMERA))
+        if (panels.any { it.type == PanelType.CAMERA } && !granted(Manifest.permission.CAMERA))
             need.add(Manifest.permission.CAMERA)
         if (panels.any { it.type == PanelType.SPEED } && !granted(Manifest.permission.ACCESS_FINE_LOCATION))
             need.add(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -527,22 +538,21 @@ class HomeActivity : DwmActivity() {
 
     /** Big centred grid of favourite apps — the "5 apps I always see" the user
      *  wanted. Shares the favourites list with the dock. */
+    /** Populates the favourites grid. Visibility is decided by renderPanels so it
+     *  never overlaps dashboard panels. */
     private fun buildFavGrid() {
         favGrid.removeAllViews()
-        if (!Prefs.showFavGrid(this)) { favGridScroll.visibility = View.GONE; return }
         val favs = Apps.effectiveFavorites(this)
-        if (favs.isEmpty()) { favGridScroll.visibility = View.GONE; return }
-        favGridScroll.visibility = View.VISIBLE
-
         val th = Ui.th(this)
-        val iconPx = Ui.dp(this, 76)
-        val pad = Ui.dp(this, 16)
+        val iconPx = Ui.dp(this, 68)
+        val padH = Ui.dp(this, 18)
+        val padV = Ui.dp(this, 14)
         for (pkg in favs.take(8)) {
             val d = Apps.icon(this, pkg) ?: continue
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(pad, pad, pad, pad)
+                setPadding(padH, padV, padH, padV)
                 background = Ui.iconRipple(this@HomeActivity)
             }
             item.addView(ImageView(this).apply {
@@ -555,7 +565,7 @@ class HomeActivity : DwmActivity() {
                 textSize = 11f
                 gravity = Gravity.CENTER
                 maxLines = 1
-                setPadding(0, Ui.dp(this@HomeActivity, 6), 0, 0)
+                setPadding(0, Ui.dp(this@HomeActivity, 8), 0, 0)
                 setShadowLayer(6f, 0f, 1f, 0x99000000.toInt())
             })
             item.setOnClickListener { LaunchEngine.launchFullscreen(this, pkg) }

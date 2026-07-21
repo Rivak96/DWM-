@@ -106,12 +106,6 @@ class SettingsActivity : DwmActivity() {
             else Toast.makeText(this, "Grant overlay permission first", Toast.LENGTH_SHORT).show()
         }
         findViewById<Button>(R.id.btnPanelsOff).setOnClickListener { OverlayPanelsService.stop(this) }
-        val swPin = findViewById<Switch>(R.id.swPinWindows)
-        swPin.isChecked = Prefs.pinWindows(this)
-        swPin.setOnCheckedChangeListener { _, v ->
-            Prefs.setPinWindows(this, v)
-            if (v && canOverlay()) OverlayPanelsService.start(this) // hosts the pin loop
-        }
         findViewById<Button>(R.id.btnRaiseNow).setOnClickListener {
             LaunchEngine.raiseWindows(this, Prefs.panels(this))
         }

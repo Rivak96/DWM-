@@ -65,7 +65,13 @@ class CameraPanel(
         if (!hasPerm()) { status.text = "Grant camera permission"; return }
         val mgr = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         val ids = runCatching { mgr.cameraIdList }.getOrDefault(emptyArray())
-        if (ids.isEmpty()) { status.text = "No camera devices exposed"; return }
+        if (ids.isEmpty()) {
+            status.text = if (fallbackPkg != null)
+                "Camera not exposed to apps\nTap to open camera app"
+            else
+                "No camera input exposed"
+            return
+        }
         // Prefer the configured id; else auto-pick: a wired analog input usually
         // reports as EXTERNAL, then a BACK cam, else the first device.
         val id = camIdPref?.takeIf { it in ids } ?: run {

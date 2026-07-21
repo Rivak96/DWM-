@@ -275,16 +275,7 @@
 
                 <TextView style="@style/SectionHeader" android:text="Keep app windows on top" />
 
-                <Switch
-                    android:id="@+id/swPinWindows"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="44dp"
-                    android:text="Auto-raise app windows above the fullscreen app"
-                    android:textColor="@color/textPrimary"
-                    android:textSize="13sp" />
-
-                <Button android:id="@+id/btnRaiseNow" style="@style/ChipButton" android:layout_marginStart="0dp" android:layout_marginTop="4dp" android:text="Raise windows now" />
+                <Button android:id="@+id/btnRaiseNow" style="@style/ChipButton" android:layout_marginStart="0dp" android:layout_marginTop="4dp" android:text="Raise app windows now" />
 
                 <Switch
                     android:id="@+id/swMuteOverlays"
@@ -300,7 +291,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:paddingTop="8dp"
-                    android:text="A windowed app (e.g. the AUX camera) sinks behind the fullscreen app when you tap it. Auto-raise brings it back every few seconds (it may briefly steal focus). True overlay panels — gauges, and the Camera2 live camera if your deck exposes it — never sink and don't need this."
+                    android:text="Camera, gauges and web panels are true overlays now — they float on top, never grab audio, never sink, and remember their size/position (drag the grips). 'Raise' is only for full app windows (non-camera), which Android sinks when you tap the app behind them."
                     android:textColor="@color/textDim"
                     android:textSize="11sp" />
             </LinearLayout>

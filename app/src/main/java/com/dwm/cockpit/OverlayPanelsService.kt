@@ -62,16 +62,6 @@ class OverlayPanelsService : Service() {
         }
     }
 
-    /** Optional: re-raise windowed apps (e.g. AUX camera) above the fullscreen
-     *  base app, which they sink behind when it is tapped. Opt-in (may flicker). */
-    private val pinTick = object : Runnable {
-        override fun run() {
-            if (Prefs.pinWindows(this@OverlayPanelsService)) {
-                LaunchEngine.raiseWindows(this@OverlayPanelsService, Prefs.panels(this@OverlayPanelsService))
-            }
-            handler.postDelayed(this, 6000)
-        }
-    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -81,18 +71,16 @@ class OverlayPanelsService : Service() {
         startForeground(NOTIF_ID, buildNotification())
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         buildOverlays()
-        // Keep running if there are panels to show OR if we're only here to pin
-        // windows on top; otherwise there's nothing to do.
-        if (cards.isEmpty() && !Prefs.pinWindows(this)) {
+        if (cards.isEmpty()) {
             android.widget.Toast.makeText(
-                this, "No overlay panels in the layout — add gauges/camera/web in Edit",
+                this, "No overlay panels in the layout — add a camera, gauge or web panel in Edit",
                 android.widget.Toast.LENGTH_LONG
             ).show()
             stopSelf()
             return
         }
-        if (cards.isNotEmpty()) { handler.post(tick); startFeeds() }
-        handler.postDelayed(pinTick, 6000)
+        handler.post(tick)
+        startFeeds()
         Prefs.setOverlaysOn(this, true)
     }
 
@@ -158,7 +146,8 @@ class OverlayPanelsService : Service() {
                     else
                         @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                     PixelFormat.TRANSLUCENT
                 ).apply {
                     gravity = Gravity.TOP or Gravity.START
@@ -193,7 +182,7 @@ class OverlayPanelsService : Service() {
         }
         PanelType.SPEED -> gauge("gps_speed").also { speedGauges.add(it) }
         PanelType.OBD -> gauge(p.metric).also { obdGauges.add((p.metric ?: "") to it) }
-        PanelType.CAMERA -> if (p.camId != null) CameraPanel(this, p.camId, p.pkg) else null
+        PanelType.CAMERA -> CameraPanel(this, p.camId, p.pkg) // Camera2, app = fallback
         PanelType.WEB, PanelType.HTML -> {
             val wv = WebView(this)
             Ui.configureWeb(wv, Prefs.muteOverlays(this))
@@ -241,7 +230,7 @@ class OverlayPanelsService : Service() {
     ) {
         var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var moved = false
         val size = LaunchEngine.displaySize(this)
-        val keep = Ui.dp(this, 48) // never let the grip corner leave the screen
+        val keep = Ui.dp(this, 40) // keep at least this much of the grip reachable
         grip.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -250,6 +239,7 @@ class OverlayPanelsService : Service() {
                 MotionEvent.ACTION_MOVE -> {
                     val dx = (e.rawX - downX).toInt(); val dy = (e.rawY - downY).toInt()
                     if (abs(dx) > 8 || abs(dy) > 8) moved = true
+                    // allow flush to every edge (incl. the very top: y = 0)
                     lp.x = (startX + dx).coerceIn(0, (size.x - keep).coerceAtLeast(0))
                     lp.y = (startY + dy).coerceIn(0, (size.y - keep).coerceAtLeast(0))
                     runCatching { wm.updateViewLayout(card, lp) }
@@ -382,7 +372,6 @@ class OverlayPanelsService : Service() {
         super.onDestroy()
         isRunning = false
         handler.removeCallbacks(tick)
-        handler.removeCallbacks(pinTick)
         locListener?.let {
             runCatching { (getSystemService(LOCATION_SERVICE) as LocationManager).removeUpdates(it) }
         }
