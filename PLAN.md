@@ -640,6 +640,16 @@ Full HomeActivity + activity_home.xml rewrite:
 - NOTE: raw.githubusercontent version.json CDN-caches ~5min after push; verify
   real value via `gh api .../contents/version.json`.
 
+## 22. STATUS — Milestone 14 (2026-07-21): camera rotate — v0.10.2
+Camera2 previews (esp. analog inputs) can come in rotated with no auto-fix.
+- `Panel.rotation` (0/90/180/270, persisted as "rot").
+- `CameraPanel.setRotationDeg` applies a TextureView matrix transform (rotate about
+  centre + cover-scale for 90/270) so the panel rect stays put.
+- Live **⟳ rotate button** top-right of the camera overlay card → cycles 90°,
+  applies live, `persistRotation` saves it (identity-checked).
+- Editor camera tile menu also has "Rotate 90°".
+- versionCode 19 / 0.10.2. Lint + encoding clean. Released via gh.
+
 ### Candidate next features (user asked "what else"; not yet built)
 1. Media now-playing panel + controls (MediaSession; needs notification access).
 2. Host real home-screen **widgets** as panels (AppWidgetHost).
