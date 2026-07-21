@@ -1,7 +1,7 @@
 {
-  "versionCode": 16,
-  "versionName": "0.9.6",
-  "tag": "v0.9.6",
+  "versionCode": 17,
+  "versionName": "0.10.0",
+  "tag": "v0.10.0",
   "apk": "app-release.apk",
-  "notes": "Camera is now a true overlay (persists size/position, no audio interruption, never sinks). Removed the music-stopping auto-raise. Overlays reach the top edge. Overlays auto-start in Solo mode. Cleaner home screen (fixed grid overlap)."
+  "notes": "All-new card dashboard home: action tiles, cockpit hero card with live layout preview, favourites and status cards. Floating pill and overlays unchanged. Tip: Settings > Display > Light for the bright look."
 }

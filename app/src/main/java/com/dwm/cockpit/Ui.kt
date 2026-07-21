@@ -165,6 +165,31 @@ object Ui {
         else rounded(0x00000000, dp(c, 10).toFloat(), 0, 0)
     }
 
+    /** Reference-style state colours (used sparingly, like the mock: blue =
+     *  primary action, green = active/on). */
+    const val GREEN = 0xFF34C759.toInt()
+
+    /** Dashboard tile: filled rounded square with ripple. */
+    fun tileBg(c: Context, fill: Int): Drawable {
+        val r = dp(c, 18).toFloat()
+        return android.graphics.drawable.RippleDrawable(
+            ColorStateList.valueOf(withAlpha(0xFFFFFFFF.toInt(), 0x33)),
+            rounded(fill, r, 0, 0),
+            rounded(0xFFFFFFFF.toInt(), r, 0, 0)
+        )
+    }
+
+    /** Big accent-filled primary button (hero "Launch"). */
+    fun primaryBtnBg(c: Context): Drawable {
+        val a = accent(c)
+        val r = dp(c, 14).toFloat()
+        return android.graphics.drawable.RippleDrawable(
+            ColorStateList.valueOf(withAlpha(0xFFFFFFFF.toInt(), 0x40)),
+            rounded(a, r, 0, 0),
+            rounded(0xFFFFFFFF.toInt(), r, 0, 0)
+        )
+    }
+
     /** Overlay-panel drag/resize grip: accent-tinted rounded corner tab so the
      *  touch target is unmistakable. */
     fun gripBg(c: Context, accent: Int, topLeft: Boolean): Drawable {

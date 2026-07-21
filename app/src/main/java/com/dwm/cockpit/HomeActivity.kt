@@ -2,7 +2,6 @@ package com.dwm.cockpit
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
@@ -16,42 +15,43 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
-import android.webkit.WebChromeClient
 import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.widget.Button
 import android.widget.FrameLayout
-import android.widget.HorizontalScrollView
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * The launcher home / cockpit. Draws DWM-owned panels (web, gauges, image, live
- * camera) as rounded cards on its canvas; real apps float above in freeform
- * windows. Runs the clock, GPS-speed and OBD feeds, and hosts the editable dock.
+ * The launcher home: a reference-style card dashboard — action tiles left, a
+ * cockpit hero card with live layout preview centre, favourites + status right.
+ * Dashboard-mode panels draw full-bleed on the canvas behind it (the dashboard
+ * hides itself when panels are present). Runs clock, GPS-speed and OBD feeds.
  */
 class HomeActivity : DwmActivity() {
 
     private lateinit var wallpaper: ImageView
     private lateinit var panelHost: FrameLayout
+    private lateinit var dashboard: LinearLayout
     private lateinit var clock: TextView
     private lateinit var date: TextView
-    private lateinit var dock: LinearLayout
-    private lateinit var dockScroll: HorizontalScrollView
-    private lateinit var dockToggle: Button
-    private lateinit var topBar: LinearLayout
-    private lateinit var topToggle: Button
-    private lateinit var cluster: LinearLayout
-    private lateinit var favGrid: LinearLayout
-    private lateinit var favGridScroll: View
+    private lateinit var cardTiles: LinearLayout
+    private lateinit var cardHero: LinearLayout
+    private lateinit var cardFavs: LinearLayout
+    private lateinit var cardStatus: LinearLayout
+    private lateinit var heroSub: TextView
+    private lateinit var heroPreviewWrap: FrameLayout
+    private lateinit var favWrap: LinearLayout
+    private var heroPreview: LayoutPreview? = null
+    private var tileCamera: Pair<LinearLayout, Pair<ImageView, TextView>>? = null
 
     private val handler = Handler(Looper.getMainLooper())
     private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
-    private val dateFmt = SimpleDateFormat("EEE d MMM", Locale.getDefault())
+    private val dateFmt = SimpleDateFormat("EEEE d MMMM", Locale.getDefault())
     private var lastPanelsJson: String? = "_never"
     private var appliedFontScale = 1.0f
 
@@ -82,71 +82,40 @@ class HomeActivity : DwmActivity() {
 
         wallpaper = findViewById(R.id.wallpaper)
         panelHost = findViewById(R.id.panelHost)
+        dashboard = findViewById(R.id.dashboard)
         clock = findViewById(R.id.clock)
         date = findViewById(R.id.date)
-        dock = findViewById(R.id.dock)
-        dockScroll = findViewById(R.id.dockScroll)
-        dockToggle = findViewById(R.id.dockToggle)
-        topBar = findViewById(R.id.topBar)
-        topToggle = findViewById(R.id.topToggle)
-        cluster = findViewById(R.id.cluster)
-        favGrid = findViewById(R.id.favGrid)
-        favGridScroll = findViewById(R.id.favGridScroll)
+        cardTiles = findViewById(R.id.cardTiles)
+        cardHero = findViewById(R.id.cardHero)
+        cardFavs = findViewById(R.id.cardFavs)
+        cardStatus = findViewById(R.id.cardStatus)
+        heroSub = findViewById(R.id.heroSub)
+        heroPreviewWrap = findViewById(R.id.heroPreviewWrap)
+        favWrap = findViewById(R.id.favWrap)
 
-        // legible over any panel behind it
-        clock.setShadowLayer(10f, 0f, 2f, 0x99000000.toInt())
-        date.setShadowLayer(8f, 0f, 1f, 0x99000000.toInt())
-
-        findViewById<View>(R.id.btnApps).setOnClickListener { startActivity(Intent(this, AppDrawerActivity::class.java)) }
-        findViewById<View>(R.id.btnLayout).setOnClickListener { startActivity(Intent(this, LayoutEditorActivity::class.java)) }
-        findViewById<View>(R.id.btnSettings).setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
-        findViewById<View>(R.id.btnReload).setOnClickListener {
-            lastPanelsJson = "_force"
-            refreshPanelsIfChanged()
-            LaunchEngine.launchLayout(this, Prefs.panels(this))
-        }
-        findViewById<View>(R.id.btnBluetooth).setOnClickListener { openSetting(Settings.ACTION_BLUETOOTH_SETTINGS) }
-        findViewById<View>(R.id.btnWifi).setOnClickListener { openSetting(Settings.ACTION_WIFI_SETTINGS) }
-        findViewById<View>(R.id.btnOverlays).setOnClickListener { toggleOverlays() }
-        dockToggle.setOnClickListener {
-            Prefs.setDockCollapsed(this, !Prefs.dockCollapsed(this))
-            applyDockCollapsed()
-        }
-        topToggle.setOnClickListener {
-            Prefs.setTopCollapsed(this, !Prefs.topCollapsed(this))
-            applyTopCollapsed()
-        }
+        findViewById<View>(R.id.topReload).setOnClickListener { reloadCockpit() }
+        findViewById<View>(R.id.topEdit).setOnClickListener { startActivity(Intent(this, LayoutEditorActivity::class.java)) }
+        findViewById<View>(R.id.topSettings).setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
+        findViewById<View>(R.id.btnHeroLaunch).setOnClickListener { reloadCockpit() }
+        findViewById<View>(R.id.btnHeroEdit).setOnClickListener { startActivity(Intent(this, LayoutEditorActivity::class.java)) }
     }
 
-    private fun styleTopIcons() {
-        val tint = android.content.res.ColorStateList.valueOf(Ui.th(this).text)
-        for (i in 0 until cluster.childCount) {
-            val v = cluster.getChildAt(i)
-            if (v is android.widget.ImageButton) {
-                v.background = Ui.iconRipple(this)
-                v.imageTintList = tint
-            }
-        }
+    private fun reloadCockpit() {
+        lastPanelsJson = "_force"
+        refreshPanelsIfChanged()
+        LaunchEngine.launchLayout(this, Prefs.panels(this))
     }
 
     private fun toggleOverlays() {
         if (!canOverlay()) {
             startActivity(
-                Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
+                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
             )
             return
         }
         if (OverlayPanelsService.isRunning) OverlayPanelsService.stop(this)
         else OverlayPanelsService.start(this)
-    }
-
-    private fun applyTopCollapsed() {
-        val collapsed = Prefs.topCollapsed(this)
-        topBar.visibility = if (collapsed) View.GONE else View.VISIBLE
-        topToggle.text = if (collapsed) "⌄" else "⌃"
+        handler.postDelayed({ refreshTileStates(); buildStatusCard() }, 600)
     }
 
     override fun onStart() {
@@ -154,17 +123,12 @@ class HomeActivity : DwmActivity() {
         if (Prefs.fontScale(this) != appliedFontScale) { recreate(); return }
         Ui.themeWindow(this)
         Ui.skin(this, findViewById(android.R.id.content))
-        dockScroll.background = Ui.barBg(this)
-        cluster.background = Ui.clusterBg(this)
-        favGrid.background = Ui.clusterBg(this)
-        favGrid.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8))
-        Ui.roundify(favGrid, 24)
-        styleTopIcons()
+        styleDashboard()
         applyWallpaper()
-        buildDock()
-        buildFavGrid()
-        applyDockCollapsed()
-        applyTopCollapsed()
+        buildTiles()
+        buildFavCard()
+        buildStatusCard()
+        updateHero()
         handler.post(tick)
         ensurePermissions()
         refreshPanelsIfChanged()
@@ -184,17 +148,283 @@ class HomeActivity : DwmActivity() {
         }
     }
 
-    private fun autoCheckUpdate() {
-        Updater.check(this) { result ->
-            if (result is Updater.Result.Available) {
-                Ui.dialog(this)
-                    .setTitle("Update to v${result.info.versionName}?")
-                    .setMessage(if (result.info.notes.isBlank()) "A new version is available." else result.info.notes)
-                    .setPositiveButton("Update") { _, _ -> startUpdate(result.info) }
-                    .setNegativeButton("Later", null)
-                    .show()
+    override fun onStop() {
+        super.onStop()
+        handler.removeCallbacks(tick)
+        stopLocation()
+        stopObd()
+    }
+
+    // ---- dashboard chrome ------------------------------------------------
+
+    private fun styleDashboard() {
+        val th = Ui.th(this)
+        for (card in listOf(cardTiles, cardHero, cardFavs, cardStatus)) {
+            card.background = Ui.cardBg(this)
+            Ui.roundify(card, 20)
+        }
+        clock.setTextColor(th.text)
+        date.setTextColor(th.dim)
+        findViewById<TextView>(R.id.heroTitle).apply {
+            setTextColor(th.text)
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+        }
+        heroSub.setTextColor(th.dim)
+        findViewById<TextView>(R.id.btnHeroLaunch).apply {
+            background = Ui.primaryBtnBg(this@HomeActivity)
+            Ui.roundify(this, 14)
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+        }
+        findViewById<TextView>(R.id.btnHeroEdit).apply {
+            background = Ui.chipBg(this@HomeActivity)
+            Ui.roundify(this, 14)
+            setTextColor(th.text)
+        }
+        val tint = android.content.res.ColorStateList.valueOf(th.text)
+        for (id in listOf(R.id.topReload, R.id.topEdit, R.id.topSettings)) {
+            findViewById<ImageButton>(id).apply {
+                background = Ui.iconRipple(this@HomeActivity)
+                imageTintList = tint
             }
         }
+    }
+
+    /** Left card: 2×3 grid of coloured action tiles (reference style). */
+    private fun buildTiles() {
+        cardTiles.removeAllViews()
+        val th = Ui.th(this)
+        val accent = Ui.accent(this)
+
+        fun tile(iconRes: Int, label: String, fill: Int?, onClick: () -> Unit): LinearLayout {
+            val filled = fill != null
+            val t = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                background = Ui.tileBg(this@HomeActivity, fill ?: th.surface)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { onClick() }
+            }
+            Ui.roundify(t, 18)
+            val icon = ImageView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(Ui.dp(this@HomeActivity, 26), Ui.dp(this@HomeActivity, 26))
+                setImageResource(iconRes)
+                imageTintList = android.content.res.ColorStateList.valueOf(
+                    if (filled) 0xFFFFFFFF.toInt() else th.text
+                )
+            }
+            val lbl = TextView(this).apply {
+                text = label
+                textSize = 11f
+                setTextColor(if (filled) 0xFFFFFFFF.toInt() else th.dim)
+                setPadding(0, Ui.dp(this@HomeActivity, 6), 0, 0)
+            }
+            t.addView(icon); t.addView(lbl)
+            return t
+        }
+
+        val overlaysOn = OverlayPanelsService.isRunning
+        val camTile = tile(R.drawable.ic_layers, "Overlays", if (overlaysOn) Ui.GREEN else null) { toggleOverlays() }
+        tileCamera = camTile to ((camTile.getChildAt(0) as ImageView) to (camTile.getChildAt(1) as TextView))
+
+        val tiles = listOf(
+            tile(R.drawable.ic_play, "CarPlay", accent) { launchCarplay() },
+            camTile,
+            tile(R.drawable.ic_bt, "Bluetooth", null) { openSetting(Settings.ACTION_BLUETOOTH_SETTINGS) },
+            tile(R.drawable.ic_wifi, "Wi-Fi", null) { openSetting(Settings.ACTION_WIFI_SETTINGS) },
+            tile(R.drawable.ic_apps, "Apps", null) { startActivity(Intent(this, AppDrawerActivity::class.java)) },
+            tile(R.drawable.ic_settings, "Settings", null) { startActivity(Intent(this, SettingsActivity::class.java)) }
+        )
+
+        val gap = Ui.dp(this, 10)
+        var i = 0
+        while (i < tiles.size) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+                ).apply { if (i > 0) topMargin = gap }
+            }
+            for (j in 0..1) {
+                val t = tiles.getOrNull(i + j) ?: break
+                t.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+                    .apply { if (j > 0) marginStart = gap }
+                row.addView(t)
+            }
+            cardTiles.addView(row)
+            i += 2
+        }
+    }
+
+    private fun refreshTileStates() {
+        val (tile, iconLbl) = tileCamera ?: return
+        val on = OverlayPanelsService.isRunning
+        val th = Ui.th(this)
+        tile.background = Ui.tileBg(this, if (on) Ui.GREEN else th.surface)
+        Ui.roundify(tile, 18)
+        iconLbl.first.imageTintList =
+            android.content.res.ColorStateList.valueOf(if (on) 0xFFFFFFFF.toInt() else th.text)
+        iconLbl.second.setTextColor(if (on) 0xFFFFFFFF.toInt() else th.dim)
+    }
+
+    private fun launchCarplay() {
+        val panels = Prefs.panels(this)
+        val base = panels.firstOrNull { it.isFullscreenApp() }?.pkg ?: Prefs.carplay(this)
+        if (base != null) LaunchEngine.launchFullscreen(this, base)
+        else {
+            Toast.makeText(this, "Pick your CarPlay app in Settings > Cockpit", Toast.LENGTH_LONG).show()
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+    }
+
+    /** Centre hero: live miniature of the saved layout + subtitle. */
+    private fun updateHero() {
+        val panels = Prefs.panels(this)
+        if (heroPreview == null) {
+            heroPreview = LayoutPreview(this)
+            heroPreviewWrap.addView(
+                heroPreview,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+        }
+        heroPreview?.setColors(Ui.accent(this), Ui.th(this))
+        heroPreview?.panels = panels
+        val modeName = if (Prefs.mode(this) == 1) "Solo + overlays" else "Dashboard"
+        heroSub.text = if (panels.isEmpty())
+            "No layout yet — tap Edit to build your cockpit"
+        else
+            "$modeName · ${panels.size} panel${if (panels.size == 1) "" else "s"}"
+    }
+
+    /** Right card: favourites grid (2×N, up to 8). */
+    private fun buildFavCard() {
+        favWrap.removeAllViews()
+        val favs = Apps.effectiveFavorites(this).take(8)
+        cardFavs.visibility = if (Prefs.showFavGrid(this) && favs.isNotEmpty()) View.VISIBLE else View.GONE
+        if (favs.isEmpty()) return
+        val th = Ui.th(this)
+        val iconPx = Ui.dp(this, 46)
+        val gap = Ui.dp(this, 6)
+        val perRow = 2
+        var i = 0
+        while (i < favs.size) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = gap }
+            }
+            for (j in 0 until perRow) {
+                val pkg = favs.getOrNull(i + j) ?: break
+                val d = Apps.icon(this, pkg) ?: continue
+                val item = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    background = Ui.iconRipple(this@HomeActivity)
+                    setPadding(gap, gap, gap, gap)
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    setOnClickListener { LaunchEngine.launchFullscreen(this@HomeActivity, pkg) }
+                    setOnLongClickListener { favItemMenu(pkg); true }
+                }
+                item.addView(ImageView(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(iconPx, iconPx)
+                    setImageDrawable(d)
+                })
+                item.addView(TextView(this).apply {
+                    text = Apps.label(this@HomeActivity, pkg)
+                    textSize = 10f
+                    maxLines = 1
+                    gravity = Gravity.CENTER
+                    setTextColor(th.dim)
+                    setPadding(0, Ui.dp(this@HomeActivity, 4), 0, 0)
+                })
+                row.addView(item)
+            }
+            favWrap.addView(row)
+            i += perRow
+        }
+    }
+
+    private fun favItemMenu(pkg: String) {
+        val label = Apps.label(this, pkg)
+        Ui.dialog(this)
+            .setTitle(label)
+            .setItems(arrayOf("Open in window", "Move up", "Move down", "Remove from favourites")) { _, w ->
+                val cur = Apps.effectiveFavorites(this).toMutableList()
+                val i = cur.indexOf(pkg)
+                when (w) {
+                    0 -> {
+                        val s = LaunchEngine.displaySize(this)
+                        LaunchEngine.launchWindow(this, pkg, android.graphics.Rect(s.x / 6, s.y / 6, s.x * 5 / 6, s.y * 5 / 6))
+                    }
+                    1 -> if (i > 0) { cur.removeAt(i); cur.add(i - 1, pkg); Prefs.saveFavorites(this, cur); buildFavCard() }
+                    2 -> if (i in 0 until cur.size - 1) { cur.removeAt(i); cur.add(i + 1, pkg); Prefs.saveFavorites(this, cur); buildFavCard() }
+                    3 -> if (i >= 0) { cur.removeAt(i); Prefs.saveFavorites(this, cur); buildFavCard() }
+                }
+            }
+            .show()
+    }
+
+    /** Right-bottom card: overlays + updates status rows. */
+    private fun buildStatusCard() {
+        cardStatus.removeAllViews()
+        val th = Ui.th(this)
+
+        fun row(label: String, value: String, valueColor: Int, onClick: () -> Unit) {
+            val r = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = Ui.dp(this@HomeActivity, 40)
+                background = Ui.iconRipple(this@HomeActivity)
+                setOnClickListener { onClick() }
+            }
+            r.addView(TextView(this).apply {
+                text = label
+                textSize = 12f
+                setTextColor(th.text)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            r.addView(TextView(this).apply {
+                text = value
+                textSize = 12f
+                setTextColor(valueColor)
+                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            })
+            cardStatus.addView(r)
+        }
+
+        val overlaysOn = OverlayPanelsService.isRunning
+        row("Overlays", if (overlaysOn) "On" else "Off", if (overlaysOn) Ui.GREEN else th.dim) { toggleOverlays() }
+        row("Version", "v" + Updater.currentVersionName(this), th.dim) {
+            Toast.makeText(this, "Checking for updates…", Toast.LENGTH_SHORT).show()
+            Updater.check(this) { result ->
+                when (result) {
+                    is Updater.Result.UpToDate -> Toast.makeText(this, "You're on the latest", Toast.LENGTH_SHORT).show()
+                    is Updater.Result.Error -> Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+                    is Updater.Result.Available -> autoPromptUpdate(result.info)
+                }
+            }
+        }
+    }
+
+    // ---- updater ---------------------------------------------------------
+
+    private fun autoCheckUpdate() {
+        Updater.check(this) { result ->
+            if (result is Updater.Result.Available) autoPromptUpdate(result.info)
+        }
+    }
+
+    private fun autoPromptUpdate(info: Updater.Info) {
+        Ui.dialog(this)
+            .setTitle("Update to v${info.versionName}?")
+            .setMessage(if (info.notes.isBlank()) "A new version is available." else info.notes)
+            .setPositiveButton("Update") { _, _ -> startUpdate(info) }
+            .setNegativeButton("Later", null)
+            .show()
     }
 
     private fun startUpdate(info: Updater.Info) {
@@ -214,21 +444,14 @@ class HomeActivity : DwmActivity() {
             onCommitted = { runCatching { dlg.dismiss() } },
             onError = { msg ->
                 runCatching { dlg.dismiss() }
-                android.widget.Toast.makeText(this, "Update failed: $msg", android.widget.Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Update failed: $msg", Toast.LENGTH_LONG).show()
             }
         )
     }
 
-    override fun onStop() {
-        super.onStop()
-        handler.removeCallbacks(tick)
-        stopLocation()
-        stopObd()
-    }
-
     // ---- panel rendering -------------------------------------------------
 
-    /** Re-render only when the saved layout (or accent) actually changed, so
+    /** Re-render only when the saved layout (or theme/mode) actually changed, so
      *  WebViews/cameras aren't torn down every time we come back to Home. */
     private fun refreshPanelsIfChanged() {
         val sig = (Prefs.panelsRaw(this) ?: "") + "|" + Prefs.accent(this) + "|" +
@@ -236,18 +459,19 @@ class HomeActivity : DwmActivity() {
         if (sig == lastPanelsJson) { startLocation(); startObd(); return }
         lastPanelsJson = sig
         panelHost.post { renderPanels() }
+        updateHero()
         syncOverlayPanels()
     }
 
     /** Keep the always-on-top overlay panels in sync with the layout/mode:
-     *  Solo mode → (re)start with the fresh layout; Dashboard → stop them.
-     *  Called when the layout actually changed, so a restart is warranted. */
+     *  Solo mode → (re)start with the fresh layout; Dashboard → stop them. */
     private fun syncOverlayPanels() {
         if (Prefs.mode(this) == 1 && canOverlay()) {
             OverlayPanelsService.stop(this)
-            handler.postDelayed({ OverlayPanelsService.start(this) }, 500)
+            handler.postDelayed({ OverlayPanelsService.start(this); refreshTileStates(); buildStatusCard() }, 500)
         } else if (OverlayPanelsService.isRunning) {
             OverlayPanelsService.stop(this)
+            handler.postDelayed({ refreshTileStates(); buildStatusCard() }, 300)
         }
     }
 
@@ -257,6 +481,7 @@ class HomeActivity : DwmActivity() {
         if (Prefs.mode(this) == 1 && canOverlay() && !OverlayPanelsService.isRunning) {
             handler.postDelayed({
                 if (Prefs.mode(this) == 1 && !OverlayPanelsService.isRunning) OverlayPanelsService.start(this)
+                refreshTileStates(); buildStatusCard()
             }, 1600)
         }
     }
@@ -272,8 +497,8 @@ class HomeActivity : DwmActivity() {
         stopLocation(); stopObd()
 
         val panels = Prefs.panels(this)
-        // Solo mode: drawn panels live in the always-on-top overlay service, so the
-        // home canvas stays a clean launcher (favourites grid).
+        // Solo mode: drawn panels live in the always-on-top overlay service, so
+        // the home canvas stays the clean card dashboard.
         val overlayMode = Prefs.mode(this) == 1
         var canvasPanels = 0
 
@@ -303,12 +528,8 @@ class HomeActivity : DwmActivity() {
             }
         }
 
-        // Favourites grid shows only when the canvas isn't busy with dashboard
-        // panels — this is the fix for the welcome-card / grid overlap.
-        val favs = Apps.effectiveFavorites(this)
-        val showGrid = Prefs.showFavGrid(this) && favs.isNotEmpty() && canvasPanels == 0
-        favGridScroll.visibility = if (showGrid) View.VISIBLE else View.GONE
-        if (canvasPanels == 0 && favs.isEmpty()) showEmptyState()
+        // Dashboard cards show only when the canvas isn't taken by panels.
+        dashboard.visibility = if (canvasPanels == 0) View.VISIBLE else View.GONE
 
         startLocation()
         startObd()
@@ -389,52 +610,6 @@ class HomeActivity : DwmActivity() {
         return wv
     }
 
-    private fun showEmptyState() {
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            background = Ui.cardBg(this@HomeActivity)
-            setPadding(Ui.dp(this@HomeActivity, 28), Ui.dp(this@HomeActivity, 24), Ui.dp(this@HomeActivity, 28), Ui.dp(this@HomeActivity, 24))
-        }
-        Ui.roundify(card, 18)
-
-        val th = Ui.th(this)
-        card.addView(TextView(this).apply {
-            text = "Welcome to DWM"
-            textSize = 20f
-            setTextColor(th.text)
-            typeface = android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL)
-        })
-        card.addView(TextView(this).apply {
-            text = "Build your cockpit: pick a layout template, tap the + slots to add CarPlay, your camera, gauges or dashboards — then Save. It auto-loads every start."
-            textSize = 12f
-            setTextColor(th.dim)
-            setPadding(0, Ui.dp(this@HomeActivity, 6), 0, Ui.dp(this@HomeActivity, 14))
-        })
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row.addView(Button(this).apply {
-            text = "Choose template"
-            setOnClickListener { startActivity(Intent(this@HomeActivity, LayoutEditorActivity::class.java)) }
-        })
-        row.addView(Button(this).apply {
-            text = "Settings"
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            lp.leftMargin = Ui.dp(this@HomeActivity, 10)
-            layoutParams = lp
-            setOnClickListener { startActivity(Intent(this@HomeActivity, SettingsActivity::class.java)) }
-        })
-        card.addView(row)
-        Ui.skin(this, card)
-
-        val lp = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
-        )
-        lp.gravity = Gravity.CENTER
-        panelHost.addView(card, lp)
-    }
-
     // ---- live data feeds -------------------------------------------------
 
     // Guarded by the granted() check below and runCatching; lint can't see that.
@@ -505,7 +680,7 @@ class HomeActivity : DwmActivity() {
         }
     }
 
-    // ---- wallpaper / dock ------------------------------------------------
+    // ---- wallpaper -------------------------------------------------------
 
     private fun applyWallpaper() {
         val idx = Prefs.wallpaper(this)
@@ -518,86 +693,6 @@ class HomeActivity : DwmActivity() {
         }
         wallpaper.setImageDrawable(null)
         wallpaper.background = Ui.wallpaperDrawable(this, idx)
-    }
-
-    private fun buildDock() {
-        dock.removeAllViews()
-        val favs = Apps.effectiveFavorites(this)
-        val size = resources.getDimensionPixelSize(R.dimen.dock_icon)
-        val gap = resources.getDimensionPixelSize(R.dimen.gap)
-        for (pkg in favs) {
-            val icon = Apps.icon(this, pkg) ?: continue
-            val iv = ImageView(this)
-            iv.layoutParams = LinearLayout.LayoutParams(size, size).apply { marginEnd = gap }
-            iv.setImageDrawable(icon)
-            iv.setOnClickListener { LaunchEngine.launchFullscreen(this, pkg) }
-            iv.setOnLongClickListener { dockItemMenu(pkg); true }
-            dock.addView(iv)
-        }
-    }
-
-    /** Big centred grid of favourite apps — the "5 apps I always see" the user
-     *  wanted. Shares the favourites list with the dock. */
-    /** Populates the favourites grid. Visibility is decided by renderPanels so it
-     *  never overlaps dashboard panels. */
-    private fun buildFavGrid() {
-        favGrid.removeAllViews()
-        val favs = Apps.effectiveFavorites(this)
-        val th = Ui.th(this)
-        val iconPx = Ui.dp(this, 68)
-        val padH = Ui.dp(this, 18)
-        val padV = Ui.dp(this, 14)
-        for (pkg in favs.take(8)) {
-            val d = Apps.icon(this, pkg) ?: continue
-            val item = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(padH, padV, padH, padV)
-                background = Ui.iconRipple(this@HomeActivity)
-            }
-            item.addView(ImageView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(iconPx, iconPx)
-                setImageDrawable(d)
-            })
-            item.addView(TextView(this).apply {
-                text = Apps.label(this@HomeActivity, pkg)
-                setTextColor(th.text)
-                textSize = 11f
-                gravity = Gravity.CENTER
-                maxLines = 1
-                setPadding(0, Ui.dp(this@HomeActivity, 8), 0, 0)
-                setShadowLayer(6f, 0f, 1f, 0x99000000.toInt())
-            })
-            item.setOnClickListener { LaunchEngine.launchFullscreen(this, pkg) }
-            item.setOnLongClickListener { dockItemMenu(pkg); true }
-            favGrid.addView(item)
-        }
-    }
-
-    private fun dockItemMenu(pkg: String) {
-        val label = Apps.label(this, pkg)
-        Ui.dialog(this)
-            .setTitle(label)
-            .setItems(arrayOf("Open in window", "Move left", "Move right", "Remove from dock")) { _, w ->
-                val cur = Apps.effectiveFavorites(this).toMutableList()
-                val i = cur.indexOf(pkg)
-                when (w) {
-                    0 -> {
-                        val s = LaunchEngine.displaySize(this)
-                        LaunchEngine.launchWindow(this, pkg, android.graphics.Rect(s.x / 6, s.y / 6, s.x * 5 / 6, s.y * 5 / 6))
-                    }
-                    1 -> if (i > 0) { cur.removeAt(i); cur.add(i - 1, pkg); Prefs.saveFavorites(this, cur); buildDock(); buildFavGrid() }
-                    2 -> if (i in 0 until cur.size - 1) { cur.removeAt(i); cur.add(i + 1, pkg); Prefs.saveFavorites(this, cur); buildDock(); buildFavGrid() }
-                    3 -> if (i >= 0) { cur.removeAt(i); Prefs.saveFavorites(this, cur); buildDock(); buildFavGrid() }
-                }
-            }
-            .show()
-    }
-
-    private fun applyDockCollapsed() {
-        val collapsed = Prefs.dockCollapsed(this)
-        dockScroll.visibility = if (collapsed) View.GONE else View.VISIBLE
-        dockToggle.text = if (collapsed) "⌃" else "⌄"
     }
 
     private fun openSetting(action: String) {
