@@ -1,7 +1,7 @@
 {
-  "versionCode": 21,
-  "versionName": "0.11.0",
-  "tag": "v0.11.0",
+  "versionCode": 22,
+  "versionName": "0.11.1",
+  "tag": "v0.11.1",
   "apk": "app-release.apk",
-  "notes": "New 'App notification' overlay panel — mirrors an app's notification (e.g. TPMS pressures) as an overlay that stays above CarPlay. Setup: Settings > Vehicle > Allow DWM notification access, then Edit > add 'App notification' panel and pick your TPMS app."
+  "notes": "Camera fix (revert): the feed fills the panel again, so resizing the panel resizes the picture (no more locked-portrait). Use the round arrow to rotate if the road is sideways."
 }
