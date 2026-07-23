@@ -650,6 +650,24 @@ Camera2 previews (esp. analog inputs) can come in rotated with no auto-fix.
 - Editor camera tile menu also has "Rotate 90°".
 - versionCode 19 / 0.10.2. Lint + encoding clean. Released via gh.
 
+## 23. STATUS — Milestone 15 (2026-07-21): app-notification overlay — v0.10.3/0.11.0
+- v0.10.3: camera aspect fix — pick the camera's real output size for the buffer,
+  contain-fit + centre transform (fixes square-panel shift/stretch), + rotation.
+- v0.11.0: **App-notification overlay panel** — user reported app WINDOWS (their
+  TPMS app) sink behind fullscreen CarPlay while the Camera2 overlay stays. Root
+  cause is the Android z-order rule (can't keep another app's window above a
+  fullscreen app). Fix: mirror the app's NOTIFICATION as a DWM-drawn overlay
+  (stays on top like the camera).
+  - `NotifStore` (latest notif per pkg) + `DwmNotificationListener`
+    (NotificationListenerService, BIND_NOTIFICATION_LISTENER_SERVICE, manifest).
+  - `NotifPanel` (drawn, subscribes to store, live). New `PanelType.NOTIF`.
+  - Editor "App notification (TPMS, etc.)" type; `pickApp` refactored Boolean
+    asCamera → `PanelType kind`. Settings→Vehicle "Allow DWM notification access"
+    (deep-links ACTION_NOTIFICATION_LISTENER_SETTINGS; `NotifStore.accessGranted`).
+  - CAVEAT: only works if the TPMS app posts the pressures in a notification. If
+    not → need BLE-TPMS decode or OBD TPMS (unknown sensor format) — pending.
+- versionCode 21 / 0.11.0. Lint + encoding clean. Released via gh.
+
 ### Candidate next features (user asked "what else"; not yet built)
 1. Media now-playing panel + controls (MediaSession; needs notification access).
 2. Host real home-screen **widgets** as panels (AppWidgetHost).
