@@ -36,7 +36,7 @@ class LayoutEditorActivity : DwmActivity() {
     private val slots = ArrayList<Slot>()
     private var pendingTarget: Slot? = null
     private var pendingIsNewFree = false
-    private var pendingAppAsCamera = false
+    private var pendingKind: PanelType = PanelType.APP
     private var minTile = 0
     private var slop = 0
 
@@ -115,14 +115,15 @@ class LayoutEditorActivity : DwmActivity() {
     private fun chooseType(target: Slot?, newFree: Boolean) {
         val items = arrayOf(
             "Android app", "Camera app (e.g. AUX)", "Web dashboard", "Custom HTML",
-            "Image", "Clock", "Speed (GPS)", "OBD gauge", "Live camera (Camera2)"
+            "Image", "Clock", "Speed (GPS)", "OBD gauge", "Live camera (Camera2)",
+            "App notification (TPMS, etc.)"
         )
         Ui.dialog(this)
             .setTitle("Add to slot")
             .setItems(items) { _, which ->
                 when (which) {
-                    0 -> pickApp(target, newFree, asCamera = false)
-                    1 -> pickApp(target, newFree, asCamera = true)
+                    0 -> pickApp(target, newFree, PanelType.APP)
+                    1 -> pickApp(target, newFree, PanelType.CAMERA)
                     2 -> configWeb(target, newFree)
                     3 -> configHtml(target, newFree)
                     4 -> pickImage(target, newFree)
@@ -130,13 +131,14 @@ class LayoutEditorActivity : DwmActivity() {
                     6 -> assign(target, newFree, Panel(PanelType.SPEED, 0f, 0f, 0f, 0f))
                     7 -> configObd(target, newFree)
                     8 -> configCameraLive(target, newFree)
+                    9 -> pickApp(target, newFree, PanelType.NOTIF)
                 }
             }
             .show()
     }
 
-    private fun pickApp(target: Slot?, newFree: Boolean, asCamera: Boolean) {
-        pendingTarget = target; pendingIsNewFree = newFree; pendingAppAsCamera = asCamera
+    private fun pickApp(target: Slot?, newFree: Boolean, kind: PanelType) {
+        pendingTarget = target; pendingIsNewFree = newFree; pendingKind = kind
         startActivityForResult(
             Intent(this, AppDrawerActivity::class.java).putExtra(AppDrawerActivity.EXTRA_PICK, true),
             REQ_APP
@@ -222,10 +224,11 @@ class LayoutEditorActivity : DwmActivity() {
             REQ_APP -> {
                 val pkg = data.getStringExtra(AppDrawerActivity.EXTRA_PKG) ?: return
                 val label = Apps.label(this, pkg)
-                val panel = if (pendingAppAsCamera)
-                    Panel(PanelType.CAMERA, 0f, 0f, 0f, 0f, pkg = pkg, label = label)
-                else
-                    Panel(PanelType.APP, 0f, 0f, 0f, 0f, pkg = pkg, label = label)
+                val panel = when (pendingKind) {
+                    PanelType.CAMERA -> Panel(PanelType.CAMERA, 0f, 0f, 0f, 0f, pkg = pkg, label = label)
+                    PanelType.NOTIF -> Panel(PanelType.NOTIF, 0f, 0f, 0f, 0f, pkg = pkg, label = label)
+                    else -> Panel(PanelType.APP, 0f, 0f, 0f, 0f, pkg = pkg, label = label)
+                }
                 assign(pendingTarget, pendingIsNewFree, panel)
             }
             REQ_IMAGE -> {
@@ -346,8 +349,9 @@ class LayoutEditorActivity : DwmActivity() {
 
     private fun reconfigure(slot: Slot) {
         when (slot.panel?.type) {
-            PanelType.APP -> pickApp(slot, false, asCamera = false)
-            PanelType.CAMERA -> if (slot.panel?.camId != null) configCameraLive(slot, false) else pickApp(slot, false, asCamera = true)
+            PanelType.APP -> pickApp(slot, false, PanelType.APP)
+            PanelType.NOTIF -> pickApp(slot, false, PanelType.NOTIF)
+            PanelType.CAMERA -> if (slot.panel?.camId != null) configCameraLive(slot, false) else pickApp(slot, false, PanelType.CAMERA)
             PanelType.WEB -> configWeb(slot, false)
             PanelType.HTML -> configHtml(slot, false)
             PanelType.IMAGE -> pickImage(slot, false)

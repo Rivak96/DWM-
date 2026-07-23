@@ -1,7 +1,7 @@
 {
-  "versionCode": 20,
-  "versionName": "0.10.3",
-  "tag": "v0.10.3",
+  "versionCode": 21,
+  "versionName": "0.11.0",
+  "tag": "v0.11.0",
   "apk": "app-release.apk",
-  "notes": "Camera fix: the feed now shows its whole frame centred at the correct aspect ratio in any panel shape (no more shift/stretch when square). Uses the camera's real output size. Tip: size the camera panel roughly 16:9 to fill it."
+  "notes": "New 'App notification' overlay panel — mirrors an app's notification (e.g. TPMS pressures) as an overlay that stays above CarPlay. Setup: Settings > Vehicle > Allow DWM notification access, then Edit > add 'App notification' panel and pick your TPMS app."
 }

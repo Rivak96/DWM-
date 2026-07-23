@@ -566,6 +566,7 @@ class HomeActivity : DwmActivity() {
         PanelType.SPEED -> gaugeFor("gps_speed").also { speedGauges.add(it) }
         PanelType.OBD -> gaugeFor(p.metric).also { obdGauges.add((p.metric ?: "") to it) }
         PanelType.CAMERA -> CameraPanel(this, p.camId, p.pkg, p.rotation)
+        PanelType.NOTIF -> p.pkg?.let { NotifPanel(this, it) }
         PanelType.APP -> null
     }
 

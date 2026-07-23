@@ -91,5 +91,16 @@
         <receiver
             android:name=".InstallResultReceiver"
             android:exported="false" />
+
+        <!-- Reads notifications so DWM can mirror e.g. TPMS pressures as an overlay. -->
+        <service
+            android:name=".DwmNotificationListener"
+            android:exported="false"
+            android:label="DWM notification mirror"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

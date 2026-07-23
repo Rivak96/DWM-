@@ -3,7 +3,7 @@ package com.dwm.cockpit
 import org.json.JSONObject
 
 /** The kinds of thing a layout cell can be. */
-enum class PanelType { APP, WEB, HTML, IMAGE, CLOCK, SPEED, OBD, CAMERA }
+enum class PanelType { APP, WEB, HTML, IMAGE, CLOCK, SPEED, OBD, CAMERA, NOTIF }
 
 /**
  * One cell in the cockpit. Position is stored as screen fractions (0..1) so the
@@ -49,6 +49,7 @@ data class Panel(
         PanelType.SPEED -> "Speed (GPS)"
         PanelType.OBD -> "OBD · ${Obd.metricName(metric)}"
         PanelType.CAMERA -> "Camera · ${camId ?: "auto"}"
+        PanelType.NOTIF -> "Notif · ${label ?: pkg ?: ""}"
     }
 
     fun toJson(): JSONObject = JSONObject().apply {

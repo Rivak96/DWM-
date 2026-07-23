@@ -320,6 +320,18 @@
 
                 <Button android:id="@+id/btnCamScan" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Scan camera inputs" />
 
+                <TextView style="@style/SectionHeader" android:text="TPMS / notification overlay" />
+
+                <Button android:id="@+id/btnNotifAccess" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Allow DWM notification access" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="8dp"
+                    android:text="Lets DWM mirror an app's notification (e.g. your TPMS app's live pressures) as an overlay that stays above CarPlay. Add an 'App notification' panel in Edit and pick the app. Works only if that app shows the info in a notification."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

@@ -122,6 +122,12 @@ class SettingsActivity : DwmActivity() {
         // -- Vehicle ------------------------------------------------------
         findViewById<Button>(R.id.btnObdPick).setOnClickListener { pickObd() }
         findViewById<Button>(R.id.btnCamScan).setOnClickListener { scanCameras() }
+        findViewById<Button>(R.id.btnNotifAccess).setOnClickListener {
+            val granted = NotifStore.accessGranted(this)
+            runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+                .onFailure { Toast.makeText(this, "Open Settings > Notification access", Toast.LENGTH_LONG).show() }
+            if (!granted) Toast.makeText(this, "Turn on DWM in the list", Toast.LENGTH_LONG).show()
+        }
 
         // -- System -------------------------------------------------------
         findViewById<Button>(R.id.btnBt).setOnClickListener { open(Settings.ACTION_BLUETOOTH_SETTINGS) }

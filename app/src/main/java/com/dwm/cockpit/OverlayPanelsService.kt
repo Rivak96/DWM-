@@ -219,6 +219,7 @@ class OverlayPanelsService : Service() {
             scaleType = ImageView.ScaleType.CENTER_CROP
             p.url?.let { u -> runCatching { setImageURI(Uri.parse(u)) } }
         }
+        PanelType.NOTIF -> p.pkg?.let { NotifPanel(this, it) }
         PanelType.APP -> null
     }
 
