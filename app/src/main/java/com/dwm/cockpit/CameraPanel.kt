@@ -34,6 +34,7 @@ class CameraPanel(
     private var bgThread: HandlerThread? = null
     private var bgHandler: Handler? = null
     private var rotation = ((rotationDeg % 360) + 360) % 360
+    private var previewSize: android.util.Size? = null
 
     init {
         setBackgroundColor(Color.BLACK)
@@ -69,19 +70,33 @@ class CameraPanel(
         applyTransform()
     }
 
+    /** Centre the camera frame in the panel at its true aspect ratio (contain:
+     *  the whole frame is always visible, no distortion, no shift), then apply
+     *  the user's rotation. Recomputed whenever the panel is resized. */
     private fun applyTransform() {
         val vw = texture.width.toFloat()
         val vh = texture.height.toFloat()
         if (vw <= 0f || vh <= 0f) return
+        val ps = previewSize
+        val pw = ps?.width?.toFloat() ?: vw
+        val ph = ps?.height?.toFloat() ?: vh
+
         val m = android.graphics.Matrix()
-        val cx = vw / 2f
-        val cy = vh / 2f
+        val viewRect = android.graphics.RectF(0f, 0f, vw, vh)
+        val cx = viewRect.centerX()
+        val cy = viewRect.centerY()
+
+        // Undo TextureView's default stretch: map the view back onto the buffer's
+        // native rect, centred, so the content shows at its true aspect ratio.
+        val bufferRect = android.graphics.RectF(0f, 0f, pw, ph)
+        bufferRect.offset(cx - bufferRect.centerX(), cy - bufferRect.centerY())
+        m.setRectToRect(viewRect, bufferRect, android.graphics.Matrix.ScaleToFit.FILL)
+
+        // Contain-fit the whole frame (accounting for 90/270 swapping dimensions).
+        val rotated = rotation == 90 || rotation == 270
+        val fitScale = if (rotated) minOf(vw / ph, vh / pw) else minOf(vw / pw, vh / ph)
+        m.postScale(fitScale, fitScale, cx, cy)
         m.postRotate(rotation.toFloat(), cx, cy)
-        if (rotation == 90 || rotation == 270) {
-            // scale the rotated frame to cover the (unchanged) view bounds
-            val scale = maxOf(vw / vh, vh / vw)
-            m.postScale(scale, scale, cx, cy)
-        }
         texture.setTransform(m)
     }
 
@@ -110,6 +125,16 @@ class CameraPanel(
                 ?: ids.firstOrNull { facing(it) == android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK }
                 ?: ids.first()
         }
+        // Pick the camera's real output size (not the view size) so the frame
+        // isn't sampled/stretched wrongly.
+        previewSize = runCatching {
+            val chars = mgr.getCameraCharacteristics(id)
+            val map = chars.get(android.hardware.camera2.CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+            val sizes = map?.getOutputSizes(android.graphics.SurfaceTexture::class.java)?.toList()
+            sizes?.filter { it.width <= 1920 && it.height <= 1080 }?.maxByOrNull { it.width.toLong() * it.height }
+                ?: sizes?.maxByOrNull { it.width.toLong() * it.height }
+        }.getOrNull() ?: android.util.Size(1280, 720)
+
         status.text = "Opening camera $id…"
         startBg()
         try {
@@ -131,7 +156,8 @@ class CameraPanel(
 
     private fun startPreview(cam: CameraDevice) {
         val st = texture.surfaceTexture ?: return
-        st.setDefaultBufferSize(texture.width.coerceAtLeast(320), texture.height.coerceAtLeast(240))
+        val ps = previewSize ?: android.util.Size(1280, 720)
+        st.setDefaultBufferSize(ps.width, ps.height)
         val surface = Surface(st)
         val req = cam.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply { addTarget(surface) }
         @Suppress("DEPRECATION")

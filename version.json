@@ -1,7 +1,7 @@
 {
-  "versionCode": 19,
-  "versionName": "0.10.2",
-  "tag": "v0.10.2",
+  "versionCode": 20,
+  "versionName": "0.10.3",
+  "tag": "v0.10.3",
   "apk": "app-release.apk",
-  "notes": "Camera rotate: tap the ⟳ button on the camera overlay to rotate the feed 90° (saved). Also in the layout editor: tap a camera tile > Rotate 90°."
+  "notes": "Camera fix: the feed now shows its whole frame centred at the correct aspect ratio in any panel shape (no more shift/stretch when square). Uses the camera's real output size. Tip: size the camera panel roughly 16:9 to fill it."
 }
