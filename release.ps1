@@ -19,7 +19,11 @@ $json = [ordered]@{
   apk         = "app-release.apk"
   notes       = $Notes
 } | ConvertTo-Json
-Set-Content -Path (Join-Path $root "version.json") -Value $json -Encoding utf8
+# MUST be UTF-8 *without* a BOM. Set-Content -Encoding utf8 on PowerShell 5.1
+# writes a BOM, and the in-app updater does JSONObject(bytes.toString(UTF_8)) —
+# a leading U+FEFF makes org.json throw, so every update check fails.
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText((Join-Path $root "version.json"), $json, $utf8NoBom)
 Write-Host "version.json -> code $code, name $name, tag $tag"
 
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
