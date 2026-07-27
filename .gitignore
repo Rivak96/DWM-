@@ -9,3 +9,7 @@ captures/
 keystore.properties
 *.keystore
 .claude/
+
+# Vehicle/CAN scan reports — device fingerprints, keep them local
+dwm-vehicle-scan*.txt
+DWM vehicle scan*.txt
