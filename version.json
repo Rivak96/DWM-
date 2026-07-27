@@ -1,7 +1,7 @@
 {
-  "versionCode": 22,
-  "versionName": "0.11.1",
-  "tag": "v0.11.1",
+  "versionCode": 23,
+  "versionName": "0.12.0",
+  "tag": "v0.12.0",
   "apk": "app-release.apk",
-  "notes": "Camera fix (revert): the feed fills the panel again, so resizing the panel resizes the picture (no more locked-portrait). Use the round arrow to rotate if the road is sideways."
+  "notes": "MAJOR: home screen rebuilt in Jetpack Compose + Material 3 — glass cards, action tiles, cockpit hero with live layout preview, favourites & status, smooth animations. Big change; if the home misbehaves, tell me (previous versions remain on GitHub Releases). Overlays, pill, camera, editor unchanged."
 }

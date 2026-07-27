@@ -1,16 +1,17 @@
 package com.dwm.cockpit
 
-import android.app.Activity
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import androidx.activity.ComponentActivity
 
-/** Base activity: applies the user's global text scale and immersive fullscreen
+/** Base activity: ComponentActivity (so screens can use Jetpack Compose
+ *  setContent), plus the user's global text scale and immersive fullscreen
  *  (hidden status/navigation bars — swipe from the edge to peek them). */
-abstract class DwmActivity : Activity() {
+abstract class DwmActivity : ComponentActivity() {
 
     override fun attachBaseContext(newBase: Context) {
         val scale = Prefs.fontScale(newBase)
