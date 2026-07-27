@@ -92,6 +92,30 @@ object Prefs {
     fun fontScale(c: Context) = sp(c).getFloat("font_scale", 1.0f)
     fun setFontScale(c: Context, v: Float) = sp(c).edit().putFloat("font_scale", v).apply()
 
+    /**
+     * Global interface scale — a density multiplier applied to every DWM screen.
+     * The deck reports a density meant for a phone-sized panel, so at 1.0 every
+     * control eats far more of the 13" glass than it needs to. Below 1.0 shrinks
+     * dp *and* sp together, so the whole UI gets smaller and more fits on screen.
+     * 0.7 tiny · 0.8 compact (default) · 0.9 cosy · 1.0 stock.
+     */
+    fun uiScale(c: Context) = sp(c).getFloat("ui_scale", 0.8f)
+    fun setUiScale(c: Context, v: Float) = sp(c).edit().putFloat("ui_scale", v).apply()
+
+    /** Camera picture fit: 0 = fill (crop to panel) · 1 = fit (letterbox) ·
+     *  2 = stretch (old behaviour — distorts). */
+    fun camFit(c: Context) = sp(c).getInt("cam_fit", 0)
+    fun setCamFit(c: Context, v: Int) = sp(c).edit().putInt("cam_fit", v).apply()
+
+    /** Camera day/night tone: 0 = auto · 1 = force day · 2 = force night. */
+    fun camDayNight(c: Context) = sp(c).getInt("cam_dn", 0)
+    fun setCamDayNight(c: Context, v: Int) = sp(c).edit().putInt("cam_dn", v).apply()
+
+    /** Manual exposure trim on top of the day/night profile, in steps of ~8%.
+     *  Range -4..+4, 0 = profile default. */
+    fun camTrim(c: Context) = sp(c).getInt("cam_trim", 0)
+    fun setCamTrim(c: Context, v: Int) = sp(c).edit().putInt("cam_trim", v.coerceIn(-4, 4)).apply()
+
     /** Theme preset: 0 = Tesla (gray, default) · 1 = Midnight (black) · 2 = Light. */
     fun theme(c: Context) = sp(c).getInt("theme", 0)
     fun setTheme(c: Context, v: Int) = sp(c).edit().putInt("theme", v).apply()

@@ -109,6 +109,28 @@
                     </LinearLayout>
                 </HorizontalScrollView>
 
+                <TextView style="@style/SectionHeader" android:text="Interface scale" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btnUiTiny" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Tiny" />
+                    <Button android:id="@+id/btnUiCompact" style="@style/ChipButton" android:text="Compact" />
+                    <Button android:id="@+id/btnUiCosy" style="@style/ChipButton" android:text="Cosy" />
+                    <Button android:id="@+id/btnUiStock" style="@style/ChipButton" android:text="Stock" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/uiScaleLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="8dp"
+                    android:text="Shrinks every control, icon and label across DWM at once. The deck reports a phone-sized density for a 13&#8221; panel, so Compact fits far more on screen without anything getting hard to hit."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+
                 <TextView style="@style/SectionHeader" android:text="Text size" />
 
                 <LinearLayout
@@ -120,6 +142,14 @@
                     <Button android:id="@+id/btnTextNormal" style="@style/ChipButton" android:text="Normal" />
                     <Button android:id="@+id/btnTextLarge" style="@style/ChipButton" android:text="Large" />
                 </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="8dp"
+                    android:text="Applied on top of the interface scale — use it if only the labels are hard to read."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <!-- COCKPIT -->
@@ -319,6 +349,85 @@
                 <TextView style="@style/SectionHeader" android:text="Cameras" />
 
                 <Button android:id="@+id/btnCamScan" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Scan camera inputs" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="12dp"
+                    android:text="Picture shape"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btnCamFill" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Fill" />
+                    <Button android:id="@+id/btnCamFit" style="@style/ChipButton" android:text="Fit" />
+                    <Button android:id="@+id/btnCamStretch" style="@style/ChipButton" android:text="Stretch" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="6dp"
+                    android:text="Fill keeps the camera&#8217;s real proportions and crops to the panel (fixes the squashed look). Fit shows the whole frame with black bars. Stretch is the old behaviour."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="12dp"
+                    android:text="Day / night picture"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btnCamAuto" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Auto" />
+                    <Button android:id="@+id/btnCamDay" style="@style/ChipButton" android:text="Day" />
+                    <Button android:id="@+id/btnCamNight" style="@style/ChipButton" android:text="Night" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="12dp"
+                    android:text="Brightness trim"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <Button android:id="@+id/btnCamDarker" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="&#8722; Darker" />
+                    <TextView
+                        android:id="@+id/camTrimLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginEnd="12dp"
+                        android:text="0"
+                        android:textColor="@color/textPrimary"
+                        android:textSize="13sp" />
+                    <Button android:id="@+id/btnCamBrighter" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="+ Brighter" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="6dp"
+                    android:text="Auto uses the deck&#8217;s light sensor when it has one, otherwise the clock (night from 19:00 to 06:00). Night dims the panel hard so the feed doesn&#8217;t light up the cabin. Reload the cockpit after changing these."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
 
                 <TextView style="@style/SectionHeader" android:text="TPMS / notification overlay" />
 

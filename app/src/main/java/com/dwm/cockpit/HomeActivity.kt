@@ -38,6 +38,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.dwm.cockpit.ui.DwmFav
 import com.dwm.cockpit.ui.DwmHome
 import com.dwm.cockpit.ui.DwmTheme
+import com.dwm.cockpit.ui.FAV_SLOTS
 import com.dwm.cockpit.ui.HomeActions
 import com.dwm.cockpit.ui.drawableToImageBitmap
 
@@ -60,7 +61,6 @@ class HomeActivity : DwmActivity() {
     private val wallpaperState = mutableStateOf<ImageBitmap?>(null)
 
     private val handler = Handler(Looper.getMainLooper())
-    private var appliedFontScale = 1.0f
     private var lastPanelsJson: String? = "_never"
 
     private val clockPanels = ArrayList<Pair<TextView, TextView>>()
@@ -73,7 +73,6 @@ class HomeActivity : DwmActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        appliedFontScale = Prefs.fontScale(this)
 
         panelHost = FrameLayout(this)
         preview = LayoutPreview(this)
@@ -122,7 +121,7 @@ class HomeActivity : DwmActivity() {
 
     override fun onStart() {
         super.onStart()
-        if (Prefs.fontScale(this) != appliedFontScale) { recreate(); return }
+        if (recreateIfScaleChanged()) return
 
         wallpaperState.value = loadWallpaperBitmap()
         favsState.value = favData()
@@ -224,8 +223,8 @@ class HomeActivity : DwmActivity() {
     // ---- data for Compose ------------------------------------------------
 
     private fun favData(): List<DwmFav> {
-        val sizePx = (56 * resources.displayMetrics.density).toInt()
-        return Apps.effectiveFavorites(this).take(8).map { pkg ->
+        val sizePx = (44 * resources.displayMetrics.density).toInt()
+        return Apps.effectiveFavorites(this).take(FAV_SLOTS).map { pkg ->
             val icon = Apps.icon(this, pkg)?.let { drawableToImageBitmap(it, sizePx) }
             DwmFav(pkg, Apps.label(this, pkg), icon)
         }

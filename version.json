@@ -1,7 +1,7 @@
-{
-  "versionCode": 23,
-  "versionName": "0.12.0",
-  "tag": "v0.12.0",
-  "apk": "app-release.apk",
-  "notes": "MAJOR: home screen rebuilt in Jetpack Compose + Material 3 — glass cards, action tiles, cockpit hero with live layout preview, favourites & status, smooth animations. Big change; if the home misbehaves, tell me (previous versions remain on GitHub Releases). Overlays, pill, camera, editor unchanged."
+﻿{
+    "versionCode":  24,
+    "versionName":  "0.13.0",
+    "tag":  "v0.13.0",
+    "apk":  "app-release.apk",
+    "notes":  "Everything is smaller and denser: new Interface scale (Settings \u003e Display) shrinks the whole UI at once - default Compact. Home rebuilt in the Jaecoo J7 style: slim status strip, Cockpit / Favourites / Status cards, and a persistent 8-icon dock. Favourites 8 -\u003e 12 (long-press now works). Camera: fixed the stretched picture (new Fill/Fit/Stretch setting) and added day/night brightness with a manual trim, under Settings \u003e Vehicle. App drawer fits more apps. APK 11MB -\u003e 6.3MB. If the home misbehaves, tell me - v0.12.0 is still on GitHub Releases."
 }

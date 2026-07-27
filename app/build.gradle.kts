@@ -21,8 +21,8 @@ android {
         applicationId = "com.dwm.cockpit"
         minSdk = 26          // Android 8.0 — well below the deck's Android 12
         targetSdk = 33
-        versionCode = 23
-        versionName = "0.12.0"
+        versionCode = 24
+        versionName = "0.13.0"
     }
 
     signingConfigs {
@@ -70,9 +70,5 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.core:core-ktx:1.13.1")
-
-    // Lottie for the startup animation
-    implementation("com.airbnb.android:lottie-compose:6.5.2")
 }

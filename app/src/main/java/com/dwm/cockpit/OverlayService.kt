@@ -53,6 +53,11 @@ class OverlayService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Match the launcher's interface scale (see [Scale]). */
+    override fun attachBaseContext(base: android.content.Context) {
+        super.attachBaseContext(Scale.wrap(base))
+    }
+
     override fun onCreate() {
         super.onCreate()
         startForeground(NOTIF_ID, buildNotification())

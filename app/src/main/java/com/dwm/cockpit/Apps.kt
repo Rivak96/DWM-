@@ -40,9 +40,13 @@ object Apps {
         val installed = all(c).map { it.pkg }
         val chosen = prefer.filter { it in installed }.toMutableList()
         for (a in installed) {
-            if (chosen.size >= 6) break
+            if (chosen.size >= DEFAULT_FAVS) break
             if (a !in chosen) chosen.add(a)
         }
-        return chosen.take(6)
+        return chosen.take(DEFAULT_FAVS)
     }
+
+    /** How many apps to pre-fill the dock with before the user picks their own —
+     *  enough to fill the home grid without burying it in whatever installed first. */
+    private const val DEFAULT_FAVS = 10
 }

@@ -65,6 +65,12 @@ class OverlayPanelsService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Inflate overlay panels at the launcher's interface scale so floating
+     *  cards match the home screen instead of towering over it. */
+    override fun attachBaseContext(base: android.content.Context) {
+        super.attachBaseContext(Scale.wrap(base))
+    }
+
     override fun onCreate() {
         super.onCreate()
         isRunning = true

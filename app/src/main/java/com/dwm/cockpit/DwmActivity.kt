@@ -1,7 +1,6 @@
 package com.dwm.cockpit
 
 import android.content.Context
-import android.content.res.Configuration
 import android.os.Build
 import android.view.View
 import android.view.WindowInsets
@@ -9,19 +8,24 @@ import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
 
 /** Base activity: ComponentActivity (so screens can use Jetpack Compose
- *  setContent), plus the user's global text scale and immersive fullscreen
- *  (hidden status/navigation bars — swipe from the edge to peek them). */
+ *  setContent), plus the user's global interface + text scale and immersive
+ *  fullscreen (hidden status/navigation bars — swipe from the edge to peek). */
 abstract class DwmActivity : ComponentActivity() {
 
+    /** Scale in force when this screen was built; used to detect a stale UI. */
+    private var builtWith: String? = null
+
     override fun attachBaseContext(newBase: Context) {
-        val scale = Prefs.fontScale(newBase)
-        if (scale == 1.0f) {
-            super.attachBaseContext(newBase)
-        } else {
-            val cfg = Configuration(newBase.resources.configuration)
-            cfg.fontScale = scale
-            super.attachBaseContext(newBase.createConfigurationContext(cfg))
-        }
+        builtWith = Scale.signature(newBase)
+        super.attachBaseContext(Scale.wrap(newBase))
+    }
+
+    /** Rebuild if the user changed interface scale, text size or theme while a
+     *  screen was in the back stack. Returns true when a recreate was kicked off. */
+    protected fun recreateIfScaleChanged(): Boolean {
+        val now = Scale.signature(this)
+        if (builtWith != null && builtWith != now) { recreate(); return true }
+        return false
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

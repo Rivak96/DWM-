@@ -62,6 +62,10 @@ class SettingsActivity : DwmActivity() {
         findViewById<Button>(R.id.btnTextCompact).setOnClickListener { setScale(0.85f) }
         findViewById<Button>(R.id.btnTextNormal).setOnClickListener { setScale(1.0f) }
         findViewById<Button>(R.id.btnTextLarge).setOnClickListener { setScale(1.15f) }
+        findViewById<Button>(R.id.btnUiTiny).setOnClickListener { setUiScale(0.7f) }
+        findViewById<Button>(R.id.btnUiCompact).setOnClickListener { setUiScale(0.8f) }
+        findViewById<Button>(R.id.btnUiCosy).setOnClickListener { setUiScale(0.9f) }
+        findViewById<Button>(R.id.btnUiStock).setOnClickListener { setUiScale(1.0f) }
         buildAccentRow()
 
         // -- Cockpit ------------------------------------------------------
@@ -122,6 +126,15 @@ class SettingsActivity : DwmActivity() {
         // -- Vehicle ------------------------------------------------------
         findViewById<Button>(R.id.btnObdPick).setOnClickListener { pickObd() }
         findViewById<Button>(R.id.btnCamScan).setOnClickListener { scanCameras() }
+        findViewById<Button>(R.id.btnCamFill).setOnClickListener { setCamFit(CameraPanel.FILL) }
+        findViewById<Button>(R.id.btnCamFit).setOnClickListener { setCamFit(CameraPanel.FIT) }
+        findViewById<Button>(R.id.btnCamStretch).setOnClickListener { setCamFit(CameraPanel.STRETCH) }
+        findViewById<Button>(R.id.btnCamAuto).setOnClickListener { setCamDayNight(CameraPanel.AUTO) }
+        findViewById<Button>(R.id.btnCamDay).setOnClickListener { setCamDayNight(CameraPanel.FORCE_DAY) }
+        findViewById<Button>(R.id.btnCamNight).setOnClickListener { setCamDayNight(CameraPanel.FORCE_NIGHT) }
+        findViewById<Button>(R.id.btnCamDarker).setOnClickListener { nudgeCamTrim(-1) }
+        findViewById<Button>(R.id.btnCamBrighter).setOnClickListener { nudgeCamTrim(+1) }
+        refreshCamTrimLabel()
         findViewById<Button>(R.id.btnNotifAccess).setOnClickListener {
             val granted = NotifStore.accessGranted(this)
             runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
@@ -172,6 +185,65 @@ class SettingsActivity : DwmActivity() {
     private fun setScale(v: Float) {
         Prefs.setFontScale(this, v)
         recreate()
+    }
+
+    /** Interface scale rescales density, so every open screen has to be rebuilt —
+     *  HomeActivity picks this up via recreateIfScaleChanged() on its next start. */
+    private fun setUiScale(v: Float) {
+        Prefs.setUiScale(this, v)
+        if (OverlayPanelsService.isRunning) {
+            OverlayPanelsService.stop(this)
+            OverlayPanelsService.start(this)
+        }
+        recreate()
+    }
+
+    private fun setCamFit(mode: Int) {
+        Prefs.setCamFit(this, mode)
+        Toast.makeText(
+            this,
+            when (mode) {
+                CameraPanel.FIT -> "Camera: fit whole frame"
+                CameraPanel.STRETCH -> "Camera: stretch to panel"
+                else -> "Camera: fill panel, keep proportions"
+            },
+            Toast.LENGTH_SHORT
+        ).show()
+        restartCameraPanels()
+    }
+
+    private fun setCamDayNight(mode: Int) {
+        Prefs.setCamDayNight(this, mode)
+        Toast.makeText(
+            this,
+            when (mode) {
+                CameraPanel.FORCE_DAY -> "Camera: day picture"
+                CameraPanel.FORCE_NIGHT -> "Camera: night picture"
+                else -> "Camera: auto day/night"
+            },
+            Toast.LENGTH_SHORT
+        ).show()
+        restartCameraPanels()
+    }
+
+    private fun nudgeCamTrim(delta: Int) {
+        Prefs.setCamTrim(this, Prefs.camTrim(this) + delta)
+        refreshCamTrimLabel()
+        restartCameraPanels()
+    }
+
+    private fun refreshCamTrimLabel() {
+        val v = Prefs.camTrim(this)
+        findViewById<TextView>(R.id.camTrimLabel).text = if (v > 0) "+$v" else "$v"
+    }
+
+    /** Camera panels read their tuning when they attach, so bounce the overlay
+     *  service to make a change visible without a full cockpit reload. */
+    private fun restartCameraPanels() {
+        if (OverlayPanelsService.isRunning) {
+            OverlayPanelsService.stop(this)
+            OverlayPanelsService.start(this)
+        }
     }
 
     private fun applyThemePreset(idx: Int) {
@@ -469,6 +541,7 @@ class SettingsActivity : DwmActivity() {
                 val pkg = data.getStringExtra(AppDrawerActivity.EXTRA_PKG) ?: return
                 val favs = Apps.effectiveFavorites(this).toMutableList()
                 if (pkg !in favs) favs.add(pkg)
+                while (favs.size > com.dwm.cockpit.ui.FAV_SLOTS) favs.removeAt(0)
                 Prefs.saveFavorites(this, favs)
                 manageFavourites()
             }

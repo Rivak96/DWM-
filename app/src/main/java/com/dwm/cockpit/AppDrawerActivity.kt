@@ -18,6 +18,7 @@ import android.widget.GridView
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import com.dwm.cockpit.ui.FAV_SLOTS
 
 /**
  * Grid of installed apps with search. Doubles as an app picker (pick mode).
@@ -86,7 +87,7 @@ class AppDrawerActivity : DwmActivity() {
                         if (inDock) cur.remove(entry.pkg)
                         else if (entry.pkg !in cur) {
                             cur.add(entry.pkg)
-                            if (cur.size > 8) cur.removeAt(0)
+                            while (cur.size > FAV_SLOTS) cur.removeAt(0)
                         }
                         Prefs.saveFavorites(this, cur)
                         Toast.makeText(this, if (inDock) "Removed from dock" else "Added to dock", Toast.LENGTH_SHORT).show()

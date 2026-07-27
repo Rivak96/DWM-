@@ -703,3 +703,76 @@ Material Symbols, Room, JSON theme; target Jaecoo/Tesla OEM feel; native Compose
 7. Weather panel (needs a free API key).
 8. Notification glance strip (needs notification access).
 
+
+## 25. STATUS — Milestone 17 (2026-07-27): density + J7 language + camera — v0.13.0
+User: drop Lottie (perf worry); "everything is so big… old man that cant see kinda
+vybs" on a 13" high-res deck — make it smaller, fit more; take inspiration from the
+**Jaecoo J7** infotainment ("actually examine it, don't just build"); front camera
+"stretches very funny" and is "very bright", wants day/night adaptation.
+
+### J7 research (Chrome automation — DDG images + Pan Motoring walkthrough video)
+Portrait 13.2"/14.8" QNX (Qualcomm 8155). Observed design language:
+- Thin top status strip, tiny type, edge-aligned; no big clock block.
+- ~50% of the panel is plain wallpaper; content lives in **frosted light cards**
+  (heavy rounding, translucent, tiny dim all-caps label + larger value).
+- Cards sit in a horizontally swipeable row (Navigation / Local radio / …).
+- **Persistent bottom bar** always on screen (even over the keyboard): split-screen,
+  power, `‹ 18° ›` driver temp, fan, `‹ 18° ›` passenger temp, car, home.
+- Thin monochrome **line icons**, small relative to the glass. App grid = 4 cols of
+  squircles with small labels.
+Takeaway applied: density comes from *small controls + card hierarchy*, not from
+cramming; one persistent dock instead of duplicated action tiles.
+
+### Shipped
+- **Lottie removed** (`lottie-compose` dep dropped; nothing referenced it).
+- **`Scale`** — global interface scale via `Configuration.densityDpi`, shrinking
+  every dp *and* sp at once. `screenWidthDp/HeightDp` divided by the same factor so
+  `widthPixels` is preserved → overlay pixel geometry stays valid. Applied in
+  `DwmActivity.attachBaseContext` **and** both overlay services' `attachBaseContext`
+  so floating panels match. Default **0.8**; Settings→Display "Interface scale"
+  (Tiny 0.7 / Compact 0.8 / Cosy 0.9 / Stock 1.0). `recreateIfScaleChanged()`
+  replaces the old fontScale-only check (now covers scale+font+theme).
+- **Home rebuilt in the J7 language** (`ui/DwmHome`): slim status strip (23sp clock,
+  tappable Overlays/BT/Wi-Fi pills, reload chip) → 3 glass cards (Cockpit hero /
+  Favourites / Status) → **persistent 8-icon dock** (CarPlay, Apps, Overlays, Pill,
+  Bluetooth, Wi-Fi, Edit, Settings). Action tiles deleted — the dock replaces them,
+  removing the tile/top-icon duplication. Favourites **8 → 12** (4×3, 34dp icons).
+  Long-press on a favourite now works (`combinedClickable` → `actions.favLong`,
+  which was previously wired but unreachable). Radii 22→16, padding 14→11.
+- **CameraPanel rewritten**:
+  - *Stretch fix* — was `setDefaultBufferSize(view w,h)` + a fill-the-panel matrix,
+    so the driver substituted its nearest mode and the frame got squashed. Now picks
+    a real supported size from `SCALER_STREAM_CONFIGURATION_MAP` closest in aspect to
+    the panel, then maps it with a matrix that undoes TextureView's stretch → rotate
+    → fit. Modes: **Fill** (uniform, crops; default) / **Fit** (letterbox) /
+    **Stretch** (old behaviour), Settings→Vehicle.
+  - *Brightness* — day/night tone profiles (day 0.90×/1.06 contrast, night 0.60×/
+    1.15). **Dimming = a black overlay View's alpha** (guaranteed to composite over
+    a TextureView); `RenderEffect.createColorFilterEffect` on API 31+ only *adds
+    contrast back* (brightness left at 1.0), so if RenderEffect turns out not to
+    apply to a TextureView the picture is still correctly dimmed, never doubly.
+    Plus `CONTROL_AE_EXPOSURE_COMPENSATION` (day −0.7 EV, night −0.3 EV) — analog/
+    USB bridges often ignore AE, hence the view-side work. Auto day/night from
+    `Sensor.TYPE_LIGHT` (<15 lux) with a clock fallback (19:00–06:00), re-evaluated
+    every 30 s. Manual **brightness trim** −4..+4 (≈8%/step) in Settings.
+- **`material-icons-extended` dropped** — the 9 Compose icons now come from local
+  vector drawables (`ic_apps/ic_bt/ic_edit/ic_layers/ic_reload/ic_settings/ic_wifi`
+  already existed; added `ic_car` + `ic_pill`) via `painterResource` + `Icon(tint=)`.
+  **Release APK 11 MB → 6.31 MB.** R8/minify deliberately NOT enabled — can't
+  runtime-test it, and a silently-broken sideload is expensive to recover from.
+- **Favourites cap bug fixed** — bumping the home grid to 12 left
+  `AppDrawerActivity` still evicting at 8, so the 9th–12th slots were unreachable.
+  `FAV_SLOTS` is now the single source (drawer + Settings both honour it) and
+  `Apps.DEFAULT_FAVS` pre-fills 10 instead of 6.
+- **App drawer densified** — GridView columnWidth 96→82dp, spacing 8→4dp, item
+  padding 10→6dp. `dimens.xml` trimmed (touch_min 76→72, gap 18→14, dock/drawer
+  icon 52→46, tile_height 104→88); at the 0.8 interface scale touch_min still lands
+  ~58dp effective, above the 48dp minimum.
+- versionCode 24 / 0.13.0. Build + lint clean. NOT runtime-tested (no deck).
+
+### Open / needs the deck to verify
+- Whether 0.8 is the right default scale, or the deck wants 0.7.
+- Whether `setRenderEffect` tints a TextureView (only affects the contrast lift —
+  dimming works either way). If not, a GLSurfaceView shader is the escape hatch.
+- J7 ideas not built: swipeable card carousel, swipe-down shortcut panel, 4-col
+  squircle app drawer. (Climate strip is impossible — no HVAC access.)
