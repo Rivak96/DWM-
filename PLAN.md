@@ -668,6 +668,31 @@ Camera2 previews (esp. analog inputs) can come in rotated with no auto-fix.
     not → need BLE-TPMS decode or OBD TPMS (unknown sensor format) — pending.
 - versionCode 21 / 0.11.0. Lint + encoding clean. Released via gh.
 
+## 24. STATUS — Milestone 16 (2026-07-21): Compose UI modernization — v0.12.0
+User: "complete UI modernization" — Compose, Material 3, glassmorphism, Lottie,
+Material Symbols, Room, JSON theme; target Jaecoo/Tesla OEM feel; native Compose
+(no RN/Flutter — user confirmed). Framework-only rule dropped for the home.
+- STAGE 1 (validated toolchain): Compose BOM + material3 + icons-extended +
+  lottie-compose + kotlin compose plugin all build on the JDK17/AGP8.7.3/K2.0.21
+  setup.
+- STAGE 2 (shipped): HOME rebuilt in Compose Material 3. `DwmActivity` →
+  ComponentActivity; `ui/DwmTheme`, `ui/Glass` (GlassCard + drawableToImageBitmap),
+  `ui/DwmHome` (clock + icon chips, action tiles with state colour, hero card with
+  live LayoutPreview via AndroidView, favourites + status, entrance animation).
+  Glass = pre-blurred wallpaper + translucent cards (NOT live BlurView — perf).
+  Dashboard-mode drawn panels still View-based via AndroidView(panelHost).
+- Engineering calls made & told to user: (a) glass via pre-blur not live BlurView
+  (smoothness); (b) MotionLayout→Compose animations (MotionLayout is a Views API);
+  both deliver the intent. APK ~11MB (icons-extended). CANNOT runtime-test without
+  the deck — shipped with clear recovery note (prior release APKs remain).
+- versionCode 23 / 0.12.0. Lint + build clean. Released via gh.
+
+### Remaining modernization stages (after user confirms Compose runs on the deck)
+- Lottie **startup animation** (dep in place; needs a boot splash + a dwm_boot.json).
+- **Room** for overlay position/size (currently Prefs JSON — functionally fine).
+- **JSON theme engine** (currently M3 theme derives from Ui.th presets).
+- Optional: R8/minify or drop icons-extended to shrink the ~11MB APK.
+
 ### Candidate next features (user asked "what else"; not yet built)
 1. Media now-playing panel + controls (MediaSession; needs notification access).
 2. Host real home-screen **widgets** as panels (AppWidgetHost).
