@@ -127,6 +127,113 @@ object VehicleProbe {
         "aircon", "climate", "hiworld", "raise", "mcu", "dvr", "obd"
     )
 
+    /**
+     * Every installed package, so the vendor stack can be eyeballed whole.
+     * The hint list in [vehicleApps] only catches packages whose *name* says
+     * "canbus"/"carsetting"/etc — on this deck that found `com.dofun.carsetting`
+     * and missed everything else Dofun ships. This is the safety net.
+     */
+    fun allPackages(c: Context): String {
+        val pm = c.packageManager
+        val pkgs = runCatching { pm.getInstalledPackages(0) }.getOrDefault(emptyList())
+        val (system, user) = pkgs.map { it to ((it.applicationInfo?.flags ?: 0) and android.content.pm.ApplicationInfo.FLAG_SYSTEM != 0) }
+            .partition { it.second }
+        fun fmt(list: List<Pair<android.content.pm.PackageInfo, Boolean>>) =
+            list.map { it.first.packageName }.sorted().joinToString("\n")
+        return "-- system (${system.size}) --\n${fmt(system)}\n\n-- user (${user.size}) --\n${fmt(user)}"
+    }
+
+    /**
+     * Full component dump for every package sharing a vendor prefix (e.g. all of
+     * `com.dofun.*`), exported or not. The CAN handler is usually a sibling of the
+     * settings app under the same prefix.
+     */
+    fun vendorPrefixDump(c: Context): String {
+        val pm = c.packageManager
+        val pkgs = runCatching { pm.getInstalledPackages(0) }.getOrDefault(emptyList())
+            .map { it.packageName }
+
+        // Prefixes to expand: derived from hint matches, plus known OEM ones.
+        val prefixes = (pkgs.filter { p -> VENDOR_HINTS.any { p.contains(it, true) } }
+            .mapNotNull { it.split('.').take(2).takeIf { s -> s.size == 2 }?.joinToString(".") }
+            + KNOWN_VENDOR_PREFIXES)
+            .distinct()
+            .filterNot { it == "com.android" || it == "com.google" }
+
+        val sb = StringBuilder()
+        for (prefix in prefixes) {
+            val members = pkgs.filter { it == prefix || it.startsWith("$prefix.") }
+            if (members.isEmpty()) continue
+            sb.append("### $prefix  (${members.size} package(s))\n")
+            for (p in members.sorted()) {
+                sb.append('\n').append(p).append('\n')
+                runCatching {
+                    val info = pm.getPackageInfo(
+                        p,
+                        PackageManager.GET_PROVIDERS or PackageManager.GET_RECEIVERS or
+                            PackageManager.GET_SERVICES or PackageManager.GET_ACTIVITIES
+                    )
+                    info.providers?.forEach {
+                        sb.append("    provider ").append(it.authority)
+                            .append(if (it.exported) " [exported]" else " [private]")
+                            .append(it.readPermission?.let { r -> " read=$r" } ?: "").append('\n')
+                    }
+                    info.receivers?.forEach {
+                        sb.append("    receiver ").append(it.name)
+                            .append(if (it.exported) " [exported]" else " [private]").append('\n')
+                    }
+                    info.services?.forEach {
+                        sb.append("    service ").append(it.name)
+                            .append(if (it.exported) " [exported]" else " [private]").append('\n')
+                    }
+                }.onFailure { sb.append("    (could not read components: ").append(it.message).append(")\n") }
+            }
+            sb.append('\n')
+        }
+        return sb.toString().ifBlank { "No vendor-prefixed packages found." }
+    }
+
+    private val KNOWN_VENDOR_PREFIXES = listOf(
+        "com.dofun", "com.microntek", "android.microntek", "com.syu", "com.hzbhd",
+        "com.txznet", "com.autochips", "com.zhonghong", "com.wits", "com.hct",
+        "com.fyt", "com.sprd", "com.unisoc", "com.ts", "com.car"
+    )
+
+    /**
+     * Which serial devices we can even *see*. CAN data reaches Android over a UART
+     * — `/dev/ttyV0` at 38400 on the MTC-family units — and if a budget ROM leaves
+     * it world-readable we can take the raw stream and skip the app layer entirely.
+     *
+     * This only stats the node (`canRead`), it never opens or reads it. A serial
+     * read is destructive: bytes we consume are bytes the deck's own CAN service
+     * doesn't get, which would break its AC display. Actually reading is a
+     * deliberate second step, not something to do behind the user's back.
+     */
+    fun serialPorts(): String {
+        val names = ArrayList<String>()
+        names += listOf("/dev/ttyV0", "/dev/ttyV1", "/dev/ttyV2", "/dev/ttyV3")
+        for (i in 0..4) names += "/dev/ttyS$i"
+        for (i in 0..4) names += "/dev/ttyHS$i"
+        for (i in 0..3) names += "/dev/ttyMT$i"
+        for (i in 0..2) names += "/dev/ttyUSB$i"
+        names += listOf("/dev/ttyACM0", "/dev/ttysprd0", "/dev/ttysprd1", "/dev/stty_bt")
+
+        val sb = StringBuilder()
+        for (n in names) {
+            val f = File(n)
+            val exists = runCatching { f.exists() }.getOrDefault(false)
+            val readable = runCatching { f.canRead() }.getOrDefault(false)
+            if (exists || readable) {
+                sb.append(n).append("  exists=").append(exists).append(" readable=").append(readable).append('\n')
+            }
+        }
+        // /dev is usually not listable under SELinux, but it costs nothing to ask.
+        val listing = runCatching { File("/dev").list()?.filter { it.startsWith("tty") }?.sorted() }.getOrNull()
+        sb.append("\n/dev listing: ")
+        sb.append(if (listing.isNullOrEmpty()) "not listable (expected — SELinux)" else listing.joinToString(" "))
+        return sb.toString().ifBlank { "No candidate serial nodes visible." }
+    }
+
     /** Try reading an exported provider straight out. */
     fun probeProvider(c: Context, authority: String): String {
         val uri = Uri.parse("content://$authority")
@@ -256,6 +363,17 @@ object VehicleProbe {
 
         sb.append("\n\n=== 4. CAN BROADCASTS SEEN DURING THE SCAN ===\n\n")
         sb.append(sniffer?.report() ?: "Sniffer not running.")
+
+        sb.append("\n\n=== 5. VENDOR PACKAGES, FULL COMPONENT DUMP ===\n")
+        sb.append("(every package under a vendor prefix, exported or not)\n\n")
+        sb.append(vendorPrefixDump(c))
+
+        sb.append("\n\n=== 6. SERIAL PORTS (CAN arrives over a UART) ===\n")
+        sb.append("(stat only — nothing is opened or read)\n\n")
+        sb.append(serialPorts())
+
+        sb.append("\n\n=== 7. ALL INSTALLED PACKAGES ===\n\n")
+        sb.append(allPackages(c))
         sb.append('\n')
         return sb.toString()
     }
@@ -311,6 +429,16 @@ object VehicleProbe {
 
     /** Known/likely CAN broadcast actions across the common head-unit platforms. */
     private val CANDIDATE_ACTIONS = listOf(
+        // Dofun — this deck's vendor (com.dofun.carsetting was found on it).
+        "com.dofun.canbus",
+        "com.dofun.canbus.data",
+        "com.dofun.carsetting.canbus",
+        "com.dofun.aircondition",
+        "com.dofun.air.condition",
+        "com.dofun.mcu.data",
+        "com.dofun.action.CANBUS",
+        "com.dofun.action.CAR_INFO",
+        "com.dofun.CAR_DATA",
         "com.ahucanbus.display",
         "com.microntek.canbusdisplay",
         "com.microntek.canbus",

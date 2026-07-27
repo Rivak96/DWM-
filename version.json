@@ -1,7 +1,7 @@
 {
-    "versionCode":  25,
-    "versionName":  "0.14.0",
-    "tag":  "v0.14.0",
+    "versionCode":  26,
+    "versionName":  "0.14.1",
+    "tag":  "v0.14.1",
     "apk":  "app-release.apk",
-    "notes":  "Vehicle scan: Settings \u003e Vehicle \u003e Scan vehicle finds the CAN data your deck already receives (AC, fan, lights, doors) and saves a report file to Downloads you can send back - two guided steps, identifiers stripped out. Overlay panels are now locked by default: no move/resize grips or frame eating the corners, so a panel is all content (turn grips back on in Settings \u003e Overlay \u003e Panel layout while rearranging)."
+    "notes":  "Deeper vehicle scan (v0.14.0 came back empty on the easy paths). Now also dumps every package under a vendor prefix with all their components, checks which serial ports are visible (CAN arrives over a UART), lists all installed packages, and watches for Dofun-specific CAN broadcasts. Same two-step flow: Settings \u003e Vehicle \u003e Scan vehicle, then send me the file."
 }

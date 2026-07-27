@@ -1,0 +1,38 @@
+DWM vehicle / CAN scan
+2026-07-27 17:32:17
+DWM v0.14.0
+device: sprd s9863a1h10_Natv  (s9863a1h10)
+android: 12 / API 29
+fingerprint: SPRD/s9863a1h10_Natv/s9863a1h10:10/QP1A.190711.020/33319:user/release-keys
+
+=== 1. SETTINGS THAT CHANGED WHILE YOU POKED THE CAR ===
+(this is the important part — these are live vehicle values)
+
+NOTHING CHANGED.
+Either the deck keeps CAN state inside its own app, or the
+controls you changed don't route through the settings store.
+
+
+=== 2. SETTINGS KEYS THAT LOOK VEHICLE-RELATED ===
+(matched by name; current values, whether or not they changed)
+
+None matched.
+
+(total keys readable in the settings store: 408)
+
+
+=== 3. VEHICLE / CAN APPS ON THE DECK ===
+
+com.dofun.carsetting
+    provider com.dofun.carsetting.files [private]
+    receiver BootReceiver
+    service ConfigService
+
+An [exported] provider with no read= permission can be queried directly.
+
+
+=== 4. CAN BROADCASTS SEEN DURING THE SCAN ===
+
+No CAN broadcasts seen yet.
+
+This only proves the candidate list missed it — the settings-diff test is the reliable one.
