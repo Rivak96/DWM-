@@ -1,7 +1,7 @@
 {
-  "versionCode": 24,
-  "versionName": "0.13.0",
-  "tag": "v0.13.0",
-  "apk": "app-release.apk",
-  "notes": "Everything is smaller and denser: new Interface scale (Settings > Display) shrinks the whole UI at once - default Compact. Home rebuilt in the Jaecoo J7 style: slim status strip, Cockpit / Favourites / Status cards, and a persistent 8-icon dock. Favourites 8 -> 12 (long-press now works). Camera: fixed the stretched picture (new Fill/Fit/Stretch setting) and added day/night brightness with a manual trim, under Settings > Vehicle. App drawer fits more apps. APK 11MB -> 6.3MB. If the home misbehaves, tell me - v0.12.0 is still on GitHub Releases."
+    "versionCode":  25,
+    "versionName":  "0.14.0",
+    "tag":  "v0.14.0",
+    "apk":  "app-release.apk",
+    "notes":  "Vehicle scan: Settings \u003e Vehicle \u003e Scan vehicle finds the CAN data your deck already receives (AC, fan, lights, doors) and saves a report file to Downloads you can send back - two guided steps, identifiers stripped out. Overlay panels are now locked by default: no move/resize grips or frame eating the corners, so a panel is all content (turn grips back on in Settings \u003e Overlay \u003e Panel layout while rearranging)."
 }

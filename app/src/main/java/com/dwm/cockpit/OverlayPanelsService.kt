@@ -95,12 +95,16 @@ class OverlayPanelsService : Service() {
     private fun buildOverlays() {
         val size = LaunchEngine.displaySize(this)
         val panels = Prefs.panels(this)
+        // Locked (the default) means the panel is all content — the grips and the
+        // card frame only exist to rearrange things, so they're dead space the rest
+        // of the time. Settings > Overlay flips this while you're moving panels.
+        val editing = Prefs.overlayEdit(this)
         panels.forEachIndexed { index, p ->
             if (!p.isDrawn()) return@forEachIndexed
             runCatching {
                 val content = buildContent(p) ?: return@runCatching
                 val card = FrameLayout(this)
-                card.background = Ui.cardBg(this)
+                if (editing) card.background = Ui.cardBg(this)
                 Ui.roundify(card, 12)
                 card.addView(
                     content,
@@ -113,58 +117,64 @@ class OverlayPanelsService : Service() {
                 val accent = Ui.accent(this)
                 val gripPx = Ui.dp(this, 34)
 
-                // MOVE grip, top-left (clear ✥ target)
-                val moveGrip = TextView(this).apply {
-                    text = "✥"
-                    textSize = 15f
-                    setTextColor(0xFFFFFFFF.toInt())
-                    gravity = Gravity.CENTER
-                    background = Ui.gripBg(this@OverlayPanelsService, accent, topLeft = true)
-                }
-                card.addView(
-                    moveGrip,
-                    FrameLayout.LayoutParams(gripPx, gripPx).apply {
-                        gravity = Gravity.TOP or Gravity.START
+                // Everything below is editing chrome. When locked it isn't built at
+                // all, so the panel is 100% content and the corners stay usable.
+                var moveGrip: TextView? = null
+                var resizeGrip: TextView? = null
+                if (editing) {
+                    // MOVE grip, top-left (clear ✥ target)
+                    moveGrip = TextView(this).apply {
+                        text = "✥"
+                        textSize = 15f
+                        setTextColor(0xFFFFFFFF.toInt())
+                        gravity = Gravity.CENTER
+                        background = Ui.gripBg(this@OverlayPanelsService, accent, topLeft = true)
                     }
-                )
+                    card.addView(
+                        moveGrip,
+                        FrameLayout.LayoutParams(gripPx, gripPx).apply {
+                            gravity = Gravity.TOP or Gravity.START
+                        }
+                    )
 
-                // RESIZE grip, bottom-right (clear ⤢ target)
-                val resizeGrip = TextView(this).apply {
-                    text = "⤢"
-                    textSize = 15f
-                    setTextColor(0xFFFFFFFF.toInt())
-                    gravity = Gravity.CENTER
-                    background = Ui.gripBg(this@OverlayPanelsService, accent, topLeft = false)
-                }
-                card.addView(
-                    resizeGrip,
-                    FrameLayout.LayoutParams(gripPx, gripPx).apply {
-                        gravity = Gravity.BOTTOM or Gravity.END
-                    }
-                )
-
-                // ROTATE button, top-right — only meaningful for the camera feed
-                if (p.type == PanelType.CAMERA && content is CameraPanel) {
-                    val cam: CameraPanel = content
-                    var rot = p.rotation
-                    val rotateBtn = TextView(this).apply {
-                        text = "⟳"
-                        textSize = 16f
+                    // RESIZE grip, bottom-right (clear ⤢ target)
+                    resizeGrip = TextView(this).apply {
+                        text = "⤢"
+                        textSize = 15f
                         setTextColor(0xFFFFFFFF.toInt())
                         gravity = Gravity.CENTER
                         background = Ui.gripBg(this@OverlayPanelsService, accent, topLeft = false)
-                        setOnClickListener {
-                            rot = (rot + 90) % 360
-                            cam.setRotationDeg(rot)
-                            persistRotation(index, p, rot)
-                        }
                     }
                     card.addView(
-                        rotateBtn,
+                        resizeGrip,
                         FrameLayout.LayoutParams(gripPx, gripPx).apply {
-                            gravity = Gravity.TOP or Gravity.END
+                            gravity = Gravity.BOTTOM or Gravity.END
                         }
                     )
+
+                    // ROTATE button, top-right — only meaningful for the camera feed
+                    if (p.type == PanelType.CAMERA && content is CameraPanel) {
+                        val cam: CameraPanel = content
+                        var rot = p.rotation
+                        val rotateBtn = TextView(this).apply {
+                            text = "⟳"
+                            textSize = 16f
+                            setTextColor(0xFFFFFFFF.toInt())
+                            gravity = Gravity.CENTER
+                            background = Ui.gripBg(this@OverlayPanelsService, accent, topLeft = false)
+                            setOnClickListener {
+                                rot = (rot + 90) % 360
+                                cam.setRotationDeg(rot)
+                                persistRotation(index, p, rot)
+                            }
+                        }
+                        card.addView(
+                            rotateBtn,
+                            FrameLayout.LayoutParams(gripPx, gripPx).apply {
+                                gravity = Gravity.TOP or Gravity.END
+                            }
+                        )
+                    }
                 }
 
                 val w = ((p.r - p.l) * size.x).toInt().coerceAtLeast(Ui.dp(this, 80))
@@ -185,8 +195,8 @@ class OverlayPanelsService : Service() {
                     y = (p.t * size.y).toInt()
                 }
 
-                makeDraggable(moveGrip, card, lp, index, p)
-                makeResizable(resizeGrip, card, lp, index, p)
+                moveGrip?.let { makeDraggable(it, card, lp, index, p) }
+                resizeGrip?.let { makeResizable(it, card, lp, index, p) }
                 wm.addView(card, lp)
                 cards.add(card to lp)
             }

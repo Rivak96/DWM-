@@ -303,6 +303,25 @@
                     android:textColor="@color/textDim"
                     android:textSize="11sp" />
 
+                <TextView style="@style/SectionHeader" android:text="Panel layout" />
+
+                <Switch
+                    android:id="@+id/swOverlayEdit"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="44dp"
+                    android:text="Edit overlay layout (show move / resize grips)"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="4dp"
+                    android:text="Off by default so overlay panels are pure content — no frame or grips eating the corners. Turn it on only while rearranging, then turn it back off."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+
                 <TextView style="@style/SectionHeader" android:text="Keep app windows on top" />
 
                 <Button android:id="@+id/btnRaiseNow" style="@style/ChipButton" android:layout_marginStart="0dp" android:layout_marginTop="4dp" android:text="Raise app windows now" />
@@ -426,6 +445,31 @@
                     android:layout_height="wrap_content"
                     android:paddingTop="6dp"
                     android:text="Auto uses the deck&#8217;s light sensor when it has one, otherwise the clock (night from 19:00 to 06:00). Night dims the panel hard so the feed doesn&#8217;t light up the cabin. Reload the cockpit after changing these."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+
+                <TextView style="@style/SectionHeader" android:text="Vehicle data (CAN bus)" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Your deck already receives CAN data (AC, lights, doors). There is no official API for it, but these units usually publish it somewhere a normal app can read. This finds out and saves a file you can send me. Tap Scan vehicle and follow the two steps."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+
+                <Button
+                    android:id="@+id/btnCanScan"
+                    style="@style/ChipButton"
+                    android:layout_marginStart="0dp"
+                    android:layout_marginTop="8dp"
+                    android:text="Scan vehicle" />
+
+                <TextView
+                    android:id="@+id/canStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="6dp"
+                    android:text="Not started."
                     android:textColor="@color/textDim"
                     android:textSize="11sp" />
 

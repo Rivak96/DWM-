@@ -27,6 +27,15 @@ class SettingsActivity : DwmActivity() {
     private lateinit var navButtons: List<Button>
     private lateinit var sections: List<View>
 
+    /** CAN discovery state (see [VehicleProbe]). */
+    private var canBefore: Map<String, String>? = null
+    private val sniffer = VehicleProbe.Sniffer()
+
+    override fun onDestroy() {
+        sniffer.stop(this)
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
@@ -113,6 +122,21 @@ class SettingsActivity : DwmActivity() {
         findViewById<Button>(R.id.btnRaiseNow).setOnClickListener {
             LaunchEngine.raiseWindows(this, Prefs.panels(this))
         }
+        val swEdit = findViewById<Switch>(R.id.swOverlayEdit)
+        swEdit.isChecked = Prefs.overlayEdit(this)
+        swEdit.setOnCheckedChangeListener { _, v ->
+            Prefs.setOverlayEdit(this, v)
+            // Grips are built at inflate time, so the panels have to be rebuilt.
+            if (OverlayPanelsService.isRunning) {
+                OverlayPanelsService.stop(this)
+                OverlayPanelsService.start(this)
+            }
+            Toast.makeText(
+                this,
+                if (v) "Grips shown — drag ✥ to move, ⤢ to resize" else "Panels locked — full content, no chrome",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
         val swMute = findViewById<Switch>(R.id.swMuteOverlays)
         swMute.isChecked = Prefs.muteOverlays(this)
         swMute.setOnCheckedChangeListener { _, v ->
@@ -135,6 +159,8 @@ class SettingsActivity : DwmActivity() {
         findViewById<Button>(R.id.btnCamDarker).setOnClickListener { nudgeCamTrim(-1) }
         findViewById<Button>(R.id.btnCamBrighter).setOnClickListener { nudgeCamTrim(+1) }
         refreshCamTrimLabel()
+        findViewById<Button>(R.id.btnCanScan).setOnClickListener { canScanTapped() }
+        sniffer.start(this)
         findViewById<Button>(R.id.btnNotifAccess).setOnClickListener {
             val granted = NotifStore.accessGranted(this)
             runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
@@ -235,6 +261,86 @@ class SettingsActivity : DwmActivity() {
     private fun refreshCamTrimLabel() {
         val v = Prefs.camTrim(this)
         findViewById<TextView>(R.id.camTrimLabel).text = if (v > 0) "+$v" else "$v"
+    }
+
+    // ---- CAN / vehicle-data discovery ------------------------------------
+
+    /** One button, two steps: arm the scan, let the user poke the car, then write
+     *  the report out as a file they can upload. */
+    private fun canScanTapped() {
+        if (canBefore == null) canScanStart() else canScanFinish()
+    }
+
+    private fun canScanStart() {
+        Ui.dialog(this)
+            .setTitle("Scan vehicle — step 1 of 2")
+            .setMessage(
+                "This looks for the CAN data your deck already receives (AC, fan, lights, doors).\n\n" +
+                    "When you tap Start:\n\n" +
+                    "1.  Leave DWM open and go change things on the car — AC temperature up and " +
+                    "down, fan speed, A/C on and off, headlights on and off, open and close a door. " +
+                    "The more you change, the more I can identify.\n\n" +
+                    "2.  Come back here and tap \"Finish scan\". It saves a file to Downloads that " +
+                    "you can upload to me.\n\n" +
+                    "Nothing is sent anywhere by itself, and identifiers are stripped out of the file."
+            )
+            .setPositiveButton("Start") { _, _ ->
+                canBefore = VehicleProbe.snapshot(this)
+                findViewById<Button>(R.id.btnCanScan).text = "Finish scan & save file"
+                findViewById<TextView>(R.id.canStatus).text =
+                    "Scanning — ${canBefore!!.size} keys recorded. Go change the AC, lights and doors, then come back and tap Finish."
+                Toast.makeText(this, "Scanning — now go change the AC and lights", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun canScanFinish() {
+        val before = canBefore
+        val after = VehicleProbe.snapshot(this)
+        val changes = if (before == null) emptyList() else VehicleProbe.diff(before, after)
+        val report = VehicleProbe.buildReport(this, before, after, sniffer)
+        val saved = VehicleProbe.saveReport(this, report)
+
+        canBefore = null
+        findViewById<Button>(R.id.btnCanScan).text = "Scan vehicle"
+        findViewById<TextView>(R.id.canStatus).text =
+            if (saved == null) "Could not write the file."
+            else "Saved ${saved.second} · ${changes.size} setting(s) changed."
+
+        if (saved == null) {
+            Ui.dialog(this)
+                .setTitle("Couldn't save")
+                .setMessage("The report couldn't be written to storage. Tell me and I'll add a fallback.")
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
+
+        Ui.dialog(this)
+            .setTitle("Scan saved")
+            .setMessage(
+                "Saved to ${saved.second}\n\n" +
+                    "${changes.size} setting(s) changed while you were poking the car" +
+                    (if (changes.isEmpty())
+                        " — so the deck probably keeps CAN state inside its own app. The file still " +
+                            "has the app and broadcast scans, which is what I need next."
+                    else ". That's very likely your live vehicle data.") +
+                    "\n\nUpload the file to me and I'll build the panel around it."
+            )
+            .setPositiveButton("Share") { _, _ -> shareReport(saved.first) }
+            .setNegativeButton("Done", null)
+            .show()
+    }
+
+    private fun shareReport(uri: android.net.Uri) {
+        val send = Intent(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .putExtra(Intent.EXTRA_SUBJECT, "DWM vehicle scan")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        runCatching { startActivity(Intent.createChooser(send, "Send vehicle scan")) }
+            .onFailure { Toast.makeText(this, "Nothing on the deck can share files — grab it from Downloads over USB", Toast.LENGTH_LONG).show() }
     }
 
     /** Camera panels read their tuning when they attach, so bounce the overlay

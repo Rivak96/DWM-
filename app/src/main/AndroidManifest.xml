@@ -92,6 +92,18 @@
             android:name=".InstallResultReceiver"
             android:exported="false" />
 
+        <!-- Shares the vehicle-scan report on pre-Q decks, where MediaStore
+             Downloads isn't available. Grants are per-URI and read-only. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Reads notifications so DWM can mirror e.g. TPMS pressures as an overlay. -->
         <service
             android:name=".DwmNotificationListener"

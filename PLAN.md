@@ -776,3 +776,65 @@ cramming; one persistent dock instead of duplicated action tiles.
   dimming works either way). If not, a GLSurfaceView shader is the escape hatch.
 - J7 ideas not built: swipeable card carousel, swipe-down shortcut panel, 4-col
   squircle app drawer. (Climate strip is impossible — no HVAC access.)
+
+## 26. STATUS — Milestone 18 (2026-07-27): CAN-bus discovery + overlay lock — v0.14.0
+User: "the deck has the canbus talking directly with it — if i change ac controls it
+shows up on the deck. cant we use all of that?" Wants AC temps, fan speed, headlights
+etc. shown "small and neat, very polish" — e.g. an animated front-seats graphic with
+the AC in front. Also: "instead of having an overlay box, thats just wasted space, if
+i want to edit the overlay i can click the button i dont need a big empty box."
+
+### Research — can a normal app read the deck's CAN data?
+**There is no standard API.** These are aftermarket units running plain Android, not
+Android Automotive, so `android.car`/`CarPropertyManager` does not exist. XDA's
+consensus on third-party CAN access is "no API, only decompilation".
+BUT the reverse-engineered Microntek CAN service (github TheUnknown12/AHUCanBus,
+`android/microntek/canbus/CanBusServer.java`) shows it publishes state two ways a
+normal app CAN read, both confirmed in source:
+1. `Settings.System.putInt(resolver, "com.microntek.hiworld.ari", 0)` — the settings
+   provider is world-**readable**; only writing needs WRITE_SETTINGS.
+2. `sendBroadcastAsUser(Intent("com.ahucanbus.display").putExtra("text", byte[]))` —
+   a plain implicit broadcast. Runtime-registered receivers still get implicit
+   broadcasts on O+ (only manifest-declared ones were restricted).
+The vendor app itself is `sharedUserId=android.uid.system` and reads `/dev/ttyV0`
+via `android.microntek.serial` — that path is closed to us, but its *outputs* aren't.
+Both channels are per-unit and undocumented → discover empirically, don't guess.
+
+### Shipped
+- **`VehicleProbe`** — zero-setup CAN discovery, no root/ADB/Shizuku:
+  - `snapshot()` dumps every name/value in Settings System+Global+Secure by querying
+    the content URIs directly; `diff()` compares two snapshots and filters clock/
+    battery/volume churn so real changes aren't buried.
+  - `vehicleApps()` lists packages matching CAN/vendor name hints with their
+    providers/receivers/services and **exported + readPermission** flags — an
+    exported provider with no read permission is directly queryable
+    (`probeProvider()`).
+  - `Sniffer` registers a runtime receiver over ~25 known head-unit CAN actions and
+    dumps any extras (byte[] rendered as hex).
+  - `buildReport()` + `saveReport()` — Settings→Vehicle→**"Scan vehicle"** is ONE
+    button running a two-step flow (user asked for a file, not copy-paste):
+    tap → instructions dialog → Start (snapshots) → user changes AC/lights/doors →
+    tap again → "Finish scan & save file". Writes a `.txt` to shared **Downloads**
+    via MediaStore on API 29+ (no permission under scoped storage; the returned
+    content:// URI is directly shareable) with a FileProvider fallback below Q,
+    then offers **Share**. Report = device info + settings diff + name-matched
+    vehicle keys + app scan + broadcast hits.
+    NOT a full settings dump on purpose — that store holds device identifiers and
+    account/network details and this file gets uploaded, so values are run through
+    a `SENSITIVE` redaction list (android_id/serial/imei/mac/account/token/ssid/…)
+    and truncated at 400 chars.
+- **Overlay edit mode** (`Prefs.overlayEdit`, default OFF) — the move ✥ / resize ⤢
+  grips, the rotate ⟳ button and the card frame are now built ONLY while editing.
+  Locked = panel is 100% content, corners usable. Toggle in Settings→Overlay→"Panel
+  layout"; flipping it restarts OverlayPanelsService since grips are inflate-time.
+- versionCode 25 / 0.14.0. Build + lint clean.
+
+### Next — gated on probe output, deliberately NOT built yet
+The polished vehicle panel (`PanelType.VEHICLE`: car/seats graphic, AC temps, fan
+speed, headlight/door state) is worthless until we know what the deck actually
+exposes and in what units. Build it only after the user pastes back a Compare diff.
+Editor wiring would follow the existing pattern in `LayoutEditorActivity` (the
+`setItems` type picker at ~line 123 → `assign(target, newFree, Panel(...))`), and
+the drawn panel would follow `GaugeView`'s `configure()/setValue()` shape.
+If the probe finds nothing: fall back to the ELM327 OBD path already in `Obd.kt`
+(user said they'd get a dongle) — that gives engine data but NOT HVAC/lights.

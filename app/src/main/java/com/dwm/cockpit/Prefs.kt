@@ -128,6 +128,14 @@ object Prefs {
     fun overlaysOn(c: Context) = sp(c).getBoolean("overlays_on", false)
     fun setOverlaysOn(c: Context, v: Boolean) = sp(c).edit().putBoolean("overlays_on", v).apply()
 
+    /**
+     * Overlay edit mode. Off (default) = panels are pure content: no move/resize
+     * grips, no rotate button, no card frame eating the corners. Turn it on only
+     * while rearranging, then turn it back off.
+     */
+    fun overlayEdit(c: Context) = sp(c).getBoolean("overlay_edit", false)
+    fun setOverlayEdit(c: Context, v: Boolean) = sp(c).edit().putBoolean("overlay_edit", v).apply()
+
     /** Freeform caption-bar compensation in dp: the system draws a title bar
      *  inside each freeform window, cropping app content (e.g. CarPlay's bottom
      *  controls). We grow window bounds by this much to compensate. */

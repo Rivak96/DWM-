@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Vehicle-scan reports on pre-Q decks (API 29+ uses MediaStore instead). -->
+    <external-files-path name="docs" path="Documents/" />
+    <files-path name="internal" path="." />
+</paths>
