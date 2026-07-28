@@ -1,7 +1,7 @@
 {
-    "versionCode":  26,
-    "versionName":  "0.14.1",
-    "tag":  "v0.14.1",
+    "versionCode":  27,
+    "versionName":  "0.15.0",
+    "tag":  "v0.15.0",
     "apk":  "app-release.apk",
-    "notes":  "Deeper vehicle scan (v0.14.0 came back empty on the easy paths). Now also dumps every package under a vendor prefix with all their components, checks which serial ports are visible (CAN arrives over a UART), lists all installed packages, and watches for Dofun-specific CAN broadcasts. Same two-step flow: Settings \u003e Vehicle \u003e Scan vehicle, then send me the file."
+    "notes":  "Found the CAN service: com.tw.carinfoservice (Topway platform). The last scan missed the whole com.tw family because it only expanded a guessed prefix list. Now dumps components for every non-AOSP package, automatically queries every exported permission-free provider (that is the channel that would hand over live data), and adds a separate opt-in Read serial port button - ttyS0/1/3/4 are readable on your deck. Run Scan vehicle again and send me the file."
 }

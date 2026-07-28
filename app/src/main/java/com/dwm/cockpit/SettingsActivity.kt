@@ -160,6 +160,7 @@ class SettingsActivity : DwmActivity() {
         findViewById<Button>(R.id.btnCamBrighter).setOnClickListener { nudgeCamTrim(+1) }
         refreshCamTrimLabel()
         findViewById<Button>(R.id.btnCanScan).setOnClickListener { canScanTapped() }
+        findViewById<Button>(R.id.btnCanSerial).setOnClickListener { serialReadPrompt() }
         sniffer.start(this)
         findViewById<Button>(R.id.btnNotifAccess).setOnClickListener {
             val granted = NotifStore.accessGranted(this)
@@ -331,6 +332,46 @@ class SettingsActivity : DwmActivity() {
             .setPositiveButton("Share") { _, _ -> shareReport(saved.first) }
             .setNegativeButton("Done", null)
             .show()
+    }
+
+    /**
+     * Reading the CAN UART steals bytes from the deck's own service, so this is
+     * gated behind an explicit warning and never runs as part of the normal scan.
+     */
+    private fun serialReadPrompt() {
+        val ports = listOf("/dev/ttyS0", "/dev/ttyS1", "/dev/ttyS2", "/dev/ttyS3", "/dev/ttyS4")
+        Ui.dialog(this)
+            .setTitle("Read serial port — heads up")
+            .setMessage(
+                "CAN data reaches Android over one of these UARTs. Reading one CONSUMES the " +
+                    "bytes, so for the ~2.5 seconds this runs, the deck's own CAN service " +
+                    "doesn't get them — its AC or climate display may glitch or freeze.\n\n" +
+                    "It recovers on its own. Do it parked, not mid-drive.\n\n" +
+                    "Pick a port to sample:"
+            )
+            .setItems(ports.toTypedArray()) { _, which -> serialRead(ports[which]) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun serialRead(path: String) {
+        Toast.makeText(this, "Reading $path for 2.5s…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val out = VehicleProbe.readSerial(path)
+            runOnUiThread {
+                val saved = VehicleProbe.saveReport(this, "DWM serial read\n$path\n\n$out\n")
+                Ui.dialog(this)
+                    .setTitle("Serial $path")
+                    .setMessage(out.take(2000))
+                    .setPositiveButton(if (saved != null) "Share" else "OK") { _, _ ->
+                        saved?.let { shareReport(it.first) }
+                    }
+                    .setNegativeButton("Close", null)
+                    .show()
+                findViewById<TextView>(R.id.canStatus).text =
+                    saved?.let { "Serial read saved ${it.second}" } ?: "Serial read done."
+            }
+        }.start()
     }
 
     private fun shareReport(uri: android.net.Uri) {

@@ -144,60 +144,121 @@ object VehicleProbe {
     }
 
     /**
-     * Full component dump for every package sharing a vendor prefix (e.g. all of
-     * `com.dofun.*`), exported or not. The CAN handler is usually a sibling of the
-     * settings app under the same prefix.
+     * Full component dump for every package that isn't stock AOSP/Google.
+     *
+     * This used to expand a hand-written list of vendor prefixes, and that list is
+     * exactly how `com.tw.carinfoservice` — the actual CAN service on this deck —
+     * got missed: the list said `com.ts`, and "carinfoservice" doesn't contain any
+     * of the name hints either. Guessing prefixes is the wrong shape of solution.
+     * Invert it: dump everything, minus the platform packages we know are noise.
      */
-    fun vendorPrefixDump(c: Context): String {
+    fun nonAospDump(c: Context): String {
         val pm = c.packageManager
         val pkgs = runCatching { pm.getInstalledPackages(0) }.getOrDefault(emptyList())
             .map { it.packageName }
-
-        // Prefixes to expand: derived from hint matches, plus known OEM ones.
-        val prefixes = (pkgs.filter { p -> VENDOR_HINTS.any { p.contains(it, true) } }
-            .mapNotNull { it.split('.').take(2).takeIf { s -> s.size == 2 }?.joinToString(".") }
-            + KNOWN_VENDOR_PREFIXES)
-            .distinct()
-            .filterNot { it == "com.android" || it == "com.google" }
+            .filterNot { p -> AOSP_PREFIXES.any { p == it || p.startsWith("$it.") } }
+            .sorted()
 
         val sb = StringBuilder()
-        for (prefix in prefixes) {
-            val members = pkgs.filter { it == prefix || it.startsWith("$prefix.") }
-            if (members.isEmpty()) continue
-            sb.append("### $prefix  (${members.size} package(s))\n")
-            for (p in members.sorted()) {
-                sb.append('\n').append(p).append('\n')
-                runCatching {
-                    val info = pm.getPackageInfo(
-                        p,
-                        PackageManager.GET_PROVIDERS or PackageManager.GET_RECEIVERS or
-                            PackageManager.GET_SERVICES or PackageManager.GET_ACTIVITIES
-                    )
-                    info.providers?.forEach {
-                        sb.append("    provider ").append(it.authority)
-                            .append(if (it.exported) " [exported]" else " [private]")
-                            .append(it.readPermission?.let { r -> " read=$r" } ?: "").append('\n')
-                    }
-                    info.receivers?.forEach {
-                        sb.append("    receiver ").append(it.name)
-                            .append(if (it.exported) " [exported]" else " [private]").append('\n')
-                    }
-                    info.services?.forEach {
-                        sb.append("    service ").append(it.name)
-                            .append(if (it.exported) " [exported]" else " [private]").append('\n')
-                    }
-                }.onFailure { sb.append("    (could not read components: ").append(it.message).append(")\n") }
-            }
+        for (p in pkgs) {
+            sb.append(p).append('\n')
+            runCatching {
+                val info = pm.getPackageInfo(
+                    p,
+                    PackageManager.GET_PROVIDERS or PackageManager.GET_RECEIVERS or
+                        PackageManager.GET_SERVICES
+                )
+                info.providers?.forEach {
+                    sb.append("    provider ").append(it.authority)
+                        .append(if (it.exported) " [exported]" else " [private]")
+                        .append(it.readPermission?.let { r -> " read=$r" } ?: "").append('\n')
+                }
+                info.receivers?.forEach {
+                    sb.append("    receiver ").append(it.name)
+                        .append(if (it.exported) " [exported]" else " [private]").append('\n')
+                }
+                info.services?.forEach {
+                    sb.append("    service ").append(it.name)
+                        .append(if (it.exported) " [exported]" else " [private]").append('\n')
+                }
+            }.onFailure { sb.append("    (components unreadable: ").append(it.message).append(")\n") }
             sb.append('\n')
         }
-        return sb.toString().ifBlank { "No vendor-prefixed packages found." }
+        return sb.toString().ifBlank { "Nothing outside AOSP." }
     }
 
-    private val KNOWN_VENDOR_PREFIXES = listOf(
-        "com.dofun", "com.microntek", "android.microntek", "com.syu", "com.hzbhd",
-        "com.txznet", "com.autochips", "com.zhonghong", "com.wits", "com.hct",
-        "com.fyt", "com.sprd", "com.unisoc", "com.ts", "com.car"
+    private val AOSP_PREFIXES = listOf(
+        "android", "com.android", "com.google", "androidx", "org.chromium",
+        "com.qualcomm", "com.spreadtrum", "com.unisoc"
     )
+
+    /**
+     * Query every exported provider that doesn't demand a read permission.
+     *
+     * This is the one channel that hands over live data with no reverse
+     * engineering: if the CAN service publishes through a provider we can read,
+     * we're done. Even a rejection is informative — "Unknown URI" means the
+     * provider is alive and merely wants a path, which is a very different answer
+     * from a permission denial.
+     */
+    fun exportedProviders(c: Context): String {
+        val pm = c.packageManager
+        val pkgs = runCatching { pm.getInstalledPackages(0) }.getOrDefault(emptyList())
+        val sb = StringBuilder()
+        var tried = 0
+        for (info in pkgs) {
+            val pkg = info.packageName
+            if (AOSP_PREFIXES.any { pkg == it || pkg.startsWith("$it.") }) continue
+            val providers = runCatching {
+                pm.getPackageInfo(pkg, PackageManager.GET_PROVIDERS).providers
+            }.getOrNull() ?: continue
+            for (pr in providers) {
+                if (!pr.exported || pr.readPermission != null) continue
+                val auth = pr.authority ?: continue
+                // FileProviders never carry vehicle data and always reject a bare query.
+                if (auth.contains("fileprovider", true) || auth.endsWith(".files")) continue
+                tried++
+                sb.append("content://").append(auth).append("   [").append(pkg).append("]\n")
+                sb.append("    ").append(probeProvider(c, auth).replace("\n", "\n    ")).append("\n\n")
+            }
+        }
+        return if (tried == 0) "No exported, permission-free providers outside AOSP."
+        else sb.toString()
+    }
+
+    /**
+     * Read a serial port for a few seconds and hex-dump whatever arrives.
+     *
+     * DESTRUCTIVE and opt-in only. A UART read consumes bytes — anything we take
+     * is data the deck's own CAN service never sees, so its AC/climate display can
+     * glitch or freeze while this runs. Bounded hard at [SERIAL_READ_MS] and closed
+     * immediately after. Never call this as part of the normal scan.
+     */
+    fun readSerial(path: String): String {
+        val f = File(path)
+        if (!f.canRead()) return "$path: not readable"
+        return runCatching {
+            val bytes = ArrayList<Byte>()
+            f.inputStream().use { ins ->
+                val deadline = System.currentTimeMillis() + SERIAL_READ_MS
+                val buf = ByteArray(256)
+                while (System.currentTimeMillis() < deadline && bytes.size < 4096) {
+                    val avail = ins.available()
+                    if (avail <= 0) { Thread.sleep(50); continue }
+                    val n = ins.read(buf, 0, minOf(buf.size, avail))
+                    if (n <= 0) break
+                    for (i in 0 until n) bytes.add(buf[i])
+                }
+            }
+            if (bytes.isEmpty()) "$path: opened OK, but no data in ${SERIAL_READ_MS}ms"
+            else "$path: ${bytes.size} bytes\n" +
+                bytes.chunked(16).joinToString("\n") { row ->
+                    row.joinToString(" ") { b -> "%02X".format(b) }
+                }
+        }.getOrElse { "$path: open/read failed — ${it.javaClass.simpleName} ${it.message}" }
+    }
+
+    private const val SERIAL_READ_MS = 2500L
 
     /**
      * Which serial devices we can even *see*. CAN data reaches Android over a UART
@@ -364,15 +425,18 @@ object VehicleProbe {
         sb.append("\n\n=== 4. CAN BROADCASTS SEEN DURING THE SCAN ===\n\n")
         sb.append(sniffer?.report() ?: "Sniffer not running.")
 
-        sb.append("\n\n=== 5. VENDOR PACKAGES, FULL COMPONENT DUMP ===\n")
-        sb.append("(every package under a vendor prefix, exported or not)\n\n")
-        sb.append(vendorPrefixDump(c))
+        sb.append("\n\n=== 5. EXPORTED PROVIDERS, QUERIED ===\n")
+        sb.append("(live data if any of these answer)\n\n")
+        sb.append(exportedProviders(c))
 
         sb.append("\n\n=== 6. SERIAL PORTS (CAN arrives over a UART) ===\n")
         sb.append("(stat only — nothing is opened or read)\n\n")
         sb.append(serialPorts())
 
-        sb.append("\n\n=== 7. ALL INSTALLED PACKAGES ===\n\n")
+        sb.append("\n\n=== 7. NON-AOSP PACKAGES, FULL COMPONENT DUMP ===\n\n")
+        sb.append(nonAospDump(c))
+
+        sb.append("\n\n=== 8. ALL INSTALLED PACKAGES ===\n\n")
         sb.append(allPackages(c))
         sb.append('\n')
         return sb.toString()
@@ -429,7 +493,24 @@ object VehicleProbe {
 
     /** Known/likely CAN broadcast actions across the common head-unit platforms. */
     private val CANDIDATE_ACTIONS = listOf(
-        // Dofun — this deck's vendor (com.dofun.carsetting was found on it).
+        // Topway (com.tw.*) — this deck's actual platform. com.tw.carinfoservice
+        // is almost certainly the CAN consumer; com.tw.carchoose is the CAN
+        // protocol/car-model picker.
+        "com.tw.carinfo",
+        "com.tw.carinfo.data",
+        "com.tw.carinfoservice.data",
+        "com.tw.canbus",
+        "com.tw.canbus.data",
+        "com.tw.aircondition",
+        "com.tw.air",
+        "com.tw.core.canbus",
+        "com.tw.service.canbus",
+        "com.tw.action.CAR_INFO",
+        "com.tw.action.CANBUS",
+        "com.tw.CARINFO",
+        "com.tw.reverse",
+        "android.intent.action.TW_CARINFO",
+        // Dofun — the UI/launcher layer on top (com.dofun.carsetting etc).
         "com.dofun.canbus",
         "com.dofun.canbus.data",
         "com.dofun.carsetting.canbus",

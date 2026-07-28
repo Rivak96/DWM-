@@ -457,12 +457,23 @@
                     android:textColor="@color/textDim"
                     android:textSize="11sp" />
 
-                <Button
-                    android:id="@+id/btnCanScan"
-                    style="@style/ChipButton"
-                    android:layout_marginStart="0dp"
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="Scan vehicle" />
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnCanScan"
+                        style="@style/ChipButton"
+                        android:layout_marginStart="0dp"
+                        android:text="Scan vehicle" />
+
+                    <Button
+                        android:id="@+id/btnCanSerial"
+                        style="@style/ChipButton"
+                        android:text="Read serial port…" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/canStatus"
