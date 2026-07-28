@@ -21,8 +21,8 @@ android {
         applicationId = "com.dwm.cockpit"
         minSdk = 26          // Android 8.0 — well below the deck's Android 12
         targetSdk = 33
-        versionCode = 27
-        versionName = "0.15.0"
+        versionCode = 28
+        versionName = "0.16.0"
     }
 
     signingConfigs {
@@ -71,4 +71,8 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.core:core-ktx:1.13.1")
+
+    // JVM-only, never packaged. Proves the AXML reader against a real APK before
+    // it ships to a deck we can't debug on.
+    testImplementation("junit:junit:4.13.2")
 }

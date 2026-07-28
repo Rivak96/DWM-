@@ -13,9 +13,12 @@ import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.zip.ZipFile
 
 /**
  * Finds the deck's CAN-bus data without root, ADB or Shizuku.
@@ -88,17 +91,30 @@ object VehicleProbe {
 
     // ---- vendor apps ------------------------------------------------------
 
-    /** Packages that look like the deck's CAN/vehicle stack, with anything of
-     *  theirs we could talk to. An exported provider with no read permission is
-     *  directly queryable. */
-    fun vehicleApps(c: Context): List<String> {
+    /**
+     * Packages that look like the deck's CAN/vehicle stack, with anything of
+     * theirs we could talk to. An exported provider with no read permission is
+     * directly queryable.
+     *
+     * Membership used to be decided by the package *name* alone, and on this deck
+     * that returned exactly one app (`com.dofun.carsetting`) while the full dump in
+     * the non-AOSP section plainly listed `com.tw.carinfoservice`, `com.syt.tmps`
+     * and `com.tw.carchoose`'s MCUService. "carinfoservice" contains none of the
+     * hints and neither does "tmps". So the test is now evidence, not spelling: a
+     * package qualifies if its name, one of its component class names, or one of
+     * the actions its manifest declares mentions something vehicle-shaped.
+     */
+    fun vehicleApps(c: Context, scan: ManifestScan): List<String> {
         val pm = c.packageManager
         val out = ArrayList<String>()
         val pkgs = runCatching { pm.getInstalledPackages(0) }.getOrDefault(emptyList())
         for (p in pkgs) {
             val name = p.packageName
-            if (!VENDOR_HINTS.any { name.contains(it, ignoreCase = true) }) continue
+            if (AOSP_PREFIXES.any { name == it || name.startsWith("$it.") }) continue
+            val why = evidence(name, scan)
+            if (why.isEmpty()) continue
             val sb = StringBuilder(name)
+            sb.append("\n    matched on: ").append(why.joinToString(", "))
             runCatching {
                 val full = pm.getPackageInfo(
                     name,
@@ -121,10 +137,29 @@ object VehicleProbe {
         return out
     }
 
+    /** Why a package was called vehicle-related — shown in the report so a wrong
+     *  match is obvious rather than mysterious. Capped; the point is the reason,
+     *  not an exhaustive list. */
+    private fun evidence(pkg: String, scan: ManifestScan): List<String> {
+        val hits = LinkedHashSet<String>()
+        if (VENDOR_HINTS.any { pkg.contains(it, ignoreCase = true) }) hits += "package name"
+        scan.actionsByComponent[pkg]?.forEach { (component, actions) ->
+            if (VENDOR_HINTS.any { component.contains(it, ignoreCase = true) })
+                hits += component.substringAfterLast('.')
+            actions.filterTo(hits) { a -> VENDOR_HINTS.any { a.contains(it, ignoreCase = true) } }
+        }
+        return hits.take(8)
+    }
+
+    /** Words that mean "this touches the car". Used to flag packages and actions
+     *  as worth a look — never to decide what gets scanned in the first place. */
     private val VENDOR_HINTS = listOf(
-        "canbus", "can_bus", "microntek", "syu", "hzbhd", "txznet", "autochips",
+        "canbus", "can_bus", "carinfo", "car_info", "cardoor", "carchoose",
+        "carassistant", "microntek", "syu", "hzbhd", "txznet", "autochips",
         "zhonghong", "wits", "hct", "fyt", "carsetting", "carservice", "vehicle",
-        "aircon", "climate", "hiworld", "raise", "mcu", "dvr", "obd"
+        "aircon", "air_condition", "climate", "hiworld", "raise", "mcu", "dvr",
+        "obd", "tpms", "tmps", "reverse", "handbrake", "seatbelt", "odometer",
+        "coolant", "steering", "doorstatus", "acc_on", "ig_on", "illumination"
     )
 
     /**
@@ -191,6 +226,262 @@ object VehicleProbe {
         "android", "com.android", "com.google", "androidx", "org.chromium",
         "com.qualcomm", "com.spreadtrum", "com.unisoc"
     )
+
+    // ---- vendor manifests --------------------------------------------------
+
+    /** Every non-platform action name declared on the deck, and which component
+     *  of which package listens for it. */
+    data class ManifestScan(
+        /** package -> "receiver com.x.Y" -> the actions that component filters on */
+        val actionsByComponent: Map<String, Map<String, List<String>>>,
+        /** flat union, for [Sniffer] to register on */
+        val allActions: Set<String>,
+        /** custom `<permission>` declarations — these are what locks us out */
+        val permissions: Map<String, List<String>>,
+        val packagesRead: Int,
+        val packagesFailed: List<String>
+    )
+
+    @Volatile private var cachedScan: ManifestScan? = null
+
+    /**
+     * Read what the vendor apps actually listen for, instead of guessing.
+     *
+     * [Sniffer] shipped with a hand-written list of ~50 plausible CAN action names
+     * and caught nothing, twice. That was never going to work — the names are
+     * per-vendor and undocumented. But they aren't *hidden*: every installed APK is
+     * world-readable at `applicationInfo.publicSourceDir`, and the actions its
+     * receivers filter on are sitting in its binary AndroidManifest.xml. So open the
+     * APK as a zip, parse the manifest, and take the real list. Same inversion that
+     * fixed the package dump — stop guessing, go read.
+     *
+     * Parsing ~40 APKs takes a second or two, so this memoises; call it off the
+     * main thread the first time.
+     */
+    fun manifestScan(c: Context): ManifestScan =
+        cachedScan ?: buildManifestScan(c).also { cachedScan = it }
+
+    private fun buildManifestScan(c: Context): ManifestScan {
+        val pm = c.packageManager
+        val pkgs = runCatching { pm.getInstalledPackages(0) }.getOrDefault(emptyList())
+        val byPkg = LinkedHashMap<String, Map<String, List<String>>>()
+        val all = LinkedHashSet<String>()
+        val perms = LinkedHashMap<String, List<String>>()
+        val failed = ArrayList<String>()
+        var read = 0
+
+        for (info in pkgs.sortedBy { it.packageName }) {
+            val pkg = info.packageName
+            if (AOSP_PREFIXES.any { pkg == it || pkg.startsWith("$it.") }) continue
+            val apk = info.applicationInfo?.publicSourceDir
+            if (apk == null) { failed += "$pkg (no apk path)"; continue }
+            val parsed = runCatching { Axml.parseApk(apk) }.getOrNull()
+            if (parsed == null) { failed += "$pkg (unreadable)"; continue }
+            read++
+
+            val comps = parsed.byComponent
+                .mapValues { (_, v) -> v.filterNot(::isPlatformName).distinct() }
+                .filterValues { it.isNotEmpty() }
+            if (comps.isNotEmpty()) byPkg[pkg] = comps
+            all += parsed.allActions.filterNot(::isPlatformName)
+            parsed.permissions.filterNot(::isPlatformName)
+                .takeIf { it.isNotEmpty() }?.let { perms[pkg] = it }
+        }
+        return ManifestScan(byPkg, all, perms, read, failed)
+    }
+
+    /** The scan as text, vehicle-looking packages hoisted to the top so the
+     *  interesting names aren't buried under Netflix's. */
+    private fun manifestReport(scan: ManifestScan): String {
+        if (scan.actionsByComponent.isEmpty())
+            return "No vendor-defined actions found (read ${scan.packagesRead} APK manifest(s))."
+
+        val interesting = { pkg: String, comps: Map<String, List<String>> ->
+            VENDOR_HINTS.any { w ->
+                pkg.contains(w, true) ||
+                    comps.any { (k, v) -> k.contains(w, true) || v.any { it.contains(w, true) } }
+            }
+        }
+        val (hot, rest) = scan.actionsByComponent.entries.partition { interesting(it.key, it.value) }
+
+        val sb = StringBuilder()
+        fun emit(entries: List<Map.Entry<String, Map<String, List<String>>>>) {
+            for ((pkg, comps) in entries) {
+                sb.append(pkg).append('\n')
+                scan.permissions[pkg]?.forEach { sb.append("    declares permission ").append(it).append('\n') }
+                for ((component, actions) in comps) {
+                    sb.append("    ").append(component).append('\n')
+                    actions.forEach { sb.append("        ").append(it).append('\n') }
+                }
+                sb.append('\n')
+            }
+        }
+        sb.append("--- vehicle-looking ---\n\n")
+        if (hot.isEmpty()) sb.append("(none)\n\n") else emit(hot)
+        sb.append("--- everything else ---\n\n")
+        emit(rest)
+        sb.append("(read ").append(scan.packagesRead).append(" APK manifest(s)")
+        if (scan.packagesFailed.isNotEmpty())
+            sb.append("; could not read: ").append(scan.packagesFailed.joinToString())
+        sb.append(")\n")
+        return sb.toString()
+    }
+
+    /** Platform-defined names carry no information about this deck. */
+    private fun isPlatformName(n: String) =
+        n.startsWith("android.") || n.startsWith("androidx.") ||
+            n.startsWith("com.android.") || n.startsWith("com.google.") ||
+            n.startsWith("org.chromium.")
+
+    /**
+     * Just enough of Android's binary-XML (AXML) format to pull
+     * `<action android:name>` out of a packaged manifest: the string pool, and the
+     * element tree walked shallowly enough to know which `<receiver>`/`<service>`
+     * an `<action>` sits under. Every read is bounds-checked and the whole thing is
+     * wrapped in runCatching upstream — a malformed manifest must not take the scan
+     * down with it.
+     *
+     * Internal rather than private so `AxmlTest` can run it against a real APK on
+     * the JVM. Hand-computed chunk offsets fail silently — they return plausible
+     * garbage rather than throwing — and this ships to a head unit that can't be
+     * attached to a debugger, so it gets checked against a manifest whose contents
+     * are known before it goes anywhere.
+     */
+    internal object Axml {
+
+        private const val TYPE_XML = 0x0003
+        private const val TYPE_STRING_POOL = 0x0001
+        private const val TYPE_START_TAG = 0x0102
+        private const val TYPE_END_TAG = 0x0103
+        private const val TYPE_STRING = 0x03
+        private const val FLAG_UTF8 = 0x0100
+
+        class Parsed {
+            val byComponent = LinkedHashMap<String, MutableList<String>>()
+            val allActions = LinkedHashSet<String>()
+            val permissions = LinkedHashSet<String>()
+        }
+
+        fun parseApk(path: String): Parsed? = ZipFile(path).use { zip ->
+            val entry = zip.getEntry("AndroidManifest.xml") ?: return null
+            zip.getInputStream(entry).use { parse(it.readBytes()) }
+        }
+
+        fun parse(data: ByteArray): Parsed? {
+            if (data.size < 8) return null
+            val bb = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+            if ((bb.short.toInt() and 0xFFFF) != TYPE_XML) return null
+            bb.short; bb.int                                    // header size, file size
+
+            var pool: Array<String> = emptyArray()
+            val out = Parsed()
+            var depth = 0
+            var component: String? = null
+            var componentDepth = -1
+
+            while (bb.remaining() >= 8) {
+                val start = bb.position()
+                val type = bb.short.toInt() and 0xFFFF
+                val headerSize = bb.short.toInt() and 0xFFFF
+                val size = bb.int
+                if (size < 8 || start.toLong() + size > data.size) break
+
+                when (type) {
+                    TYPE_STRING_POOL -> pool = readPool(data, bb, start, headerSize)
+
+                    TYPE_START_TAG -> {
+                        depth++
+                        bb.position(start + headerSize)
+                        bb.int                                  // namespace
+                        val tag = pool.getOrElse(bb.int) { "" }
+                        val attrStart = bb.short.toInt() and 0xFFFF
+                        val attrSize = (bb.short.toInt() and 0xFFFF).coerceAtLeast(20)
+                        val attrCount = bb.short.toInt() and 0xFFFF
+                        val name = androidName(
+                            data, bb, pool, start + headerSize + attrStart, attrSize, attrCount
+                        )
+                        if (name != null) when (tag) {
+                            "receiver", "service", "activity", "activity-alias", "provider" -> {
+                                component = "$tag $name"
+                                componentDepth = depth
+                            }
+                            "action" -> {
+                                out.allActions += name
+                                component?.let { out.byComponent.getOrPut(it) { ArrayList() } += name }
+                            }
+                            "permission" -> out.permissions += name
+                        }
+                    }
+
+                    TYPE_END_TAG -> {
+                        if (depth == componentDepth) { component = null; componentDepth = -1 }
+                        depth--
+                    }
+                }
+                bb.position(start + size)
+            }
+            return out
+        }
+
+        /** Value of this element's `android:name`, or null if it has none. */
+        private fun androidName(
+            data: ByteArray, bb: ByteBuffer, pool: Array<String>,
+            at: Int, attrSize: Int, count: Int
+        ): String? {
+            var p = at
+            repeat(count) {
+                if (p + 20 > data.size) return null
+                bb.position(p)
+                bb.int                                          // namespace
+                val key = pool.getOrElse(bb.int) { "" }
+                val raw = bb.int
+                bb.short; bb.get()                              // value size, padding
+                val valueType = bb.get().toInt() and 0xFF
+                val value = bb.int
+                if (key == "name") return when {
+                    raw in pool.indices -> pool[raw]
+                    valueType == TYPE_STRING && value in pool.indices -> pool[value]
+                    else -> null
+                }
+                p += attrSize
+            }
+            return null
+        }
+
+        private fun readPool(data: ByteArray, bb: ByteBuffer, start: Int, headerSize: Int): Array<String> {
+            bb.position(start + 8)
+            val count = bb.int
+            bb.int                                              // style count
+            val utf8 = (bb.int and FLAG_UTF8) != 0
+            val dataStart = start + bb.int
+            if (count <= 0 || count > (1 shl 20)) return emptyArray()
+            bb.position(start + headerSize)
+            val offsets = IntArray(count) { bb.int }
+            return Array(count) { i ->
+                runCatching { decode(data, dataStart + offsets[i], utf8) }.getOrDefault("")
+            }
+        }
+
+        /** Pool strings are length-prefixed with a 1-or-2 unit varint, then either
+         *  UTF-8 bytes or UTF-16LE code units depending on the pool's flag. */
+        private fun decode(d: ByteArray, at: Int, utf8: Boolean): String {
+            var p = at
+            fun u8(): Int = d[p++].toInt() and 0xFF
+            fun u16(): Int {
+                val v = (d[p].toInt() and 0xFF) or ((d[p + 1].toInt() and 0xFF) shl 8)
+                p += 2
+                return v
+            }
+            return if (utf8) {
+                var chars = u8(); if (chars and 0x80 != 0) chars = ((chars and 0x7F) shl 8) or u8()
+                var bytes = u8(); if (bytes and 0x80 != 0) bytes = ((bytes and 0x7F) shl 8) or u8()
+                String(d, p, bytes, Charsets.UTF_8)
+            } else {
+                var units = u16(); if (units and 0x8000 != 0) units = ((units and 0x7FFF) shl 16) or u16()
+                String(d, p, units * 2, Charsets.UTF_16LE)
+            }
+        }
+    }
 
     /**
      * Query every exported provider that doesn't demand a read permission.
@@ -316,15 +607,23 @@ object VehicleProbe {
     // ---- broadcast sniffer ------------------------------------------------
 
     /**
-     * Listens for the CAN broadcasts these units are known to emit. We can't
-     * enumerate every broadcast on the device without root, so this is a candidate
-     * list — a hit proves the channel exists and shows us the extras.
+     * Listens for the CAN broadcasts this deck emits.
+     *
+     * We can't enumerate broadcasts as they happen without root, so we have to
+     * register for named actions up front. [CANDIDATE_ACTIONS] is the old guessed
+     * list, kept only as a backstop; the real list comes from [manifestScan] —
+     * every action any vendor app on this device declares a receiver for. If the
+     * CAN service broadcasts at all, the action is in that set.
      */
     class Sniffer {
         private val hits = LinkedHashMap<String, String>()
         private var receiver: BroadcastReceiver? = null
+        private var registered = 0
 
-        fun start(c: Context) {
+        /** Number of actions currently being listened for — 0 means not running. */
+        val watching: Int get() = if (receiver == null) 0 else registered
+
+        fun start(c: Context, discovered: Set<String> = emptySet()) {
             if (receiver != null) return
             val r = object : BroadcastReceiver() {
                 override fun onReceive(ctx: Context, intent: Intent) {
@@ -343,7 +642,9 @@ object VehicleProbe {
                     hits[action] = if (sb.isEmpty()) "(no extras)" else sb.toString()
                 }
             }
-            val f = IntentFilter().apply { CANDIDATE_ACTIONS.forEach { addAction(it) } }
+            val actions = LinkedHashSet(CANDIDATE_ACTIONS) + discovered
+            registered = actions.size
+            val f = IntentFilter().apply { actions.forEach { addAction(it) } }
             runCatching {
                 if (android.os.Build.VERSION.SDK_INT >= 33)
                     c.registerReceiver(r, f, Context.RECEIVER_EXPORTED)
@@ -358,9 +659,15 @@ object VehicleProbe {
             receiver = null
         }
 
-        fun report(): String =
-            if (hits.isEmpty()) "No CAN broadcasts seen yet.\n\nThis only proves the candidate list missed it — the settings-diff test is the reliable one."
+        fun report(): String {
+            val header = "(listening on $registered action(s) — every one this deck's apps declare, plus the guessed list)\n\n"
+            return header + if (hits.isEmpty())
+                "Nothing fired.\n\nWith the real action list in play, this now means one of: the CAN " +
+                    "service sends explicitly (component-targeted or LocalBroadcastManager, neither of " +
+                    "which a third party can catch), it only broadcasts on change and nothing changed, " +
+                    "or it doesn't broadcast at all and hands data over by binding instead."
             else hits.entries.joinToString("\n\n") { "${it.key}${it.value}" }
+        }
     }
 
     // ---- report ------------------------------------------------------------
@@ -416,27 +723,39 @@ object VehicleProbe {
         else hinted.forEach { (k, v) -> sb.append(k).append(" = ").append(redact(k, v)).append('\n') }
         sb.append("\n(total keys readable in the settings store: ").append(after.size).append(")\n")
 
+        // Name matching missed the CAN service in the package list too, so don't
+        // trust it here either — the key names alone are cheap and leak nothing.
+        sb.append("\n--- every readable key NAME (no values) ---\n")
+        sb.append(after.keys.joinToString(", "))
+        sb.append('\n')
+
+        val scan = manifestScan(c)
+
         sb.append("\n\n=== 3. VEHICLE / CAN APPS ON THE DECK ===\n\n")
-        val apps = vehicleApps(c)
-        if (apps.isEmpty()) sb.append("No packages matched the CAN/vehicle name hints.\n")
+        val apps = vehicleApps(c, scan)
+        if (apps.isEmpty()) sb.append("Nothing matched on name, component or declared action.\n")
         else sb.append(apps.joinToString("\n\n"))
             .append("\n\nAn [exported] provider with no read= permission can be queried directly.\n")
 
         sb.append("\n\n=== 4. CAN BROADCASTS SEEN DURING THE SCAN ===\n\n")
         sb.append(sniffer?.report() ?: "Sniffer not running.")
 
-        sb.append("\n\n=== 5. EXPORTED PROVIDERS, QUERIED ===\n")
+        sb.append("\n\n=== 5. ACTIONS THE DECK'S OWN APPS LISTEN FOR ===\n")
+        sb.append("(read out of each APK's manifest — these are real names, not guesses)\n\n")
+        sb.append(manifestReport(scan))
+
+        sb.append("\n\n=== 6. EXPORTED PROVIDERS, QUERIED ===\n")
         sb.append("(live data if any of these answer)\n\n")
         sb.append(exportedProviders(c))
 
-        sb.append("\n\n=== 6. SERIAL PORTS (CAN arrives over a UART) ===\n")
+        sb.append("\n\n=== 7. SERIAL PORTS (CAN arrives over a UART) ===\n")
         sb.append("(stat only — nothing is opened or read)\n\n")
         sb.append(serialPorts())
 
-        sb.append("\n\n=== 7. NON-AOSP PACKAGES, FULL COMPONENT DUMP ===\n\n")
+        sb.append("\n\n=== 8. NON-AOSP PACKAGES, FULL COMPONENT DUMP ===\n\n")
         sb.append(nonAospDump(c))
 
-        sb.append("\n\n=== 8. ALL INSTALLED PACKAGES ===\n\n")
+        sb.append("\n\n=== 9. ALL INSTALLED PACKAGES ===\n\n")
         sb.append(allPackages(c))
         sb.append('\n')
         return sb.toString()

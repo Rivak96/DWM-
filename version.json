@@ -1,7 +1,7 @@
 {
-    "versionCode":  27,
-    "versionName":  "0.15.0",
-    "tag":  "v0.15.0",
+    "versionCode":  28,
+    "versionName":  "0.16.0",
+    "tag":  "v0.16.0",
     "apk":  "app-release.apk",
-    "notes":  "Found the CAN service: com.tw.carinfoservice (Topway platform). The last scan missed the whole com.tw family because it only expanded a guessed prefix list. Now dumps components for every non-AOSP package, automatically queries every exported permission-free provider (that is the channel that would hand over live data), and adds a separate opt-in Read serial port button - ttyS0/1/3/4 are readable on your deck. Run Scan vehicle again and send me the file."
+    "notes":  "Stop guessing broadcast names too. DWM now reads every installed APK\u0027s binary AndroidManifest.xml and pulls out the real intent-filter actions its receivers listen for, then sniffs on that list instead of 50 guesses. Report gains a section 5 listing action names per component (vehicle-looking apps first), the full settings key-name list, and evidence-based vehicle app matching - the old name-only test missed com.tw.carinfoservice, com.syt.tmps and the MCU service. Run Scan vehicle again: open Settings, wait a few seconds, tap Start, poke the AC and lights, tap Finish."
 }

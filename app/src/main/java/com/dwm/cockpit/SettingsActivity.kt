@@ -161,7 +161,13 @@ class SettingsActivity : DwmActivity() {
         refreshCamTrimLabel()
         findViewById<Button>(R.id.btnCanScan).setOnClickListener { canScanTapped() }
         findViewById<Button>(R.id.btnCanSerial).setOnClickListener { serialReadPrompt() }
-        sniffer.start(this)
+        // Parsing every APK manifest takes a second or two; do it off the main
+        // thread, then listen on the action names it found rather than guesses.
+        Thread {
+            val discovered = runCatching { VehicleProbe.manifestScan(this).allActions }
+                .getOrDefault(emptySet())
+            runOnUiThread { if (!isFinishing) sniffer.start(this, discovered) }
+        }.start()
         findViewById<Button>(R.id.btnNotifAccess).setOnClickListener {
             val granted = NotifStore.accessGranted(this)
             runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
@@ -289,7 +295,7 @@ class SettingsActivity : DwmActivity() {
                 canBefore = VehicleProbe.snapshot(this)
                 findViewById<Button>(R.id.btnCanScan).text = "Finish scan & save file"
                 findViewById<TextView>(R.id.canStatus).text =
-                    "Scanning — ${canBefore!!.size} keys recorded. Go change the AC, lights and doors, then come back and tap Finish."
+                    "Scanning — ${canBefore!!.size} keys recorded, ${sniffer.watching} broadcast actions watched. Go change the AC, lights and doors, then come back and tap Finish."
                 Toast.makeText(this, "Scanning — now go change the AC and lights", Toast.LENGTH_LONG).show()
             }
             .setNegativeButton("Cancel", null)
@@ -324,8 +330,9 @@ class SettingsActivity : DwmActivity() {
                 "Saved to ${saved.second}\n\n" +
                     "${changes.size} setting(s) changed while you were poking the car" +
                     (if (changes.isEmpty())
-                        " — so the deck probably keeps CAN state inside its own app. The file still " +
-                            "has the app and broadcast scans, which is what I need next."
+                        " — so the deck keeps CAN state inside its own app. The file also lists every " +
+                            "broadcast action its apps declare, read straight out of their manifests, " +
+                            "which is what I need next."
                     else ". That's very likely your live vehicle data.") +
                     "\n\nUpload the file to me and I'll build the panel around it."
             )
