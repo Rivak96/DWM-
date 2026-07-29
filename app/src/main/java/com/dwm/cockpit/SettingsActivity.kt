@@ -30,9 +30,11 @@ class SettingsActivity : DwmActivity() {
     /** CAN discovery state (see [VehicleProbe]). */
     private var canBefore: Map<String, String>? = null
     private val sniffer = VehicleProbe.Sniffer()
+    private val watcher = VehicleProbe.Watcher()
 
     override fun onDestroy() {
         sniffer.stop(this)
+        watcher.stop(this)
         super.onDestroy()
     }
 
@@ -282,20 +284,25 @@ class SettingsActivity : DwmActivity() {
         Ui.dialog(this)
             .setTitle("Scan vehicle — step 1 of 2")
             .setMessage(
-                "This looks for the CAN data your deck already receives (AC, fan, lights, doors).\n\n" +
+                "This looks for the CAN data your deck already receives (reverse, AC, fan, " +
+                    "lights, doors).\n\n" +
                     "When you tap Start:\n\n" +
-                    "1.  Leave DWM open and go change things on the car — AC temperature up and " +
-                    "down, fan speed, A/C on and off, headlights on and off, open and close a door. " +
+                    "1.  Leave DWM open and go change things on the car — shift into reverse and " +
+                    "back out, AC temperature up and down, fan speed, A/C on and off, headlights " +
+                    "on and off, open and close a door. Hold each one for a couple of seconds. " +
                     "The more you change, the more I can identify.\n\n" +
                     "2.  Come back here and tap \"Finish scan\". It saves a file to Downloads that " +
                     "you can upload to me.\n\n" +
+                    "Unlike the last scan, this one records changes as they happen, so a value " +
+                    "that moves and moves back again is no longer missed.\n\n" +
                     "Nothing is sent anywhere by itself, and identifiers are stripped out of the file."
             )
             .setPositiveButton("Start") { _, _ ->
                 canBefore = VehicleProbe.snapshot(this)
+                watcher.start(this)
                 findViewById<Button>(R.id.btnCanScan).text = "Finish scan & save file"
                 findViewById<TextView>(R.id.canStatus).text =
-                    "Scanning — ${canBefore!!.size} keys recorded, ${sniffer.watching} broadcast actions watched. Go change the AC, lights and doors, then come back and tap Finish."
+                    "Scanning — ${canBefore!!.size} keys recorded, ${sniffer.watching} broadcast actions watched, live settings watcher on. Go change the AC, lights and doors, then come back and tap Finish."
                 Toast.makeText(this, "Scanning — now go change the AC and lights", Toast.LENGTH_LONG).show()
             }
             .setNegativeButton("Cancel", null)
@@ -306,14 +313,16 @@ class SettingsActivity : DwmActivity() {
         val before = canBefore
         val after = VehicleProbe.snapshot(this)
         val changes = if (before == null) emptyList() else VehicleProbe.diff(before, after)
-        val report = VehicleProbe.buildReport(this, before, after, sniffer)
+        val live = watcher.count
+        val report = VehicleProbe.buildReport(this, before, after, sniffer, watcher)
         val saved = VehicleProbe.saveReport(this, report)
 
+        watcher.stop(this)
         canBefore = null
         findViewById<Button>(R.id.btnCanScan).text = "Scan vehicle"
         findViewById<TextView>(R.id.canStatus).text =
             if (saved == null) "Could not write the file."
-            else "Saved ${saved.second} · ${changes.size} setting(s) changed."
+            else "Saved ${saved.second} · $live live change(s), ${changes.size} net."
 
         if (saved == null) {
             Ui.dialog(this)
@@ -670,6 +679,7 @@ class SettingsActivity : DwmActivity() {
             appendLine("Freeform feature: ${if (freeform) "YES" else "no"}")
             appendLine("enable_freeform_support: $freeformGlobal")
             appendLine("Overlay permission: ${if (canOverlay()) "granted" else "not granted"}")
+            appendLine("Vehicle: ${Vehicle.summary()}")
         }
     }
 

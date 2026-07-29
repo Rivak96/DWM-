@@ -6,9 +6,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.pm.PermissionInfo
+import android.database.ContentObserver
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.content.FileProvider
@@ -125,16 +129,69 @@ object VehicleProbe {
                         .append(if (pr.exported) " [exported]" else " [private]")
                     pr.readPermission?.let { sb.append(" read=").append(it) }
                 }
+                // Whether a component *declares* a permission and whether it
+                // *enforces* one are different facts, and only the second decides
+                // if we can bind. com.tw.carinfoservice declares USE_AIDL; that
+                // says nothing about whether CarService is actually behind it.
                 full.receivers?.filter { it.exported }?.forEach {
                     sb.append("\n    receiver ").append(it.name.substringAfterLast('.'))
+                        .append(guard(it.permission))
                 }
                 full.services?.filter { it.exported }?.forEach {
                     sb.append("\n    service ").append(it.name.substringAfterLast('.'))
+                        .append(guard(it.permission))
                 }
             }
             out.add(sb.toString())
         }
         return out
+    }
+
+    /** How an exported component is guarded. "UNGUARDED" is the interesting word:
+     *  an exported service with no permission attribute can be bound by anyone. */
+    private fun guard(permission: String?) =
+        if (permission == null) "  [UNGUARDED]" else "  [needs $permission]"
+
+    /**
+     * What each vendor-declared permission actually costs us.
+     *
+     * This is the single fact that decides whether `com.tw.carinfoservice`'s AIDL
+     * is reachable, and the scan has never reported it. `normal` is free — declare
+     * `<uses-permission>` and the bind just works. `dangerous` needs a runtime
+     * prompt but is still gettable. `signature` means only an app signed with the
+     * vendor's key gets in and there is no way around it short of a system build,
+     * at which point the serial port is the better target.
+     */
+    fun permissionLevels(c: Context, scan: ManifestScan): String {
+        val pm = c.packageManager
+        val names = scan.permissions.values.flatten().distinct().sorted()
+        if (names.isEmpty()) return "No vendor app declares a custom permission."
+        val sb = StringBuilder()
+        for (n in names) {
+            val info = runCatching { pm.getPermissionInfo(n, 0) }.getOrNull()
+            sb.append(n).append("\n    ")
+            if (info == null) {
+                sb.append("not resolvable (declaring app may be disabled)")
+            } else {
+                val base = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.protection
+                else @Suppress("DEPRECATION") (info.protectionLevel and PermissionInfo.PROTECTION_MASK_BASE)
+                sb.append(
+                    when (base) {
+                        PermissionInfo.PROTECTION_NORMAL -> "normal — GETTABLE, just add <uses-permission>"
+                        PermissionInfo.PROTECTION_DANGEROUS -> "dangerous — gettable via a runtime prompt"
+                        PermissionInfo.PROTECTION_SIGNATURE -> "signature — vendor-signed apps only, closed to us"
+                        else -> "protection level $base"
+                    }
+                )
+                sb.append("\n    held: ").append(
+                    if (pm.checkPermission(n, c.packageName) == PackageManager.PERMISSION_GRANTED)
+                        "YES — DWM already has this"
+                    else "no"
+                )
+            }
+            sb.append('\n')
+        }
+        return sb.toString()
     }
 
     /** Why a package was called vehicle-related — shown in the report so a wrong
@@ -152,14 +209,26 @@ object VehicleProbe {
     }
 
     /** Words that mean "this touches the car". Used to flag packages and actions
-     *  as worth a look — never to decide what gets scanned in the first place. */
+     *  as worth a look — never to decide what gets scanned in the first place.
+     *
+     *  Scan 3 flagged 3 keys out of 408 while the raw name list it printed
+     *  alongside was full of ones it walked straight past: `DOOR`, `SYSTEM_DOOR2`,
+     *  `SHOW_VOLTAGE`, `TEMP_MODE`, `SYSTEM_FRADAR`, `TWCameraBrake`. The list had
+     *  "cardoor" and "doorstatus" but not "door". Worse, it had "reverse" and the
+     *  deck spells its key `revserse_status` — a vendor typo beat the matcher. So
+     *  the hints are now short stems, and anything that looks like a state word in
+     *  a settings key earns its place. */
     private val VENDOR_HINTS = listOf(
         "canbus", "can_bus", "carinfo", "car_info", "cardoor", "carchoose",
         "carassistant", "microntek", "syu", "hzbhd", "txznet", "autochips",
         "zhonghong", "wits", "hct", "fyt", "carsetting", "carservice", "vehicle",
         "aircon", "air_condition", "climate", "hiworld", "raise", "mcu", "dvr",
-        "obd", "tpms", "tmps", "reverse", "handbrake", "seatbelt", "odometer",
-        "coolant", "steering", "doorstatus", "acc_on", "ig_on", "illumination"
+        "obd", "tpms", "tmps", "handbrake", "seatbelt", "odometer",
+        "coolant", "steering", "acc_on", "acc_off", "ig_on", "illumination",
+        // Stems, so a vendor typo or an unexpected prefix can't dodge the match.
+        "reverse", "revserse", "door", "brake", "voltage", "radar", "gear",
+        "seat", "temp_mode", "ampvol", "amplifier", "trip", "fuel", "rpm",
+        "wheel", "unisound", "dofun", "carplay", "zlink"
     )
 
     /**
@@ -210,11 +279,13 @@ object VehicleProbe {
                 }
                 info.receivers?.forEach {
                     sb.append("    receiver ").append(it.name)
-                        .append(if (it.exported) " [exported]" else " [private]").append('\n')
+                        .append(if (it.exported) " [exported]" else " [private]")
+                        .append(if (it.exported) guard(it.permission) else "").append('\n')
                 }
                 info.services?.forEach {
                     sb.append("    service ").append(it.name)
-                        .append(if (it.exported) " [exported]" else " [private]").append('\n')
+                        .append(if (it.exported) " [exported]" else " [private]")
+                        .append(if (it.exported) guard(it.permission) else "").append('\n')
                 }
             }.onFailure { sb.append("    (components unreadable: ").append(it.message).append(")\n") }
             sb.append('\n')
@@ -670,6 +741,123 @@ object VehicleProbe {
         }
     }
 
+    // ---- live settings watcher ---------------------------------------------
+
+    /**
+     * Records settings changes as they happen instead of comparing two snapshots.
+     *
+     * The before/after diff has now reported "NOTHING CHANGED" three scans running,
+     * and scan 3 proved that answer is partly an artefact of the method: a DO_MUTE
+     * broadcast arrived carrying `reverse = 1`, so the car demonstrably went into
+     * reverse during the scan — and came back out of it before the second snapshot.
+     * `system/revserse_status` could have gone 0 → 1 → 0 in that window and the diff
+     * would still see two identical endpoints. Every genuinely interesting vehicle
+     * value is a transient like that; a two-point diff is the wrong instrument.
+     *
+     * A ContentObserver on the three settings tables is woken on each write and gets
+     * the URI that changed, so we see the whole sequence with timings. A key that
+     * toggles while the user pokes the car *is* the vehicle key — that pattern is
+     * the signal, and it's what the diff was throwing away.
+     */
+    class Watcher {
+
+        data class Event(val atMs: Long, val key: String, val value: String?)
+
+        private val events = ArrayList<Event>()
+        private val observers = ArrayList<Pair<Uri, ContentObserver>>()
+        private var startedAt = 0L
+        private var suppressed = 0
+
+        val running: Boolean get() = observers.isNotEmpty()
+        val count: Int get() = synchronized(events) { events.size }
+
+        fun start(c: Context) {
+            if (running) return
+            startedAt = System.currentTimeMillis()
+            val app = c.applicationContext
+            val h = Handler(Looper.getMainLooper())
+            val spaces = listOf(
+                "system" to Settings.System.CONTENT_URI,
+                "global" to Settings.Global.CONTENT_URI,
+                "secure" to Settings.Secure.CONTENT_URI
+            )
+            for ((ns, uri) in spaces) {
+                val o = object : ContentObserver(h) {
+                    override fun onChange(selfChange: Boolean) = onChange(selfChange, null)
+                    override fun onChange(selfChange: Boolean, changed: Uri?) {
+                        // Pre-16 and some vendor ROMs notify without a URI; then all
+                        // we can honestly say is "something in this table moved".
+                        val key = changed?.lastPathSegment
+                        if (key == null) { record(ns, "$ns/(unnamed)", null); return }
+                        val value = runCatching {
+                            app.contentResolver.query(
+                                uri, arrayOf("name", "value"), "name=?", arrayOf(key), null
+                            )?.use { cur -> if (cur.moveToFirst()) cur.getString(1) else null }
+                        }.getOrNull()
+                        record(ns, "$ns/$key", value)
+                    }
+                }
+                runCatching {
+                    app.contentResolver.registerContentObserver(uri, true, o)
+                    observers += uri to o
+                }
+            }
+        }
+
+        private fun record(ns: String, key: String, value: String?) {
+            if (isNoise(key)) { synchronized(events) { suppressed++ }; return }
+            synchronized(events) {
+                if (events.size >= MAX_EVENTS) return
+                // A key rewritten with the value it already had tells us nothing.
+                if (events.lastOrNull { it.key == key }?.value == value) return
+                events += Event(System.currentTimeMillis(), key, value)
+            }
+        }
+
+        fun stop(c: Context) {
+            val cr = c.applicationContext.contentResolver
+            for ((_, o) in observers) runCatching { cr.unregisterContentObserver(o) }
+            observers.clear()
+        }
+
+        /**
+         * Grouped by key rather than strictly chronological: what identifies a
+         * vehicle key is that it *moved repeatedly* while the car was poked, and
+         * that is far easier to see with each key's value sequence on one line.
+         */
+        fun report(): String {
+            val snap = synchronized(events) { events.toList() to suppressed }
+            val (all, hidden) = snap
+            if (!running && all.isEmpty()) return "Watcher never started."
+            if (all.isEmpty())
+                return "Nothing in the settings store changed while the scan was open " +
+                    "($hidden noise write(s) ignored).\n\nThe deck keeps its vehicle state " +
+                    "somewhere else — most likely inside com.tw.carinfoservice, handed out " +
+                    "over its AIDL bind rather than published."
+
+            val sb = StringBuilder()
+            sb.append(all.size).append(" change(s) on ")
+                .append(all.map { it.key }.distinct().size).append(" key(s)")
+            if (hidden > 0) sb.append(", plus ").append(hidden).append(" ignored as noise")
+            sb.append(".\n\n")
+
+            for ((key, evs) in all.groupBy { it.key }.entries.sortedByDescending { it.value.size }) {
+                sb.append(key).append("  (").append(evs.size).append("x)\n")
+                for (e in evs.take(MAX_PER_KEY)) {
+                    sb.append("    +").append("%.1f".format((e.atMs - startedAt) / 1000.0))
+                        .append("s  ").append(redact(key, e.value)).append('\n')
+                }
+                if (evs.size > MAX_PER_KEY) sb.append("    … ").append(evs.size - MAX_PER_KEY).append(" more\n")
+            }
+            return sb.toString()
+        }
+
+        private companion object {
+            const val MAX_EVENTS = 2000
+            const val MAX_PER_KEY = 12
+        }
+    }
+
     // ---- report ------------------------------------------------------------
 
     /**
@@ -684,7 +872,8 @@ object VehicleProbe {
         c: Context,
         before: Map<String, String>?,
         after: Map<String, String>,
-        sniffer: Sniffer?
+        sniffer: Sniffer?,
+        watcher: Watcher? = null
     ): String {
         val sb = StringBuilder()
         val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
@@ -696,8 +885,16 @@ object VehicleProbe {
         sb.append("android: ").append(Build.VERSION.RELEASE).append(" / API ").append(Build.VERSION.SDK_INT).append('\n')
         sb.append("fingerprint: ").append(Build.FINGERPRINT).append("\n\n")
 
-        sb.append("=== 1. SETTINGS THAT CHANGED WHILE YOU POKED THE CAR ===\n")
-        sb.append("(this is the important part — these are live vehicle values)\n\n")
+        sb.append("=== 0. LIVE VEHICLE SIGNAL ===\n")
+        sb.append("(what DWM is reading right now, from the deck's own broadcasts)\n\n")
+        sb.append(Vehicle.summary()).append('\n')
+
+        sb.append("\n\n=== 1a. SETTINGS CHANGES, AS THEY HAPPENED ===\n")
+        sb.append("(every write while the scan was open — catches values that move and move back)\n\n")
+        sb.append(watcher?.report() ?: "Watcher not running.")
+
+        sb.append("\n\n=== 1b. SETTINGS THAT CHANGED WHILE YOU POKED THE CAR ===\n")
+        sb.append("(before/after only — blind to anything that returned to its old value)\n\n")
         if (before == null) {
             sb.append("No 'before' snapshot — scan was not started properly.\n")
         } else {
@@ -743,6 +940,10 @@ object VehicleProbe {
         sb.append("\n\n=== 5. ACTIONS THE DECK'S OWN APPS LISTEN FOR ===\n")
         sb.append("(read out of each APK's manifest — these are real names, not guesses)\n\n")
         sb.append(manifestReport(scan))
+
+        sb.append("\n\n=== 5b. VENDOR PERMISSIONS — CAN WE GET THEM? ===\n")
+        sb.append("(decides whether com.tw.carinfoservice's AIDL is reachable at all)\n\n")
+        sb.append(permissionLevels(c, scan))
 
         sb.append("\n\n=== 6. EXPORTED PROVIDERS, QUERIED ===\n")
         sb.append("(live data if any of these answer)\n\n")

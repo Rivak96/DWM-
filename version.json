@@ -1,7 +1,7 @@
 {
-    "versionCode":  28,
-    "versionName":  "0.16.0",
-    "tag":  "v0.16.0",
+    "versionCode":  29,
+    "versionName":  "0.17.0",
+    "tag":  "v0.17.0",
     "apk":  "app-release.apk",
-    "notes":  "Stop guessing broadcast names too. DWM now reads every installed APK\u0027s binary AndroidManifest.xml and pulls out the real intent-filter actions its receivers listen for, then sniffs on that list instead of 50 guesses. Report gains a section 5 listing action names per component (vehicle-looking apps first), the full settings key-name list, and evidence-based vehicle app matching - the old name-only test missed com.tw.carinfoservice, com.syt.tmps and the MCU service. Run Scan vehicle again: open Settings, wait a few seconds, tap Start, poke the AC and lights, tap Finish."
+    "notes":  "Scan 3 caught the first real vehicle broadcast: com.unisound.intent.action.DO_MUTE / DO_UNMUTE carry live \u0027reverse\u0027 and \u0027call\u0027 extras, so DWM now has genuine reverse-gear detection with no permission and no AIDL - see the new Vehicle signal on the Settings diagnostics line. The settings scan no longer uses a before/after diff alone: a ContentObserver records every write as it happens, because reverse engaged AND released inside the last scan window and two identical snapshots hid it. Report gains section 0 (live signal), 1a (changes as they happened) and 5b (whether each vendor permission is normal/dangerous/signature - this is what decides if com.tw.carinfoservice\u0027s AIDL is reachable). Exported services now show whether they actually enforce a permission or are UNGUARDED. Run Scan vehicle again: this time shift into reverse and back, hold each control a couple of seconds."
 }

@@ -74,6 +74,11 @@ class HomeActivity : DwmActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Registered on the application context and never torn down: DWM is the
+        // launcher, so its process outlives every activity, and reverse gear is
+        // only useful if we were already listening when it engaged.
+        Vehicle.start(this)
+
         panelHost = FrameLayout(this)
         preview = LayoutPreview(this)
 
