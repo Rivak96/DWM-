@@ -784,6 +784,7 @@ class SettingsActivity : DwmActivity() {
             appendLine("enable_freeform_support: $freeformGlobal")
             appendLine("Overlay permission: ${if (canOverlay()) "granted" else "not granted"}")
             appendLine("Vehicle: ${Vehicle.summary()}")
+            appendLine(CarInfo.summary())
         }
     }
 

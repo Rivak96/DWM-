@@ -78,6 +78,10 @@ class HomeActivity : DwmActivity() {
         // launcher, so its process outlives every activity, and reverse gear is
         // only useful if we were already listening when it engaged.
         Vehicle.start(this)
+        // The vendor CAN service, same reasoning: bound for the life of the
+        // process, because its data is pushed and a callback registered after the
+        // fact has already missed everything.
+        CarInfo.start(this)
 
         panelHost = FrameLayout(this)
         preview = LayoutPreview(this)

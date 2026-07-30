@@ -21,8 +21,8 @@ android {
         applicationId = "com.dwm.cockpit"
         minSdk = 26          // Android 8.0 — well below the deck's Android 12
         targetSdk = 33
-        versionCode = 31
-        versionName = "0.18.1"
+        versionCode = 32
+        versionName = "0.19.0"
     }
 
     signingConfigs {
@@ -49,6 +49,13 @@ android {
 
     buildFeatures {
         compose = true
+        // AGP 8 defaults AIDL off. On for the vendor's own CarServiceAidl /
+        // CarServiceCallBack definitions in src/main/aidl, copied byte-for-byte
+        // out of com.tw.carinfoservice.apk. Letting the build generate the stubs
+        // is the whole point: AIDL numbers transactions by declaration order, so
+        // generated code cannot disagree with the service the way hand-written
+        // transaction codes could.
+        aidl = true
     }
 
     compileOptions {

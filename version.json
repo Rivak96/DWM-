@@ -1,7 +1,7 @@
 {
-    "versionCode":  31,
-    "versionName":  "0.18.1",
-    "tag":  "v0.18.1",
+    "versionCode":  32,
+    "versionName":  "0.19.0",
+    "tag":  "v0.19.0",
     "apk":  "app-release.apk",
-    "notes":  "Fixes Export CAN app, which in v0.18.0 showed the explanation and then nothing to pick. A framework AlertDialog shows either a message or a list, never both - it only attaches the list when there is no message - so the picker was silently dropped. The explanation now ends in a Choose app button that opens the list. Read serial port had exactly the same bug and is fixed the same way: the warning now ends in Pick a port. Nothing else changed - the AIDL probe and the APK export itself were fine, they were just unreachable."
+    "notes":  "DWM now speaks the CAN service\u0027s AIDL properly. The v0.18 probe got the interface name; the APK export got the answer, because com.tw.carinfoservice ships its own .aidl source files inside the APK - CarServiceAidl (64 methods) and CarServiceCallBack (66), fully commented. Both are now in the project byte-for-byte and the build generates the stubs, so the transaction numbering cannot disagree with the service. DWM binds the service, registers a callback and reads live vehicle data: real GEAR (D/N/R/P/S), reverse, road speed, engine rpm, handbrake, headlights, turn signal, doors and boot, seatbelts, voltage, coolant and ambient temp, fuel, steering trace, the 16 parking radar sensors, and TPMS - pressure, temperature and warning state per wheel. Reverse now comes from the gear itself rather than inferring it from the deck ducking its audio; the DO_MUTE broadcast stays as a fallback since it needs no bind. Two findings worth knowing: getCarReverse() is a dead stub on this ROM - its case returns a hardcoded -1 and never reads CAN, so reverse must be received pushed, not polled. And extendedInterface() is not a getter: it writes bytes to the vehicle bus. DWM never calls it. New report section 0b shows every signal with \u0027never reported\u0027 for the ones this car does not put on the bus."
 }

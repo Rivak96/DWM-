@@ -120,6 +120,18 @@ object Vehicle {
         }
     }
 
+    /**
+     * The vendor AIDL's opinion, from [CarInfo]. It outranks the broadcast and is
+     * allowed to overwrite it: DO_MUTE only ever meant "the deck ducked its audio
+     * and said the reason was reverse", while `onGear_Information` is the gear
+     * itself. The broadcast stays because it needs no bind and works even if the
+     * CAN service is dead.
+     */
+    fun onCarInfoReverse(reverse: Boolean, source: String) {
+        if (state.reverse == reverse && state.source == source) return
+        publish(state.copy(reverse = reverse, source = source, atMs = System.currentTimeMillis()))
+    }
+
     private fun publish(s: State) {
         state = s
         for (l in listeners) runCatching { l(s) }

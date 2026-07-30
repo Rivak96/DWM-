@@ -13,3 +13,9 @@ keystore.properties
 # Vehicle/CAN scan reports — device fingerprints, keep them local
 dwm-vehicle-scan*.txt
 DWM vehicle scan*.txt
+
+# Vendor APKs pulled off the deck for decompiling. *.apk already covers them;
+# named explicitly so nothing else in here (dumps, notes) gets published either.
+# The vendor's .aidl files ARE committed, under app/src/main/aidl — those are the
+# interface definition we build against, not redistributed binaries.
+extracted apps/

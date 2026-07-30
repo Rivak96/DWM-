@@ -1099,6 +1099,10 @@ object VehicleProbe {
         sb.append("(what DWM is reading right now, from the deck's own broadcasts)\n\n")
         sb.append(Vehicle.summary()).append('\n')
 
+        sb.append("\n\n=== 0b. THE CAN SERVICE'S AIDL, NOW SPOKEN PROPERLY ===\n")
+        sb.append("(generated from the vendor's own .aidl, which ships inside its APK)\n\n")
+        sb.append(CarInfo.report())
+
         sb.append("\n\n=== 1a. SETTINGS CHANGES, AS THEY HAPPENED ===\n")
         sb.append("(every write while the scan was open — catches values that move and move back)\n\n")
         sb.append(watcher?.report() ?: "Watcher not running.")
