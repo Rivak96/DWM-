@@ -211,6 +211,23 @@ object CarInfo {
         seen[key] = how
     }
 
+    /** Every key the poller asks for, so "asked and got nothing" can be told
+     *  apart from "never asked". */
+    private val probed = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    /**
+     * Signals this car does not provide: polled repeatedly, always -1, never
+     * pushed. Held back until a few cycles have run so a cold start doesn't
+     * report the whole car as missing.
+     *
+     * This is the difference between a dashboard that looks broken and one that
+     * is telling you something true about your vehicle.
+     */
+    fun absent(): Set<String> {
+        if (pollCount < 8) return emptySet()
+        return probed.toSet() - seen.keys
+    }
+
     /** Raw values that are documented ambiguously and are therefore reported
      *  rather than decoded — see [pollOnce]. */
     @Volatile var rawDoor: Int? = null; private set
@@ -265,8 +282,10 @@ object CarInfo {
     private fun pollOnce(s: CarServiceAidl) {
         // Each getter in its own runCatching: one unimplemented method on this
         // ROM must not stop the other sixty.
-        fun <T> get(key: String, read: () -> T?): T? = runCatching { read() }.getOrNull()
-            ?.also { mark(key, "poll") }
+        fun <T> get(key: String, read: () -> T?): T? {
+            probed += key
+            return runCatching { read() }.getOrNull()?.also { mark(key, "poll") }
+        }
 
         get("gear") { vInt(s.gear_Information) }?.let {
             if (gear != it) Vehicle.onCarInfoReverse(it == 2, "AIDL gear=${gearName(it)}")
@@ -307,6 +326,112 @@ object CarInfo {
             true
         }
         get("radar") { s.radar?.takeIf { it.size >= 16 } }?.let { radar = it }
+    }
+
+    /**
+     * Call every read-only getter once and print exactly what came back.
+     *
+     * Built after two releases of guessing. The dashboard shows what DWM decided a
+     * value means; this shows the raw return, so "the car doesn't send it" and
+     * "DWM read it wrong" stop being indistinguishable.
+     *
+     * The pattern this is meant to confirm: the service resolves a signal either
+     * by name (`y0("Speed")`) or by profile index (`x0(4)`). Only seven are
+     * name-based — Radar, SendElectricVoltage, SendHeadlight, SendHandbrake,
+     * Speed, Track, Turn — and on this deck those are the only ones ever seen
+     * working. The indexed ones look up a per-car profile list; if this vehicle's
+     * profile doesn't define an item, the getter returns -1 forever and no amount
+     * of DWM code changes that.
+     *
+     * `extendedInterface` and `updateApk` are not called. Everything else here is
+     * a getter and cannot write to the bus.
+     */
+    fun dumpGetters(): String {
+        val s = svc ?: return "Not connected to ${PKG} — nothing to dump."
+        val sb = StringBuilder()
+        sb.append("Raw return from every read-only getter, called once.\n")
+        sb.append("-1 is the vendor's \"invalid\": the value is not in this car's profile.\n")
+        sb.append("[name] = resolved by signal name · [idx N] = resolved by profile index\n\n")
+
+        fun row(code: Int, how: String, name: String, read: () -> Any?) {
+            val v = runCatching { read() }.fold(
+                onSuccess = { r ->
+                    when (r) {
+                        null -> "null"
+                        is IntArray -> r.joinToString(",")
+                        is FloatArray -> r.joinToString(",")
+                        else -> r.toString()
+                    }
+                },
+                onFailure = { "THREW ${it.javaClass.simpleName} ${it.message}" }
+            )
+            sb.append(String.format("%-3d %-9s %-34s %s%n", code, how, name, v))
+        }
+
+        row(4, "[name]", "getElectricVoltage") { s.electricVoltage }
+        row(5, "[name]", "getHeadlight") { s.headlight }
+        row(6, "[idx]", "getDrivingTime") { s.drivingTime }
+        row(7, "[idx 0]", "getTotal_Mileage") { s.total_Mileage }
+        row(8, "[idx 1]", "getRecharge_Mileage") { s.recharge_Mileage }
+        row(9, "[idx 2]", "getAverage_Fuel_Consumption") { s.average_Fuel_Consumption }
+        row(10, "[idx 3]", "getInstant_Fuel_Consumption") { s.instant_Fuel_Consumption }
+        row(11, "[idx 4]", "getGear_Information") { s.gear_Information }
+        row(12, "[idx 5]", "getMain_Driving_Seat_Belt") { s.main_Driving_Seat_Belt }
+        row(13, "[idx 6]", "getCo_Pilot_Seat_Belt") { s.co_Pilot_Seat_Belt }
+        row(14, "[name]", "getHandbrake") { s.handbrake }
+        row(15, "[idx 8]", "getLeft_Turn_Signal") { s.left_Turn_Signal }
+        row(16, "[idx 9]", "getRight_Turn_Signal") { s.right_Turn_Signal }
+        row(17, "[idx 15]", "getDouble_flash") { s.double_flash }
+        row(18, "[name]", "getInstantaneous_Speed") { s.instantaneous_Speed }
+        row(19, "[idx 11]", "getEngine_Speed") { s.engine_Speed }
+        row(20, "[idx 12]", "getWater_Temp") { s.water_Temp }
+        row(21, "[idx 13]", "getAmbient_Temp") { s.ambient_Temp }
+        row(22, "[idx 14]", "getEngine_Oil_Temp") { s.engine_Oil_Temp }
+        row(23, "[idx 18]", "getOil_Volume") { s.oil_Volume }
+        row(24, "[idx 16]", "getElectricity") { s.electricity }
+        row(25, "[idx 17]", "getCharging") { s.charging }
+        row(26, "[idx 20]", "getVoltageWarning") { s.voltageWarning }
+        row(27, "[stub]", "getCarReverse") { s.carReverse }
+        row(28, "[idx 55]", "getDoor") { s.door }
+        row(29, "[idx 59]", "getOriginalCarVoltage") { s.originalCarVoltage }
+        row(30, "[idx 60]", "getTransTemp") { s.transTemp }
+        row(31, "[idx 61]", "getIntkeTemp") { s.intkeTemp }
+        row(32, "[idx 62]", "getIntkePressure") { s.intkePressure }
+        row(33, "[idx 63]", "getTurbocharged") { s.turbocharged }
+        row(34, "[idx 64]", "getDrivingMode") { s.drivingMode }
+        row(35, "[idx 65]", "getOffSign") { s.offSign }
+        row(36, "[idx 66]", "getOnSign") { s.onSign }
+        row(37, "[idx 67+]", "getTirePressure") { s.tirePressure }
+        row(38, "[idx 71]", "getThrottle") { s.throttle }
+        row(39, "[idx 72]", "getSteeringWheelAngle") { s.steeringWheelAngle }
+        row(40, "[idx 73]", "getEngineLoad") { s.engineLoad }
+        row(41, "[idx 74]", "getFRAngle") { s.frAngle }
+        row(42, "[idx 75]", "getLRAngle") { s.lrAngle }
+        row(43, "[idx 76]", "getMaintenanceMileage") { s.maintenanceMileage }
+        row(44, "[idx 77]", "getMaintenanceTime") { s.maintenanceTime }
+        row(45, "[idx 78]", "getOilWarning") { s.oilWarning }
+        row(48, "[idx 79]", "getDrivenDistance") { s.drivenDistance }
+        row(49, "[idx 80]", "getLFTireWarning") { s.lfTireWarning }
+        row(50, "[idx 81]", "getRFTireWarning") { s.rfTireWarning }
+        row(51, "[idx 82]", "getLRTireWarning") { s.lrTireWarning }
+        row(52, "[idx 83]", "getRRTireWarning") { s.rrTireWarning }
+        row(53, "[idx 84]", "getLFTireTemp") { s.lfTireTemp }
+        row(54, "[idx 85]", "getRFTireTemp") { s.rfTireTemp }
+        row(55, "[idx 86]", "getLRTireTemp") { s.lrTireTemp }
+        row(56, "[idx 87]", "getRRTireTemp") { s.rrTireTemp }
+        row(57, "[idx 88]", "getWashingFluidWarning") { s.washingFluidWarning }
+        row(58, "[name]", "getRadar") { s.radar }
+        row(59, "[name]", "getTrack") { s.track }
+        row(60, "[name]", "getTurn_Signal") { s.turn_Signal }
+        row(61, "[idx 89]", "getAverage_Fuel_..._This_Drive") { s.average_Fuel_Consumption_For_This_Drive }
+
+        sb.append("\nIf every [idx] row reads -1 and only [name] rows carry values, this car's\n")
+        sb.append("CAN profile simply does not define those items. That is a limit of the\n")
+        sb.append("vehicle/head-unit pairing, not of DWM, and the dashboard should be cut\n")
+        sb.append("down to what is actually here.\n")
+        sb.append("\nNOTE: air-conditioning is NOT part of this interface at all — there is no\n")
+        sb.append("AC method among the 64. Climate lives in another vendor app entirely.\n")
+        return sb.toString()
     }
 
     private fun startPolling() {

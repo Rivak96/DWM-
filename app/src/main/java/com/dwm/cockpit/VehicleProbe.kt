@@ -1086,14 +1086,7 @@ object VehicleProbe {
         aidl: AidlProbe? = null
     ): String {
         val sb = StringBuilder()
-        val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
-        sb.append("DWM vehicle / CAN scan\n")
-        sb.append(stamp).append('\n')
-        sb.append("DWM v").append(Updater.currentVersionName(c)).append('\n')
-        sb.append("device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
-            .append("  (").append(Build.DEVICE).append(")\n")
-        sb.append("android: ").append(Build.VERSION.RELEASE).append(" / API ").append(Build.VERSION.SDK_INT).append('\n')
-        sb.append("fingerprint: ").append(Build.FINGERPRINT).append("\n\n")
+        sb.append(header(c)).append('\n')
 
         sb.append("=== 0. LIVE VEHICLE SIGNAL ===\n")
         sb.append("(what DWM is reading right now, from the deck's own broadcasts)\n\n")
@@ -1102,6 +1095,10 @@ object VehicleProbe {
         sb.append("\n\n=== 0b. THE CAN SERVICE'S AIDL, NOW SPOKEN PROPERLY ===\n")
         sb.append("(generated from the vendor's own .aidl, which ships inside its APK)\n\n")
         sb.append(CarInfo.report())
+
+        sb.append("\n\n=== 0c. EVERY GETTER, RAW ===\n")
+        sb.append("(the ground truth: what each of the 64 methods returns right now)\n\n")
+        sb.append(CarInfo.dumpGetters())
 
         sb.append("\n\n=== 1a. SETTINGS CHANGES, AS THEY HAPPENED ===\n")
         sb.append("(every write while the scan was open — catches values that move and move back)\n\n")
@@ -1199,6 +1196,22 @@ object VehicleProbe {
      * the shared Downloads collection via MediaStore (no permission needed under
      * scoped storage, and the returned content:// URI is directly shareable).
      */
+    /** Which build, which deck. Every report that gets sent to me needs it, so it
+     *  lives here rather than being retyped per report. */
+    fun header(c: Context): String {
+        val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+        return buildString {
+            append("DWM vehicle / CAN scan\n")
+            append(stamp).append('\n')
+            append("DWM v").append(Updater.currentVersionName(c)).append('\n')
+            append("device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
+                .append("  (").append(Build.DEVICE).append(")\n")
+            append("android: ").append(Build.VERSION.RELEASE)
+                .append(" / API ").append(Build.VERSION.SDK_INT).append('\n')
+            append("fingerprint: ").append(Build.FINGERPRINT).append('\n')
+        }
+    }
+
     fun saveReport(c: Context, text: String): Pair<Uri, String>? {
         val name = "dwm-vehicle-scan-" +
             SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + ".txt"

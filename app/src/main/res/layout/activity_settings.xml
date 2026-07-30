@@ -506,6 +506,11 @@
                         android:id="@+id/btnCanApk"
                         style="@style/ChipButton"
                         android:text="Export CAN app" />
+
+                    <Button
+                        android:id="@+id/btnCanDump"
+                        style="@style/ChipButton"
+                        android:text="Dump CAN getters" />
                 </LinearLayout>
 
                 <TextView

@@ -154,6 +154,8 @@ private fun StatusStrip(head: HeadState, overlaysOn: Boolean, actions: HomeActio
 
         // Tapping the CAN state goes where the diagnostics are, so "why is
         // everything a dash?" is one tap from its answer.
+        AbsentChip(head.absentCount)
+        Spacer(Modifier.width(8.dp))
         Box(Modifier.clip(RoundedCornerShape(9.dp)).clickable { actions.settings() }
             .padding(horizontal = 7.dp, vertical = 5.dp)) {
             CanDot(head.canLevel, head.demo)

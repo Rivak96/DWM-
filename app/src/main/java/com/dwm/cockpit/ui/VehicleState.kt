@@ -84,7 +84,11 @@ data class HeadState(
     val ambientUnit: String? = null,
     val canLevel: Int = 0,
     val updates: Int = 0,
-    val demo: Boolean = false
+    val demo: Boolean = false,
+    /** How many signals were asked for repeatedly and always came back invalid —
+     *  i.e. not on this car's CAN profile. Shown so a screen full of dashes reads
+     *  as "your car doesn't send these" instead of "this app is broken". */
+    val absentCount: Int = 0
 )
 
 class VehicleUi(
@@ -132,7 +136,8 @@ private fun liveInto(
             else -> 2
         },
         updates = CarInfo.updates,
-        demo = false
+        demo = false,
+        absentCount = CarInfo.absent().size
     )
     drive.value = DriveState(
         gear = CarInfo.gear,

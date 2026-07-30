@@ -192,6 +192,7 @@ class SettingsActivity : DwmActivity() {
         findViewById<Button>(R.id.btnCanScan).setOnClickListener { canScanTapped() }
         findViewById<Button>(R.id.btnCanSerial).setOnClickListener { serialReadPrompt() }
         findViewById<Button>(R.id.btnCanApk).setOnClickListener { exportApkPrompt() }
+        findViewById<Button>(R.id.btnCanDump).setOnClickListener { dumpGetters() }
         // Parsing every APK manifest takes a second or two; do it off the main
         // thread, then listen on the action names it found rather than guesses.
         Thread {
@@ -433,6 +434,38 @@ class SettingsActivity : DwmActivity() {
             .setItems(labels.toTypedArray()) { _, which -> exportApk(pkgs[which]) }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    /**
+     * One tap, one file: what every CAN getter returns right now. Deliberately
+     * not behind the full vehicle scan — this is the question that has come up
+     * three releases running, and it should cost one button, not a whole ritual.
+     */
+    private fun dumpGetters() {
+        Toast.makeText(this, "Reading every getter…", Toast.LENGTH_SHORT).show()
+        Thread {
+            // Binder calls into another process; never on the main thread.
+            val text = VehicleProbe.header(this) + "\n" + CarInfo.dumpGetters()
+            val saved = VehicleProbe.saveReport(this, text)
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                findViewById<TextView>(R.id.canStatus).text =
+                    saved?.let { "Getter dump saved ${it.second}" } ?: "Couldn't save the dump."
+                val named = text.lines().count { it.contains("[name]") && !it.contains("-1.0") && !it.trimEnd().endsWith("-1") }
+                Ui.dialog(this)
+                    .setTitle("CAN getter dump")
+                    .setMessage(
+                        (saved?.second ?: "Not saved") + "\n\n" +
+                            "$named name-resolved signals returned a value. Send me this file " +
+                            "and the dashboard gets cut down to exactly what your car provides."
+                    )
+                    .setPositiveButton("Share") { _, _ ->
+                        saved?.let { shareReport(it.first, "text/plain", "DWM CAN getters") }
+                    }
+                    .setNegativeButton("Done", null)
+                    .show()
+            }
+        }.start()
     }
 
     private fun exportApk(pkg: String) {

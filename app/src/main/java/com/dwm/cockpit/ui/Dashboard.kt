@@ -306,6 +306,19 @@ fun CanDot(level: Int, demo: Boolean) {
     }
 }
 
+/** Says out loud that the blanks are the car's doing, not a hung app. */
+@Composable
+fun AbsentChip(count: Int) {
+    if (count <= 0) return
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        DwmText(
+            "$count not on this car",
+            size = 9.sp,
+            color = Color.White.copy(alpha = 0.42f)
+        )
+    }
+}
+
 @Composable
 fun AmbientReadout(head: HeadState) {
     if (head.ambient == null) return
