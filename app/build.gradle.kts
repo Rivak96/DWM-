@@ -21,8 +21,8 @@ android {
         applicationId = "com.dwm.cockpit"
         minSdk = 26          // Android 8.0 — well below the deck's Android 12
         targetSdk = 33
-        versionCode = 36
-        versionName = "0.21.0"
+        versionCode = 37
+        versionName = "0.21.1"
     }
 
     signingConfigs {

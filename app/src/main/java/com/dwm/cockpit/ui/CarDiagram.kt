@@ -63,8 +63,8 @@ fun CarDiagram(body: BodyState, accent: Color, modifier: Modifier = Modifier) {
 private fun DrawScope.drawBody(b: BodyState, accent: Color, blinkOn: Boolean) {
     val w = size.width
     val h = size.height
-    val bw = w * 0.26f
-    val bh = h * 0.52f
+    val bw = w * 0.30f
+    val bh = h * 0.56f
     val l = (w - bw) / 2f
     val t = (h - bh) / 2f
     val r = l + bw
@@ -85,14 +85,19 @@ private fun DrawScope.drawBody(b: BodyState, accent: Color, blinkOn: Boolean) {
     drawLine(hair, Offset(l + inset, t + bh * 0.24f), Offset(r - inset, t + bh * 0.24f), stroke * 0.8f)
     drawLine(hair, Offset(l + inset, bottom - bh * 0.22f), Offset(r - inset, bottom - bh * 0.22f), stroke * 0.8f)
 
-    // headlights — a soft wash at the nose when they are on
+    // headlights — two lamps at the nose. The single wide bar this replaced read
+    // as a stray beige blob floating above the van rather than as lights.
     if (b.headlight == true) {
-        drawRoundRect(
-            color = Color(0xFFFFF3C4).copy(alpha = 0.18f),
-            topLeft = Offset(l, t - h * 0.05f),
-            size = Size(bw, h * 0.055f),
-            cornerRadius = CornerRadius(bw * 0.2f, bw * 0.2f)
-        )
+        val lampW = bw * 0.26f
+        val lampH = h * 0.014f
+        for (lx in listOf(l + bw * 0.10f, r - bw * 0.10f - lampW)) {
+            drawRoundRect(
+                color = Color(0xFFFFF3C4).copy(alpha = 0.85f),
+                topLeft = Offset(lx, t - lampH * 0.5f),
+                size = Size(lampW, lampH),
+                cornerRadius = CornerRadius(lampH, lampH)
+            )
+        }
     }
 
     // wheels
@@ -149,8 +154,8 @@ private fun DrawScope.drawRadar(radar: List<Int>, reverse: Boolean) {
     if (radar.size < 16) return
     val w = size.width
     val h = size.height
-    val bw = w * 0.26f
-    val bh = h * 0.52f
+    val bw = w * 0.30f
+    val bh = h * 0.56f
     val l = (w - bw) / 2f
     val t = (h - bh) / 2f
     val span = bw * 1.15f
@@ -158,25 +163,29 @@ private fun DrawScope.drawRadar(radar: List<Int>, reverse: Boolean) {
     val segW = span / 4f
     val gap = segW * 0.12f
 
+    // Chunky enough to read as instrumentation from the driver's seat rather than
+    // as decoration — the thin version was mistaken for a dead feature.
+    val endH = h * 0.055f
     for (i in 0 until 4) {
         // nose
         bar(
-            Offset(x0 + i * segW + gap / 2, t - h * 0.135f), Size(segW - gap, h * 0.034f),
+            Offset(x0 + i * segW + gap / 2, t - h * 0.155f), Size(segW - gap, endH),
             radar[i], false
         )
         // tail — drawn right-to-left, which is what indices 8..11 mean
         bar(
-            Offset(x0 + (3 - i) * segW + gap / 2, t + bh + h * 0.10f), Size(segW - gap, h * 0.034f),
+            Offset(x0 + (3 - i) * segW + gap / 2, t + bh + h * 0.10f), Size(segW - gap, endH),
             radar[8 + i], reverse
         )
     }
     val sideH = bh * 0.19f
+    val sideW = w * 0.022f
     for (i in 0 until 4) {
         val y = t + bh * 0.10f + i * (sideH * 1.18f)
-        bar(Offset(l + bw + w * 0.022f, y), Size(w * 0.012f, sideH), radar[4 + i], false)
+        bar(Offset(l + bw + w * 0.030f, y), Size(sideW, sideH), radar[4 + i], false)
         bar(
-            Offset(l - w * 0.034f, t + bh * 0.10f + (3 - i) * (sideH * 1.18f)),
-            Size(w * 0.012f, sideH), radar[12 + i], false
+            Offset(l - w * 0.030f - sideW, t + bh * 0.10f + (3 - i) * (sideH * 1.18f)),
+            Size(sideW, sideH), radar[12 + i], false
         )
     }
 }
@@ -206,8 +215,8 @@ private fun DrawScope.drawTrace(path: Path, track: Int?, accent: Color) {
     val t = track ?: return
     val w = size.width
     val h = size.height
-    val bw = w * 0.26f
-    val bh = h * 0.52f
+    val bw = w * 0.30f
+    val bh = h * 0.56f
     val top = (h - bh) / 2f + bh
     val bend = ((t - 240) / 240f).coerceIn(-1f, 1f) * w * 0.11f
     val len = h * 0.20f
