@@ -14,6 +14,12 @@ keystore.properties
 dwm-vehicle-scan*.txt
 DWM vehicle scan*.txt
 
+# Photos of the deck dropped in for debugging — they show the car interior and
+# are not project files.
+IMG_*.jpg
+IMG_*.jpeg
+IMG_*.png
+
 # Vendor APKs pulled off the deck for decompiling. *.apk already covers them;
 # named explicitly so nothing else in here (dumps, notes) gets published either.
 # The vendor's .aidl files ARE committed, under app/src/main/aidl — those are the

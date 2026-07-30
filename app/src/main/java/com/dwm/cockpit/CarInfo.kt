@@ -153,12 +153,15 @@ object CarInfo {
                     .onFailure { status = "connected, register failed: ${it.javaClass.simpleName}" }
                 runCatching { s.requestData() }
                 runCatching { s.getData() }
+                // Pushes alone leave most of the dashboard blank on this deck.
+                startPolling()
             }
 
             override fun onServiceDisconnected(name: ComponentName?) {
                 svc = null
                 registered = false
                 status = "service disconnected"
+                stopPolling()
             }
 
             override fun onNullBinding(name: ComponentName?) {
@@ -181,6 +184,7 @@ object CarInfo {
     fun stop(c: Context) {
         val app = c.applicationContext
         val s = svc
+        stopPolling()
         if (s != null && registered) runCatching { s.unRegisterCarServiceCallBack(callback) }
         conn?.let { runCatching { app.unbindService(it) } }
         conn = null
@@ -192,6 +196,131 @@ object CarInfo {
     private fun touch() {
         updates++
         lastMs = System.currentTimeMillis()
+    }
+
+    private fun push(key: String) {
+        touch()
+        mark(key, "push")
+    }
+
+    /** Which signals have ever produced a real value, and how they arrived. The
+     *  answer to "why is my dashboard all dashes" is exactly this set. */
+    private val seen = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private fun mark(key: String, how: String) {
+        seen[key] = how
+    }
+
+    /** Raw values that are documented ambiguously and are therefore reported
+     *  rather than decoded — see [pollOnce]. */
+    @Volatile var rawDoor: Int? = null; private set
+
+    // ---- polling ------------------------------------------------------------
+
+    /**
+     * Read the getters on a timer, as well as listening for pushes.
+     *
+     * v0.20.0 shipped push-only and that was wrong. On this deck the CAN service
+     * volunteers almost nothing — a photo of the first real drive showed voltage
+     * and headlights arriving and every other tile stuck on "—" — but the same
+     * values sit behind 64 getters that nobody was calling. Pushes are still the
+     * better channel where they exist (instant, no IPC cost), so this merges:
+     * whichever source produces a real value wins, and [seen] records which one.
+     *
+     * On a background thread because a binder call into another process blocks,
+     * and 1Hz because that is a dashboard, not a tachometer.
+     *
+     * Two methods are never called here, for the reasons in the class docs:
+     * `extendedInterface` (writes to the vehicle bus) and `updateApk`.
+     */
+    private const val POLL_MS = 1000L
+    private var pollThread: android.os.HandlerThread? = null
+    private var pollHandler: android.os.Handler? = null
+
+    private var pollCount = 0
+
+    private val poll = object : Runnable {
+        override fun run() {
+            svc?.let { s ->
+                runCatching { pollOnce(s) }
+                // requestData() is the vendor's own "resend everything" — its
+                // handler posts 0xFF03 to the CAN box. We called it once at
+                // connect, which is no use if the box was still waking up or the
+                // ignition came on later. Nudge it every 5s rather than every
+                // second, so it stays a refresh and not a flood.
+                if (pollCount % 5 == 0) runCatching { s.requestData() }
+                pollCount++
+            }
+            pollHandler?.postDelayed(this, POLL_MS)
+        }
+    }
+
+    /** The vendor documents -1 as "invalid" on every getter, so it is absence,
+     *  not a reading. The cost is that a genuine -1°C ambient reads as unknown —
+     *  accepted, because their own apps have the same blind spot. */
+    private fun vInt(v: Int): Int? = if (v == -1) null else v
+    private fun vFloat(v: Float): Float? = if (v == -1f || v.isNaN()) null else v
+    private fun vBool(v: Int): Boolean? = if (v == -1) null else v != 0
+
+    private fun pollOnce(s: CarServiceAidl) {
+        // Each getter in its own runCatching: one unimplemented method on this
+        // ROM must not stop the other sixty.
+        fun <T> get(key: String, read: () -> T?): T? = runCatching { read() }.getOrNull()
+            ?.also { mark(key, "poll") }
+
+        get("gear") { vInt(s.gear_Information) }?.let {
+            if (gear != it) Vehicle.onCarInfoReverse(it == 2, "AIDL gear=${gearName(it)}")
+            gear = it
+        }
+        get("speed") { s.instantaneous_Speed?.firstOrNull()?.let { v -> vInt(v) } }?.let { speedKmh = it }
+        get("rpm") { vInt(s.engine_Speed) }?.let { rpm = it }
+        get("handbrake") { vBool(s.handbrake) }?.let { handbrake = it }
+        get("headlight") { vBool(s.headlight) }?.let { headlight = it }
+        get("turn") { vInt(s.turn_Signal) }?.let { turnSignal = it }
+        get("voltage") { vFloat(s.electricVoltage) }?.let { voltage = it }
+        get("fuel") { vFloat(s.oil_Volume) }?.let { fuelLevel = it }
+        get("belts") {
+            beltDriver = vBool(s.main_Driving_Seat_Belt) ?: beltDriver
+            beltPassenger = vBool(s.co_Pilot_Seat_Belt) ?: beltPassenger
+            true
+        }
+        get("track") { vInt(s.track) }?.let { track = it }
+        // Documented as a flag word, and guessing which bit is which door is
+        // exactly the mistake this project keeps refusing to make. Reported raw.
+        get("door_raw") { vInt(s.door) }?.let { rawDoor = it }
+
+        // water temp: [0] value, [1] unit
+        get("coolant") { s.water_Temp?.firstOrNull()?.let { v -> vFloat(v) } }?.let { coolant = it }
+        // ambient: [0] is the validity flag, [1] the value
+        get("ambient") {
+            val a = s.ambient_Temp ?: return@get null
+            if (a.isEmpty() || a[0] == -1f) null else (a.getOrNull(1) ?: a[0])
+        }?.let { ambient = it }
+
+        get("tpms") {
+            val p = s.tirePressure ?: return@get null
+            if (p.size < 4) return@get null
+            val unit = when (p.getOrNull(4)) { 0f -> "psi"; 1f -> "kpa"; 2f -> "bar"; else -> null }
+            for (i in 0 until 4) {
+                vFloat(p[i])?.let { tyres[i].pressure = it; tyres[i].pressureUnit = unit }
+            }
+            true
+        }
+        get("radar") { s.radar?.takeIf { it.size >= 16 } }?.let { radar = it }
+    }
+
+    private fun startPolling() {
+        if (pollThread != null) return
+        val th = android.os.HandlerThread("dwm-caninfo").apply { start() }
+        pollThread = th
+        pollHandler = android.os.Handler(th.looper).also { it.post(poll) }
+    }
+
+    private fun stopPolling() {
+        pollHandler?.removeCallbacks(poll)
+        pollHandler = null
+        pollThread?.quitSafely()
+        pollThread = null
     }
 
     // ---- diagnostics -------------------------------------------------------
@@ -247,8 +376,21 @@ object CarInfo {
         radar?.let { line("radar", it.joinToString(",")) }
         sb.append("\n  TPMS (pressure, temp):\n")
         for (t in tyres) sb.append("    ").append(t.line()).append('\n')
-        sb.append("\nAnything marked \"never reported\" is a signal this car does not put on\n")
-        sb.append("the bus, or that the CAN box does not decode — not a DWM failure.\n")
+        line("door flags (raw)", rawDoor?.let { "$it  (0b${Integer.toBinaryString(it)})" })
+
+        sb.append("\n  WHERE EACH SIGNAL CAME FROM\n")
+        if (seen.isEmpty()) {
+            sb.append("    nothing at all — neither a push nor a getter returned a real value\n")
+        } else {
+            for ((k, how) in seen.toSortedMap()) {
+                sb.append("    ").append(k.padEnd(14)).append(how).append('\n')
+            }
+        }
+        sb.append("\n  Signals absent from that list returned -1 (the vendor's \"invalid\") from\n")
+        sb.append("  their getter AND were never pushed — meaning this car does not put them\n")
+        sb.append("  on the bus, or the CAN box does not decode them. That is the honest\n")
+        sb.append("  boundary of what DWM can show, and it is not a DWM failure.\n")
+        sb.append("  Send this section: it is what decides which tiles are worth keeping.\n")
         return sb.toString()
     }
 
@@ -265,7 +407,7 @@ object CarInfo {
         // -- the ones DWM actually uses
 
         override fun onGear_Information(gear_: Int) {
-            touch()
+            push("gear")
             gear = gear_
             // Gear is the better reverse signal: it says which gear, not merely
             // that the deck ducked its audio. 2 = R.
@@ -273,30 +415,30 @@ object CarInfo {
         }
 
         override fun onCarReverse(on: Boolean) {
-            touch()
+            push("reverse")
             reverse = on
             Vehicle.onCarInfoReverse(on, "AIDL onCarReverse")
         }
 
-        override fun onInstantaneous_Speed(v: Int) { touch(); speedKmh = v }
-        override fun onEngine_Speed(v: Int) { touch(); rpm = v }
-        override fun onHandbrake(on: Boolean) { touch(); handbrake = on }
-        override fun onHeadlight(on: Boolean) { touch(); headlight = on }
-        override fun onTurn_Signal(v: Int) { touch(); turnSignal = v }
-        override fun onElectricVoltage(v: Float, unit: String?) { touch(); voltage = v }
-        override fun onWater_Temp(v: Int, unit: String?) { touch(); coolant = v.toFloat() }
+        override fun onInstantaneous_Speed(v: Int) { push("speed"); speedKmh = v }
+        override fun onEngine_Speed(v: Int) { push("rpm"); rpm = v }
+        override fun onHandbrake(on: Boolean) { push("handbrake"); handbrake = on }
+        override fun onHeadlight(on: Boolean) { push("headlight"); headlight = on }
+        override fun onTurn_Signal(v: Int) { push("turn"); turnSignal = v }
+        override fun onElectricVoltage(v: Float, unit: String?) { push("voltage"); voltage = v }
+        override fun onWater_Temp(v: Int, unit: String?) { push("coolant"); coolant = v.toFloat() }
         override fun onAmbient_Temp(v: Float, unit: String?) {
-            touch(); ambient = v; ambientUnit = unit
+            push("ambient"); ambient = v; ambientUnit = unit
         }
-        override fun onOil_Volume(v: Float, unit: String?) { touch(); fuelLevel = v }
-        override fun onMain_Driving_Seat_Belt(on: Boolean) { touch(); beltDriver = on }
-        override fun onCo_Pilot_Seat_Belt(on: Boolean) { touch(); beltPassenger = on }
+        override fun onOil_Volume(v: Float, unit: String?) { push("fuel"); fuelLevel = v }
+        override fun onMain_Driving_Seat_Belt(on: Boolean) { push("belts"); beltDriver = on }
+        override fun onCo_Pilot_Seat_Belt(on: Boolean) { push("belts"); beltPassenger = on }
 
-        override fun onLeftFrontDoor(open: Boolean) { touch(); doorLF = open }
-        override fun onRightFrontDoor(open: Boolean) { touch(); doorRF = open }
-        override fun onLeftRearDoor(open: Boolean) { touch(); doorLR = open }
-        override fun onRightRearDoor(open: Boolean) { touch(); doorRR = open }
-        override fun onBackDoor(open: Boolean) { touch(); boot = open }
+        override fun onLeftFrontDoor(open: Boolean) { push("doors"); doorLF = open }
+        override fun onRightFrontDoor(open: Boolean) { push("doors"); doorRF = open }
+        override fun onLeftRearDoor(open: Boolean) { push("doors"); doorLR = open }
+        override fun onRightRearDoor(open: Boolean) { push("doors"); doorRR = open }
+        override fun onBackDoor(open: Boolean) { push("doors"); boot = open }
 
         override fun onLFTirePressure(v: Float, unit: String?) = tyre(0, v, unit)
         override fun onRFTirePressure(v: Float, unit: String?) = tyre(1, v, unit)
@@ -313,26 +455,26 @@ object CarInfo {
         override fun onLRTireWarning(type: Int, value: Int) = tyreWarn(2, type, value)
         override fun onRRTireWarning(type: Int, value: Int) = tyreWarn(3, type, value)
 
-        override fun onTrack(v: Int) { touch(); track = v }
+        override fun onTrack(v: Int) { push("track"); track = v }
 
         override fun onRadar(
             a: Int, b: Int, c: Int, d: Int, e: Int, f: Int, g: Int, h: Int,
             i: Int, j: Int, k: Int, l: Int, m: Int, n: Int, o: Int, p: Int
         ) {
-            touch()
+            push("radar")
             radar = intArrayOf(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p)
         }
 
         private fun tyre(i: Int, v: Float, unit: String?) {
-            touch(); tyres[i].pressure = v; tyres[i].pressureUnit = unit
+            push("tpms"); tyres[i].pressure = v; tyres[i].pressureUnit = unit
         }
 
         private fun tyreTemp(i: Int, v: Int, unit: String?) {
-            touch(); tyres[i].temp = v.toFloat(); tyres[i].tempUnit = unit
+            push("tpms_temp"); tyres[i].temp = v.toFloat(); tyres[i].tempUnit = unit
         }
 
         private fun tyreWarn(i: Int, type: Int, value: Int) {
-            touch(); tyres[i].warnType = type; tyres[i].warnValue = value
+            push("tpms_warn"); tyres[i].warnType = type; tyres[i].warnValue = value
         }
 
         // -- counted but unused: still evidence the bus is alive
