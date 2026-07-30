@@ -287,45 +287,26 @@ object CarInfo {
             return runCatching { read() }.getOrNull()?.also { mark(key, "poll") }
         }
 
+        // Only the readings this van actually answers. The 2026-07-30 dump had
+        // every profile-indexed getter at -1 — gear, rpm, coolant, fuel, TPMS,
+        // doors, belts, ambient — so polling them 45 times a second's worth of
+        // IPC bought nothing but heat. `Dump CAN getters` in Settings still
+        // sweeps all 64 on demand, which is where that question belongs.
+        get("speed") { s.instantaneous_Speed?.firstOrNull()?.let { v -> vInt(v) } }?.let { speedKmh = it }
+        get("track") { vInt(s.track) }?.let { track = it }
+        get("turn") { vInt(s.turn_Signal) }?.let { turnSignal = it }
+        get("headlight") { vBool(s.headlight) }?.let { headlight = it }
+        get("voltage") { vFloat(s.electricVoltage) }?.let { voltage = it }
+        get("radar") { s.radar?.takeIf { it.size >= 16 } }?.let { radar = it }
+        // Name-resolved like the six above but dead on this van — kept because it
+        // costs one call and would light up a chip the moment it ever answers.
+        get("handbrake") { vBool(s.handbrake) }?.let { handbrake = it }
+        // Gear is the one indexed reading worth still asking for: it decides
+        // reverse, and a car-profile change in the head unit could bring it back.
         get("gear") { vInt(s.gear_Information) }?.let {
             if (gear != it) Vehicle.onCarInfoReverse(it == 2, "AIDL gear=${gearName(it)}")
             gear = it
         }
-        get("speed") { s.instantaneous_Speed?.firstOrNull()?.let { v -> vInt(v) } }?.let { speedKmh = it }
-        get("rpm") { vInt(s.engine_Speed) }?.let { rpm = it }
-        get("handbrake") { vBool(s.handbrake) }?.let { handbrake = it }
-        get("headlight") { vBool(s.headlight) }?.let { headlight = it }
-        get("turn") { vInt(s.turn_Signal) }?.let { turnSignal = it }
-        get("voltage") { vFloat(s.electricVoltage) }?.let { voltage = it }
-        get("fuel") { vFloat(s.oil_Volume) }?.let { fuelLevel = it }
-        get("belts") {
-            beltDriver = vBool(s.main_Driving_Seat_Belt) ?: beltDriver
-            beltPassenger = vBool(s.co_Pilot_Seat_Belt) ?: beltPassenger
-            true
-        }
-        get("track") { vInt(s.track) }?.let { track = it }
-        // Documented as a flag word, and guessing which bit is which door is
-        // exactly the mistake this project keeps refusing to make. Reported raw.
-        get("door_raw") { vInt(s.door) }?.let { rawDoor = it }
-
-        // water temp: [0] value, [1] unit
-        get("coolant") { s.water_Temp?.firstOrNull()?.let { v -> vFloat(v) } }?.let { coolant = it }
-        // ambient: [0] is the validity flag, [1] the value
-        get("ambient") {
-            val a = s.ambient_Temp ?: return@get null
-            if (a.isEmpty() || a[0] == -1f) null else (a.getOrNull(1) ?: a[0])
-        }?.let { ambient = it }
-
-        get("tpms") {
-            val p = s.tirePressure ?: return@get null
-            if (p.size < 4) return@get null
-            val unit = when (p.getOrNull(4)) { 0f -> "psi"; 1f -> "kpa"; 2f -> "bar"; else -> null }
-            for (i in 0 until 4) {
-                vFloat(p[i])?.let { tyres[i].pressure = it; tyres[i].pressureUnit = unit }
-            }
-            true
-        }
-        get("radar") { s.radar?.takeIf { it.size >= 16 } }?.let { radar = it }
     }
 
     /**

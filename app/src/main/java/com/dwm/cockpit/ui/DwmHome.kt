@@ -112,19 +112,21 @@ fun DwmHome(
             StatusStrip(vehicle.head.value, overlaysOn, actions)
             Spacer(Modifier.height(9.dp))
 
+            // Two zones, not three. The van provides six readings, and a third
+            // card would only hold tiles the vehicle can never fill.
             Row(Modifier.fillMaxWidth().weight(1f)) {
                 GlassCard(Modifier.fillMaxHeight().weight(1f), radius = 16.dp, padding = 11.dp) {
-                    DriveZone(vehicle.drive.value, cs.primary)
+                    DriveZone(
+                        vehicle.drive.value,
+                        vehicle.vitals.value,
+                        vehicle.body.value,
+                        cs.primary
+                    )
                 }
                 Spacer(Modifier.width(9.dp))
 
-                GlassCard(Modifier.fillMaxHeight().weight(1.25f), radius = 16.dp, padding = 11.dp) {
-                    VehicleZone(vehicle.body.value, cs.primary)
-                }
-                Spacer(Modifier.width(9.dp))
-
-                GlassCard(Modifier.fillMaxHeight().weight(1f), radius = 16.dp, padding = 11.dp) {
-                    VitalsZone(vehicle.vitals.value, cs.primary)
+                GlassCard(Modifier.fillMaxHeight().weight(1.45f), radius = 16.dp, padding = 11.dp) {
+                    ParkingZone(vehicle.body.value, cs.primary)
                 }
             }
 
@@ -147,15 +149,12 @@ private fun StatusStrip(head: HeadState, overlaysOn: Boolean, actions: HomeActio
         Text(time, color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Light)
         Spacer(Modifier.width(9.dp))
         Text(date, color = Color.White.copy(alpha = 0.62f), fontSize = 10.sp)
-        Spacer(Modifier.width(12.dp))
-        AmbientReadout(head)
 
         Spacer(Modifier.weight(1f))
 
-        // Tapping the CAN state goes where the diagnostics are, so "why is
-        // everything a dash?" is one tap from its answer.
-        AbsentChip(head.absentCount)
-        Spacer(Modifier.width(8.dp))
+        // Tapping the CAN state goes to the diagnostics — and now that the dead
+        // tiles are gone, that is where the full "what this van doesn't send"
+        // list lives rather than on the dashboard.
         Box(Modifier.clip(RoundedCornerShape(9.dp)).clickable { actions.settings() }
             .padding(horizontal = 7.dp, vertical = 5.dp)) {
             CanDot(head.canLevel, head.demo)

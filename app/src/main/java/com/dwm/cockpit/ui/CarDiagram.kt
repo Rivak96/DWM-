@@ -1,21 +1,14 @@
 package com.dwm.cockpit.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -24,22 +17,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import kotlin.math.abs
 
 /**
- * The car, from above.
+ * The van, from above, with its parking sensors around it.
  *
- * One drawing carries nine separate signals — four doors, the boot, both belts,
- * the headlights, the indicators, four tyre pressures and sixteen radar sensors —
- * because that is far and away the cheapest way to spend the middle of the screen.
- * Read as a picture it is also the only layout where "which door is open" needs no
- * label at all.
+ * This drawing used to carry nine signals. The getter dump of 2026-07-30 settled
+ * what this vehicle actually provides: every profile-indexed reading returns -1
+ * permanently — no doors, no boot, no seatbelts, no tyre pressures, no gear. So
+ * the door outlines, seat marks and TPMS corners are gone; drawing them was
+ * drawing a promise the van cannot keep.
  *
- * Everything degrades to a dim outline when a signal has never reported, so a car
- * that tells us nothing renders as a plain grey car rather than a broken widget.
+ * What is left is real and worth the space: sixteen radar sensors, the
+ * indicators, the headlights, and the steering trace. Parking is the one job this
+ * van gives DWM enough data to do properly, so this is now a parking display.
  */
 
 private val WARN = Color(0xFFFF453A)
@@ -64,72 +55,7 @@ fun CarDiagram(body: BodyState, accent: Color, modifier: Modifier = Modifier) {
             if (body.reverse) drawTrace(trace, body.track, accent)
             drawBody(body, accent, blinkOn)
         }
-
-        // Tyre readouts sit outside the wheels. Laid out with weights rather than
-        // absolute offsets so they track the drawing at any size or UI scale.
-        Row(Modifier.fillMaxSize()) {
-            TyreColumn(body.tyre(0), body.tyre(2), Alignment.End, Modifier.weight(1f))
-            Spacer(Modifier.weight(1.15f))
-            TyreColumn(body.tyre(1), body.tyre(3), Alignment.Start, Modifier.weight(1f))
-        }
     }
-}
-
-private fun BodyState.tyre(i: Int): TyreState? = tyres.getOrNull(i)
-
-@Composable
-private fun TyreColumn(
-    front: TyreState?,
-    rear: TyreState?,
-    align: Alignment.Horizontal,
-    modifier: Modifier
-) {
-    Column(modifier.fillMaxHeight(), horizontalAlignment = align) {
-        Spacer(Modifier.weight(0.22f))
-        TyreLabel(front, align)
-        Spacer(Modifier.weight(0.40f))
-        TyreLabel(rear, align)
-        Spacer(Modifier.weight(0.26f))
-    }
-}
-
-@Composable
-private fun TyreLabel(t: TyreState?, align: Alignment.Horizontal) {
-    val warned = (t?.warn ?: 0) != 0
-    Column(horizontalAlignment = align) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            DwmText(
-                t?.label ?: "—",
-                size = 8.sp,
-                color = Color.White.copy(alpha = 0.45f)
-            )
-            DwmText(
-                "  " + (t?.pressure?.let { "%.0f".format(it) } ?: "—"),
-                size = 15.sp,
-                color = if (warned) WARN else Color.White.copy(alpha = 0.92f),
-                weight = FontWeight.Medium,
-                tabular = true
-            )
-        }
-        DwmText(
-            when {
-                t == null -> ""
-                warned -> tyreWarning(t.warn)
-                t.temp != null -> "%.0f°".format(t.temp)
-                else -> t.pressureUnit ?: ""
-            },
-            size = 8.sp,
-            color = if (warned) WARN.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.4f)
-        )
-    }
-}
-
-/** Vendor coding: 1 pressure, 2 temperature, 3 sensor. */
-private fun tyreWarning(type: Int?): String = when (type) {
-    1 -> "PRESSURE"
-    2 -> "TEMP"
-    3 -> "SENSOR"
-    else -> "WARN"
 }
 
 /* ------------------------------------------------------------------ drawing */
@@ -137,13 +63,13 @@ private fun tyreWarning(type: Int?): String = when (type) {
 private fun DrawScope.drawBody(b: BodyState, accent: Color, blinkOn: Boolean) {
     val w = size.width
     val h = size.height
-    val bw = w * 0.30f
-    val bh = h * 0.60f
+    val bw = w * 0.26f
+    val bh = h * 0.52f
     val l = (w - bw) / 2f
     val t = (h - bh) / 2f
     val r = l + bw
     val bottom = t + bh
-    val hair = Color.White.copy(alpha = 0.30f)
+    val hair = Color.White.copy(alpha = 0.34f)
     val stroke = (w * 0.004f).coerceIn(1.2f, 3f)
 
     // shell
@@ -154,39 +80,28 @@ private fun DrawScope.drawBody(b: BodyState, accent: Color, blinkOn: Boolean) {
         cornerRadius = CornerRadius(bw * 0.30f, bw * 0.30f),
         style = Stroke(width = stroke)
     )
-    // windscreen + rear glass, purely to make the orientation readable
+    // windscreen + rear glass, so the orientation reads at a glance
     val inset = bw * 0.16f
-    drawLine(hair, Offset(l + inset, t + bh * 0.22f), Offset(r - inset, t + bh * 0.22f), stroke * 0.8f)
-    drawLine(hair, Offset(l + inset, bottom - bh * 0.20f), Offset(r - inset, bottom - bh * 0.20f), stroke * 0.8f)
+    drawLine(hair, Offset(l + inset, t + bh * 0.24f), Offset(r - inset, t + bh * 0.24f), stroke * 0.8f)
+    drawLine(hair, Offset(l + inset, bottom - bh * 0.22f), Offset(r - inset, bottom - bh * 0.22f), stroke * 0.8f)
 
     // headlights — a soft wash at the nose when they are on
     if (b.headlight == true) {
         drawRoundRect(
-            color = Color(0xFFFFF3C4).copy(alpha = 0.16f),
-            topLeft = Offset(l, t - h * 0.055f),
-            size = Size(bw, h * 0.06f),
+            color = Color(0xFFFFF3C4).copy(alpha = 0.18f),
+            topLeft = Offset(l, t - h * 0.05f),
+            size = Size(bw, h * 0.055f),
             cornerRadius = CornerRadius(bw * 0.2f, bw * 0.2f)
         )
     }
 
-    // doors: two segments a side, plus the boot across the tail
-    doorLine(Offset(l, t + bh * 0.26f), Offset(l, t + bh * 0.50f), b.doorLF, stroke)
-    doorLine(Offset(l, t + bh * 0.52f), Offset(l, t + bh * 0.76f), b.doorLR, stroke)
-    doorLine(Offset(r, t + bh * 0.26f), Offset(r, t + bh * 0.50f), b.doorRF, stroke)
-    doorLine(Offset(r, t + bh * 0.52f), Offset(r, t + bh * 0.76f), b.doorRR, stroke)
-    doorLine(Offset(l + inset, bottom), Offset(r - inset, bottom), b.boot, stroke)
-
-    // belts: the two front seats
-    seat(Offset(l + bw * 0.30f, t + bh * 0.40f), bw * 0.17f, b.beltDriver)
-    seat(Offset(l + bw * 0.70f, t + bh * 0.40f), bw * 0.17f, b.beltPassenger)
-
     // wheels
-    val wheelW = bw * 0.11f
-    val wheelH = bh * 0.15f
+    val wheelW = bw * 0.12f
+    val wheelH = bh * 0.16f
     for (wx in listOf(l - wheelW * 0.5f, r - wheelW * 0.5f)) {
-        for (wy in listOf(t + bh * 0.16f, t + bh * 0.68f)) {
+        for (wy in listOf(t + bh * 0.16f, t + bh * 0.66f)) {
             drawRoundRect(
-                color = Color.White.copy(alpha = 0.22f),
+                color = Color.White.copy(alpha = 0.20f),
                 topLeft = Offset(wx, wy),
                 size = Size(wheelW, wheelH),
                 cornerRadius = CornerRadius(wheelW * 0.4f, wheelW * 0.4f)
@@ -198,42 +113,17 @@ private fun DrawScope.drawBody(b: BodyState, accent: Color, blinkOn: Boolean) {
     val turn = b.turnSignal ?: 0
     val leftOn = blinkOn && (turn == 2 || turn == 3)
     val rightOn = blinkOn && (turn == 1 || turn == 3)
-    arrow(Offset(l - w * 0.055f, h / 2f), -1f, w * 0.030f, if (leftOn) CAUTION else Color.White.copy(alpha = 0.10f))
-    arrow(Offset(r + w * 0.055f, h / 2f), 1f, w * 0.030f, if (rightOn) CAUTION else Color.White.copy(alpha = 0.10f))
+    arrow(Offset(l - w * 0.075f, h / 2f), -1f, w * 0.032f, if (leftOn) CAUTION else Color.White.copy(alpha = 0.09f))
+    arrow(Offset(r + w * 0.075f, h / 2f), 1f, w * 0.032f, if (rightOn) CAUTION else Color.White.copy(alpha = 0.09f))
 
     if (b.reverse) {
         drawRoundRect(
-            color = accent.copy(alpha = 0.20f),
-            topLeft = Offset(l, bottom + h * 0.01f),
-            size = Size(bw, h * 0.035f),
+            color = accent.copy(alpha = 0.22f),
+            topLeft = Offset(l, bottom + h * 0.012f),
+            size = Size(bw, h * 0.03f),
             cornerRadius = CornerRadius(6f, 6f)
         )
     }
-}
-
-/** Unknown stays a hairline; open is the only thing that shouts. */
-private fun DrawScope.doorLine(a: Offset, b: Offset, open: Boolean?, stroke: Float) {
-    val color = when (open) {
-        true -> WARN
-        false -> OK.copy(alpha = 0.45f)
-        null -> Color.White.copy(alpha = 0.12f)
-    }
-    drawLine(color, a, b, if (open == true) stroke * 2.4f else stroke * 1.3f)
-}
-
-private fun DrawScope.seat(centre: Offset, r: Float, belted: Boolean?) {
-    val color = when (belted) {
-        true -> OK.copy(alpha = 0.55f)
-        false -> WARN.copy(alpha = 0.85f)
-        null -> Color.White.copy(alpha = 0.13f)
-    }
-    drawRoundRect(
-        color = color,
-        topLeft = Offset(centre.x - r, centre.y - r),
-        size = Size(r * 2, r * 2.3f),
-        cornerRadius = CornerRadius(r * 0.5f, r * 0.5f),
-        style = Stroke(width = r * 0.34f)
-    )
 }
 
 private fun DrawScope.arrow(tip: Offset, dir: Float, s: Float, color: Color) {
@@ -251,16 +141,19 @@ private fun DrawScope.arrow(tip: Offset, dir: Float, s: Float, color: Color) {
  * right flank, 8-11 across the tail right-to-left, 12-15 up the left flank. `0`
  * means nothing detected; `1` is closest and `11` furthest, so the colour ramp
  * runs the opposite way to the number.
+ *
+ * The van reports a one-element `[-1]` when the sensors are idle, which is why
+ * this needs all sixteen before it will draw anything.
  */
 private fun DrawScope.drawRadar(radar: List<Int>, reverse: Boolean) {
     if (radar.size < 16) return
     val w = size.width
     val h = size.height
-    val bw = w * 0.30f
-    val bh = h * 0.60f
+    val bw = w * 0.26f
+    val bh = h * 0.52f
     val l = (w - bw) / 2f
     val t = (h - bh) / 2f
-    val span = bw * 1.10f
+    val span = bw * 1.15f
     val x0 = (w - span) / 2f
     val segW = span / 4f
     val gap = segW * 0.12f
@@ -268,20 +161,23 @@ private fun DrawScope.drawRadar(radar: List<Int>, reverse: Boolean) {
     for (i in 0 until 4) {
         // nose
         bar(
-            Offset(x0 + i * segW + gap / 2, t - h * 0.115f), Size(segW - gap, h * 0.030f),
+            Offset(x0 + i * segW + gap / 2, t - h * 0.135f), Size(segW - gap, h * 0.034f),
             radar[i], false
         )
         // tail — drawn right-to-left, which is what indices 8..11 mean
         bar(
-            Offset(x0 + (3 - i) * segW + gap / 2, t + bh + h * 0.085f), Size(segW - gap, h * 0.030f),
+            Offset(x0 + (3 - i) * segW + gap / 2, t + bh + h * 0.10f), Size(segW - gap, h * 0.034f),
             radar[8 + i], reverse
         )
     }
-    val sideH = bh * 0.20f
+    val sideH = bh * 0.19f
     for (i in 0 until 4) {
-        val y = t + bh * 0.12f + i * (sideH * 1.15f)
-        bar(Offset(l + bw + w * 0.018f, y), Size(w * 0.011f, sideH), radar[4 + i], false)
-        bar(Offset(l - w * 0.029f, t + bh * 0.12f + (3 - i) * (sideH * 1.15f)), Size(w * 0.011f, sideH), radar[12 + i], false)
+        val y = t + bh * 0.10f + i * (sideH * 1.18f)
+        bar(Offset(l + bw + w * 0.022f, y), Size(w * 0.012f, sideH), radar[4 + i], false)
+        bar(
+            Offset(l - w * 0.034f, t + bh * 0.10f + (3 - i) * (sideH * 1.18f)),
+            Size(w * 0.012f, sideH), radar[12 + i], false
+        )
     }
 }
 
@@ -302,19 +198,19 @@ private fun DrawScope.bar(at: Offset, sz: Size, v: Int, emphasise: Boolean) {
 }
 
 /**
- * Reversing guides, bent by the steering trace (0..480, centre 240). Two curves
- * behind the car, the way every factory reversing camera draws them. The [Path]
- * is reused across frames — this runs at 4Hz behind a moving wheel.
+ * Reversing guides, bent by the steering trace (0..480, centre 240) — one of the
+ * six readings this van genuinely provides, and it moves with the wheel.
+ * The [Path] is reused across frames rather than reallocated.
  */
 private fun DrawScope.drawTrace(path: Path, track: Int?, accent: Color) {
     val t = track ?: return
     val w = size.width
     val h = size.height
-    val bw = w * 0.30f
-    val bh = h * 0.60f
+    val bw = w * 0.26f
+    val bh = h * 0.52f
     val top = (h - bh) / 2f + bh
-    val bend = ((t - 240) / 240f).coerceIn(-1f, 1f) * w * 0.10f
-    val len = h * 0.16f
+    val bend = ((t - 240) / 240f).coerceIn(-1f, 1f) * w * 0.11f
+    val len = h * 0.20f
     val stroke = (w * 0.005f).coerceIn(1.5f, 3.5f)
 
     for (side in listOf(-1f, 1f)) {
@@ -323,12 +219,8 @@ private fun DrawScope.drawTrace(path: Path, track: Int?, accent: Color) {
         path.moveTo(x, top)
         path.quadraticBezierTo(
             x + bend * 0.5f, top + len * 0.55f,
-            x + bend + side * bw * 0.10f, top + len
+            x + bend + side * bw * 0.12f, top + len
         )
-        drawPath(
-            path,
-            color = accent.copy(alpha = 0.55f - abs(bend) / w * 0.6f + 0.15f),
-            style = Stroke(width = stroke)
-        )
+        drawPath(path, color = accent.copy(alpha = 0.6f), style = Stroke(width = stroke))
     }
 }
