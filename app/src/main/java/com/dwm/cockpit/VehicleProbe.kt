@@ -1,10 +1,12 @@
 package com.dwm.cockpit
 
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.content.pm.PermissionInfo
 import android.database.ContentObserver
@@ -12,7 +14,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.os.Handler
+import android.os.IBinder
 import android.os.Looper
+import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.content.FileProvider
@@ -675,6 +679,211 @@ object VehicleProbe {
         }.getOrElse { "not readable: ${it.javaClass.simpleName} ${it.message}" }
     }
 
+    // ---- vendor AIDL -------------------------------------------------------
+
+    /**
+     * Binds the deck's CAN service and reports what its binder gives up.
+     *
+     * Scan 3 (2026-07-29) settled the question that had blocked this:
+     *
+     *     com.tw.carinfoservice.permission.USE_AIDL
+     *         normal — GETTABLE, just add <uses-permission>
+     *     service com.tw.carinfoservice.CarService [exported]  [UNGUARDED]
+     *
+     * `normal` means the permission costs one manifest line and no prompt, and
+     * UNGUARDED means the component never asks for it anyway. So the bind should
+     * simply work — this finds out, and names the interface behind it.
+     *
+     * What it deliberately does NOT do is walk transaction codes. An AIDL stub
+     * reads its arguments straight off the parcel, and a parcel we never filled
+     * yields 0/null instead of throwing — so poking an unknown code is as likely
+     * to call `setSomething(0)` on a live vehicle bus as it is to call a getter.
+     * The facts taken here are the ones a binder owes us by contract and cannot
+     * misinterpret: its interface descriptor (which names the AIDL, so a decompile
+     * of the vendor APK can be matched against it), whether it is alive, and
+     * whatever `dump()` volunteers. Argument-level calls wait for the real
+     * interface definition — same discipline as [readSerial], which is opt-in for
+     * the same reason.
+     *
+     * Bound at scan *start* and read at scan *finish*: `bindService` is
+     * asynchronous while [buildReport] runs on the main thread, so given the whole
+     * scan window there is nothing left to wait for.
+     */
+    class AidlProbe {
+
+        /** [action] is passed through even alongside an explicit component — some
+         *  vendor services switch on it inside `onBind`. */
+        data class Target(val pkg: String, val cls: String, val action: String?)
+
+        private class Result(val target: Target) {
+            var accepted: Boolean? = null
+            var refused: String? = null
+            @Volatile var connected = false
+            @Volatile var afterMs = 0L
+            @Volatile var descriptor: String? = null
+            @Volatile var binder: IBinder? = null
+            @Volatile var nullBinding = false
+            @Volatile var disconnected = false
+        }
+
+        private val results = ArrayList<Result>()
+        private val conns = ArrayList<Pair<Result, ServiceConnection>>()
+        private var startedAt = 0L
+
+        /** How many binds are currently held — 0 means not running. */
+        val bound: Int get() = conns.size
+
+        fun start(c: Context) {
+            if (conns.isNotEmpty()) return
+            val app = c.applicationContext
+            startedAt = System.currentTimeMillis()
+            for (t in TARGETS) {
+                val res = Result(t)
+                results += res
+                val conn = object : ServiceConnection {
+                    override fun onServiceConnected(name: ComponentName?, b: IBinder?) {
+                        res.afterMs = System.currentTimeMillis() - startedAt
+                        res.connected = true
+                        res.binder = b
+                        res.descriptor = runCatching { b?.interfaceDescriptor }
+                            .getOrElse { "unavailable — ${it.javaClass.simpleName}" }
+                    }
+
+                    override fun onServiceDisconnected(name: ComponentName?) {
+                        res.disconnected = true
+                    }
+
+                    override fun onNullBinding(name: ComponentName?) {
+                        res.nullBinding = true
+                    }
+                }
+                val intent = Intent().apply {
+                    component = ComponentName(t.pkg, t.cls)
+                    t.action?.let { action = it }
+                }
+                runCatching { app.bindService(intent, conn, Context.BIND_AUTO_CREATE) }
+                    .onSuccess { ok ->
+                        res.accepted = ok
+                        // A false return still leaves the connection registered.
+                        conns += res to conn
+                    }
+                    .onFailure { res.refused = "${it.javaClass.simpleName} ${it.message}" }
+            }
+        }
+
+        fun stop(c: Context) {
+            val app = c.applicationContext
+            for ((_, conn) in conns) runCatching { app.unbindService(conn) }
+            conns.clear()
+        }
+
+        fun report(): String {
+            if (results.isEmpty()) return "AIDL probe not running."
+            val sb = StringBuilder()
+            for (r in results) {
+                sb.append(r.target.pkg).append('/').append(r.target.cls.removePrefix(r.target.pkg))
+                r.target.action?.let { sb.append("\n    action: ").append(it) }
+                sb.append("\n    bindService accepted: ").append(
+                    when {
+                        r.refused != null -> "THREW — ${r.refused}"
+                        r.accepted == true -> "true"
+                        else -> "false — nothing on the deck matched, or we were denied"
+                    }
+                )
+                when {
+                    r.nullBinding ->
+                        sb.append("\n    connected: no — onBind() returned null (service is alive but hands out no interface)")
+                    !r.connected ->
+                        sb.append("\n    connected: NO — never called back in the whole scan window")
+                    else -> {
+                        sb.append("\n    connected: YES after ").append(r.afterMs).append("ms")
+                        sb.append("\n    descriptor: ").append(r.descriptor ?: "(none — a raw Binder, not an AIDL stub)")
+                        val b = r.binder
+                        if (b != null) {
+                            sb.append("\n    alive: ").append(runCatching { b.isBinderAlive }.getOrNull())
+                            sb.append("  ping: ").append(runCatching { b.pingBinder() }.getOrNull())
+                            sb.append("\n    dump(): ").append(dump(b).replace("\n", "\n        "))
+                        }
+                        if (r.disconnected) sb.append("\n    NOTE: dropped the connection during the scan")
+                    }
+                }
+                sb.append("\n\n")
+            }
+            sb.append("A descriptor is the AIDL's fully-qualified name — that is what to look for\n")
+            sb.append("when decompiling the vendor APK, and it confirms the bind is real.\n")
+            return sb.toString()
+        }
+
+        /**
+         * `dump()` is the one transaction a binder is contractually allowed to
+         * answer with state and nothing else, so it is safe where a blind
+         * `transact` is not. Most apps never override it and print nothing; the
+         * ones that do tend to print exactly the decoded CAN state we're after.
+         */
+        private fun dump(b: IBinder): String {
+            val pipe = runCatching { ParcelFileDescriptor.createPipe() }.getOrNull()
+                ?: return "couldn't open a pipe"
+            val out = StringBuilder()
+            // Drain the read end while the remote writes — a dump bigger than the
+            // pipe buffer would otherwise deadlock against our own blocking call.
+            val reader = Thread {
+                runCatching {
+                    ParcelFileDescriptor.AutoCloseInputStream(pipe[0]).use { ins ->
+                        val buf = ByteArray(4096)
+                        while (out.length < DUMP_MAX) {
+                            val n = ins.read(buf)
+                            if (n <= 0) break
+                            out.append(String(buf, 0, n))
+                        }
+                    }
+                }
+            }
+            reader.start()
+            val err = runCatching { b.dump(pipe[1].fileDescriptor, emptyArray()) }.exceptionOrNull()
+            runCatching { pipe[1].close() }
+            reader.join(DUMP_WAIT_MS)
+            return when {
+                err != null -> "refused — ${err.javaClass.simpleName} ${err.message}"
+                out.isBlank() -> "nothing printed (the default Binder.dump is a no-op — expected)"
+                else -> out.toString().trim()
+            }
+        }
+
+        private companion object {
+            const val DUMP_WAIT_MS = 1500L
+            const val DUMP_MAX = 16384
+
+            /**
+             * Every exported, unguarded service on this deck that plausibly holds
+             * vehicle state, taken from scan 3's component dump. `com.tw.carchoose`'s
+             * MCUService is absent on purpose — it is [private] and cannot be bound.
+             */
+            val TARGETS = listOf(
+                Target(
+                    "com.tw.carinfoservice",
+                    "com.tw.carinfoservice.CarService",
+                    "com.tw.carinfoservice.CarService.Bind"
+                ),
+                // Named "permission", exported and unguarded — reads like the
+                // handshake the vendor's own apps use to earn AIDL access.
+                Target(
+                    "com.tw.carinfoservice",
+                    "com.tw.carinfoservice.permission.PermissionService",
+                    null
+                ),
+                Target(
+                    "com.dofun.carassistant.car",
+                    "com.dofun.carassistant.car.service.CarService",
+                    "com.dofun.car.CarService"
+                ),
+                // TPMS pressures come off a Deelife USB dongle, but the deck ships
+                // its own TPMS app with ISSHOW_TPMS=1 — if this binder carries the
+                // pressures, it beats reverse-engineering the dongle's bytes.
+                Target("com.syt.tmps", "com.syt.tmps.TpmsService", "com.tpms.TpmsService")
+            )
+        }
+    }
+
     // ---- broadcast sniffer ------------------------------------------------
 
     /**
@@ -873,7 +1082,8 @@ object VehicleProbe {
         before: Map<String, String>?,
         after: Map<String, String>,
         sniffer: Sniffer?,
-        watcher: Watcher? = null
+        watcher: Watcher? = null,
+        aidl: AidlProbe? = null
     ): String {
         val sb = StringBuilder()
         val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
@@ -945,6 +1155,10 @@ object VehicleProbe {
         sb.append("(decides whether com.tw.carinfoservice's AIDL is reachable at all)\n\n")
         sb.append(permissionLevels(c, scan))
 
+        sb.append("\n\n=== 5c. THE CAN SERVICE'S AIDL — DID THE BIND WORK? ===\n")
+        sb.append("(bound at the start of the scan; no transaction codes are guessed)\n\n")
+        sb.append(aidl?.report() ?: "AIDL probe not running.")
+
         sb.append("\n\n=== 6. EXPORTED PROVIDERS, QUERIED ===\n")
         sb.append("(live data if any of these answer)\n\n")
         sb.append(exportedProviders(c))
@@ -984,17 +1198,56 @@ object VehicleProbe {
     fun saveReport(c: Context, text: String): Pair<Uri, String>? {
         val name = "dwm-vehicle-scan-" +
             SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + ".txt"
+        return saveToDownloads(c, name, "text/plain") { it.write(text.toByteArray()) }
+    }
 
+    /**
+     * Copy a vendor APK out to Downloads so it can be decompiled off the deck.
+     *
+     * No adb and no cable: every installed APK is world-readable at
+     * `applicationInfo.publicSourceDir` — which is already how [manifestScan] reads
+     * 180-odd vendor manifests — so DWM can simply hand the file over the same way
+     * it hands over the scan report.
+     *
+     * This matters for correctness, not just convenience. AIDL assigns transaction
+     * codes *positionally*, in the order methods are declared, so a copy of this
+     * APK from a different ROM build with one extra method inserted shifts every
+     * code after it. A downloaded near-match would give us a plausible method list
+     * over silently wrong codes — the exact failure [AidlProbe] refuses to risk.
+     * The byte-exact copy off this deck is the only version that can be trusted.
+     */
+    fun saveApk(c: Context, pkg: String): Pair<Uri, String>? {
+        val src = runCatching {
+            c.packageManager.getApplicationInfo(pkg, 0).publicSourceDir
+        }.getOrNull() ?: return null
+        val f = File(src)
+        if (!f.canRead()) return null
+        return saveToDownloads(c, "$pkg.apk", "application/vnd.android.package-archive") { out ->
+            f.inputStream().use { it.copyTo(out) }
+        }
+    }
+
+    /**
+     * Write a file where the user can actually get at it. On API 29+ that's the
+     * shared Downloads collection via MediaStore (no permission needed under
+     * scoped storage, and the returned content:// URI is directly shareable).
+     */
+    private fun saveToDownloads(
+        c: Context,
+        name: String,
+        mime: String,
+        write: (java.io.OutputStream) -> Unit
+    ): Pair<Uri, String>? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             return runCatching {
                 val values = ContentValues().apply {
                     put(MediaStore.Downloads.DISPLAY_NAME, name)
-                    put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+                    put(MediaStore.Downloads.MIME_TYPE, mime)
                     put(MediaStore.Downloads.IS_PENDING, 1)
                 }
                 val uri = c.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                     ?: return@runCatching null
-                c.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+                c.contentResolver.openOutputStream(uri)?.use(write)
                 values.clear()
                 values.put(MediaStore.Downloads.IS_PENDING, 0)
                 c.contentResolver.update(uri, values, null, null)
@@ -1006,7 +1259,7 @@ object VehicleProbe {
         return runCatching {
             val dir = c.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: c.filesDir
             val f = File(dir, name)
-            f.writeText(text)
+            f.outputStream().use(write)
             FileProvider.getUriForFile(c, "${c.packageName}.files", f) to f.absolutePath
         }.getOrNull()
     }

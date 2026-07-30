@@ -473,6 +473,11 @@
                         android:id="@+id/btnCanSerial"
                         style="@style/ChipButton"
                         android:text="Read serial port…" />
+
+                    <Button
+                        android:id="@+id/btnCanApk"
+                        style="@style/ChipButton"
+                        android:text="Export CAN app" />
                 </LinearLayout>
 
                 <TextView

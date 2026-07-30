@@ -22,6 +22,14 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- The deck's CAN service (com.tw.carinfoservice) guards its AIDL with this.
+         Scan 3 (2026-07-29) measured it as protection level `normal`, so a plain
+         uses-permission is the whole cost — no prompt, no vendor signature. The
+         CarService component is additionally exported with no android:permission
+         at all, so this may be redundant; declared anyway because another ROM
+         build could tighten the component without changing the permission. -->
+    <uses-permission android:name="com.tw.carinfoservice.permission.USE_AIDL" />
+
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />

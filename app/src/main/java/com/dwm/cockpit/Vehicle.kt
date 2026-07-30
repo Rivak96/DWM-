@@ -4,10 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.database.ContentObserver
-import android.os.Handler
-import android.os.Looper
-import android.provider.Settings
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -26,11 +22,14 @@ import java.util.concurrent.CopyOnWriteArrayList
  * action names, caught nothing — this only arrived once v0.16 started listening on
  * names read out of the vendor manifests.
  *
- * The settings store is a second opinion here, not the primary source. The deck
- * does keep `system/revserse_status` (vendor's spelling), but v0.16's before/after
- * diff never saw it move: reverse was engaged *and released* inside the scan
- * window, so the two snapshots matched. A transient is invisible to a two-point
- * diff and obvious to an observer, so this watches rather than samples.
+ * The settings store used to be watched as a second opinion. Scan 3 disproved it
+ * and it has been removed — do not put it back. `system/revserse_status` (vendor's
+ * spelling) reads **1 while the car is in drive**, and across a scan in which
+ * reverse was engaged *and* released the live watcher recorded zero writes to the
+ * settings store. So the key does not track the gear; it is far more likely a
+ * reverse-camera feature flag left switched on. `SYSTEM_LRREVERSE` sat at 0
+ * through the same window. Watching either one could only ever contradict a
+ * broadcast that was already right.
  */
 object Vehicle {
 
@@ -53,7 +52,6 @@ object Vehicle {
 
     private val listeners = CopyOnWriteArrayList<(State) -> Unit>()
     private var receiver: BroadcastReceiver? = null
-    private var observer: ContentObserver? = null
 
     fun addListener(l: (State) -> Unit) {
         listeners += l
@@ -82,22 +80,14 @@ object Vehicle {
         "com.unisound.intent.action.DO_SHUTDOWN"
     )
 
-    /** The deck spells it "revserse". Both are watched because a different ROM
-     *  build may well fix the typo. */
-    private val REVERSE_KEYS = listOf("revserse_status", "reverse_status", "SYSTEM_LRREVERSE")
-
     fun start(c: Context) {
-        val app = c.applicationContext
-        startReceiver(app)
-        startObserver(app)
+        startReceiver(c.applicationContext)
     }
 
     fun stop(c: Context) {
         val app = c.applicationContext
         receiver?.let { runCatching { app.unregisterReceiver(it) } }
         receiver = null
-        observer?.let { runCatching { app.contentResolver.unregisterContentObserver(it) } }
-        observer = null
     }
 
     private fun startReceiver(app: Context) {
@@ -127,31 +117,6 @@ object Vehicle {
             else
                 @Suppress("UnspecifiedRegisterReceiverFlag") app.registerReceiver(r, f)
             receiver = r
-        }
-    }
-
-    /**
-     * Second source: the settings key the deck keeps reverse in. Registered per
-     * key rather than on the whole `system` table so the callback isn't woken by
-     * every volume tick.
-     */
-    private fun startObserver(app: Context) {
-        if (observer != null) return
-        val o = object : ContentObserver(Handler(Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean) = onChange(selfChange, null)
-            override fun onChange(selfChange: Boolean, uri: android.net.Uri?) {
-                val key = uri?.lastPathSegment ?: return
-                val v = runCatching { Settings.System.getString(app.contentResolver, key) }.getOrNull()
-                val on = truthy(v) ?: return
-                if (on == state.reverse) return
-                publish(state.copy(reverse = on, source = "settings/$key", atMs = System.currentTimeMillis()))
-            }
-        }
-        runCatching {
-            for (k in REVERSE_KEYS) {
-                app.contentResolver.registerContentObserver(Settings.System.getUriFor(k), false, o)
-            }
-            observer = o
         }
     }
 

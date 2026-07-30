@@ -31,10 +31,12 @@ class SettingsActivity : DwmActivity() {
     private var canBefore: Map<String, String>? = null
     private val sniffer = VehicleProbe.Sniffer()
     private val watcher = VehicleProbe.Watcher()
+    private val aidl = VehicleProbe.AidlProbe()
 
     override fun onDestroy() {
         sniffer.stop(this)
         watcher.stop(this)
+        aidl.stop(this)
         super.onDestroy()
     }
 
@@ -163,6 +165,7 @@ class SettingsActivity : DwmActivity() {
         refreshCamTrimLabel()
         findViewById<Button>(R.id.btnCanScan).setOnClickListener { canScanTapped() }
         findViewById<Button>(R.id.btnCanSerial).setOnClickListener { serialReadPrompt() }
+        findViewById<Button>(R.id.btnCanApk).setOnClickListener { exportApkPrompt() }
         // Parsing every APK manifest takes a second or two; do it off the main
         // thread, then listen on the action names it found rather than guesses.
         Thread {
@@ -293,16 +296,21 @@ class SettingsActivity : DwmActivity() {
                     "The more you change, the more I can identify.\n\n" +
                     "2.  Come back here and tap \"Finish scan\". It saves a file to Downloads that " +
                     "you can upload to me.\n\n" +
-                    "Unlike the last scan, this one records changes as they happen, so a value " +
-                    "that moves and moves back again is no longer missed.\n\n" +
+                    "New this time: DWM also binds the deck's own CAN service " +
+                    "(com.tw.carinfoservice) and reports which AIDL interface it hands back. " +
+                    "It only reads what a binder is obliged to tell us — it does not call any " +
+                    "vehicle function, so nothing on the car can be changed by this.\n\n" +
                     "Nothing is sent anywhere by itself, and identifiers are stripped out of the file."
             )
             .setPositiveButton("Start") { _, _ ->
                 canBefore = VehicleProbe.snapshot(this)
                 watcher.start(this)
+                // Bound now so the connections have the whole scan window to
+                // arrive — bindService is async and the report is built inline.
+                aidl.start(this)
                 findViewById<Button>(R.id.btnCanScan).text = "Finish scan & save file"
                 findViewById<TextView>(R.id.canStatus).text =
-                    "Scanning — ${canBefore!!.size} keys recorded, ${sniffer.watching} broadcast actions watched, live settings watcher on. Go change the AC, lights and doors, then come back and tap Finish."
+                    "Scanning — ${canBefore!!.size} keys recorded, ${sniffer.watching} broadcast actions watched, ${aidl.bound} vendor service(s) binding, live settings watcher on. Go change the AC, lights and doors, then come back and tap Finish."
                 Toast.makeText(this, "Scanning — now go change the AC and lights", Toast.LENGTH_LONG).show()
             }
             .setNegativeButton("Cancel", null)
@@ -314,10 +322,12 @@ class SettingsActivity : DwmActivity() {
         val after = VehicleProbe.snapshot(this)
         val changes = if (before == null) emptyList() else VehicleProbe.diff(before, after)
         val live = watcher.count
-        val report = VehicleProbe.buildReport(this, before, after, sniffer, watcher)
+        val report = VehicleProbe.buildReport(this, before, after, sniffer, watcher, aidl)
         val saved = VehicleProbe.saveReport(this, report)
 
         watcher.stop(this)
+        // Unbound only after the report has read the binders.
+        aidl.stop(this)
         canBefore = null
         findViewById<Button>(R.id.btnCanScan).text = "Scan vehicle"
         findViewById<TextView>(R.id.canStatus).text =
@@ -348,6 +358,69 @@ class SettingsActivity : DwmActivity() {
             .setPositiveButton("Share") { _, _ -> shareReport(saved.first) }
             .setNegativeButton("Done", null)
             .show()
+    }
+
+    /**
+     * Copy one of the deck's vehicle APKs to Downloads so it can be decompiled.
+     *
+     * Read-only, and needs no adb: installed APKs sit world-readable at
+     * `publicSourceDir`, which is already how the manifest scan works. The point is
+     * to get the *exact* build off this deck — see [VehicleProbe.saveApk] for why a
+     * copy downloaded from anywhere else can't be trusted.
+     */
+    private fun exportApkPrompt() {
+        val pkgs = listOf(
+            "com.tw.carinfoservice",
+            "com.dofun.carassistant.car",
+            "com.syt.tmps",
+            "com.tw.carchoose"
+        )
+        val labels = pkgs.map { pkg ->
+            val mb = runCatching {
+                val p = packageManager.getApplicationInfo(pkg, 0).publicSourceDir
+                java.io.File(p).length() / (1024.0 * 1024.0)
+            }.getOrNull()
+            if (mb == null) "$pkg  (not installed)" else "%s  (%.1f MB)".format(pkg, mb)
+        }
+        Ui.dialog(this)
+            .setTitle("Export a vehicle app's APK")
+            .setMessage(
+                "Copies the app's own APK to Downloads so it can be pulled apart off the " +
+                    "deck — that's how we learn the real method names behind the CAN " +
+                    "service's AIDL.\n\nNothing is installed, changed or sent anywhere; the " +
+                    "file is only read. com.tw.carinfoservice is the one that matters."
+            )
+            .setItems(labels.toTypedArray()) { _, which -> exportApk(pkgs[which]) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun exportApk(pkg: String) {
+        Toast.makeText(this, "Copying $pkg…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val saved = VehicleProbe.saveApk(this, pkg)
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                findViewById<TextView>(R.id.canStatus).text =
+                    saved?.let { "APK saved ${it.second}" } ?: "Couldn't read $pkg's APK."
+                if (saved == null) {
+                    Ui.dialog(this)
+                        .setTitle("Couldn't export")
+                        .setMessage("$pkg's APK wasn't readable. Tell me and I'll find another route.")
+                        .setPositiveButton("OK", null)
+                        .show()
+                } else {
+                    Ui.dialog(this)
+                        .setTitle("Saved")
+                        .setMessage("${saved.second}\n\nSend me this file and I'll decompile it.")
+                        .setPositiveButton("Share") { _, _ ->
+                            shareReport(saved.first, "application/octet-stream", "$pkg.apk")
+                        }
+                        .setNegativeButton("Done", null)
+                        .show()
+                }
+            }
+        }.start()
     }
 
     /**
@@ -390,13 +463,19 @@ class SettingsActivity : DwmActivity() {
         }.start()
     }
 
-    private fun shareReport(uri: android.net.Uri) {
+    /** [mime] matters: a chooser filtered to text/plain hides every target that
+     *  could carry an APK. */
+    private fun shareReport(
+        uri: android.net.Uri,
+        mime: String = "text/plain",
+        subject: String = "DWM vehicle scan"
+    ) {
         val send = Intent(Intent.ACTION_SEND)
-            .setType("text/plain")
+            .setType(mime)
             .putExtra(Intent.EXTRA_STREAM, uri)
-            .putExtra(Intent.EXTRA_SUBJECT, "DWM vehicle scan")
+            .putExtra(Intent.EXTRA_SUBJECT, subject)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        runCatching { startActivity(Intent.createChooser(send, "Send vehicle scan")) }
+        runCatching { startActivity(Intent.createChooser(send, "Send file")) }
             .onFailure { Toast.makeText(this, "Nothing on the deck can share files — grab it from Downloads over USB", Toast.LENGTH_LONG).show() }
     }
 
