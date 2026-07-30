@@ -10,9 +10,10 @@ keystore.properties
 *.keystore
 .claude/
 
-# Vehicle/CAN scan reports — device fingerprints, keep them local
+# Vehicle/CAN scan reports and getter dumps — device fingerprints, keep them local
 dwm-vehicle-scan*.txt
 DWM vehicle scan*.txt
+DWM CAN getters*.txt
 
 # Photos of the deck dropped in for debugging — they show the car interior and
 # are not project files.
