@@ -367,8 +367,28 @@ class SettingsActivity : DwmActivity() {
      * `publicSourceDir`, which is already how the manifest scan works. The point is
      * to get the *exact* build off this deck — see [VehicleProbe.saveApk] for why a
      * copy downloaded from anywhere else can't be trusted.
+     *
+     * Two dialogs, and it has to be two: a framework AlertDialog shows *either* a
+     * message *or* a list, never both. `AlertController.setupContent` only swaps the
+     * ListView into the scroll parent on the `mMessage == null` branch, so setting
+     * both silently drops the list — which is exactly what v0.18.0 shipped, an
+     * explanation with nothing to pick. Don't merge these back together.
      */
     private fun exportApkPrompt() {
+        Ui.dialog(this)
+            .setTitle("Export a vehicle app's APK")
+            .setMessage(
+                "Copies the app's own APK to Downloads so it can be pulled apart off the " +
+                    "deck — that's how we learn the real method names behind the CAN " +
+                    "service's AIDL.\n\nNothing is installed, changed or sent anywhere; the " +
+                    "file is only read. com.tw.carinfoservice is the one that matters."
+            )
+            .setPositiveButton("Choose app") { _, _ -> exportApkPicker() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun exportApkPicker() {
         val pkgs = listOf(
             "com.tw.carinfoservice",
             "com.dofun.carassistant.car",
@@ -383,13 +403,7 @@ class SettingsActivity : DwmActivity() {
             if (mb == null) "$pkg  (not installed)" else "%s  (%.1f MB)".format(pkg, mb)
         }
         Ui.dialog(this)
-            .setTitle("Export a vehicle app's APK")
-            .setMessage(
-                "Copies the app's own APK to Downloads so it can be pulled apart off the " +
-                    "deck — that's how we learn the real method names behind the CAN " +
-                    "service's AIDL.\n\nNothing is installed, changed or sent anywhere; the " +
-                    "file is only read. com.tw.carinfoservice is the one that matters."
-            )
+            .setTitle("Which app? (the size proves it was read)")
             .setItems(labels.toTypedArray()) { _, which -> exportApk(pkgs[which]) }
             .setNegativeButton("Cancel", null)
             .show()
@@ -426,18 +440,29 @@ class SettingsActivity : DwmActivity() {
     /**
      * Reading the CAN UART steals bytes from the deck's own service, so this is
      * gated behind an explicit warning and never runs as part of the normal scan.
+     *
+     * Split in two for the same reason as [exportApkPrompt] — a message and a list
+     * can't share one AlertDialog, and here the warning is the whole point of the
+     * first dialog, so it earns the extra tap.
      */
     private fun serialReadPrompt() {
-        val ports = listOf("/dev/ttyS0", "/dev/ttyS1", "/dev/ttyS2", "/dev/ttyS3", "/dev/ttyS4")
         Ui.dialog(this)
             .setTitle("Read serial port — heads up")
             .setMessage(
                 "CAN data reaches Android over one of these UARTs. Reading one CONSUMES the " +
                     "bytes, so for the ~2.5 seconds this runs, the deck's own CAN service " +
                     "doesn't get them — its AC or climate display may glitch or freeze.\n\n" +
-                    "It recovers on its own. Do it parked, not mid-drive.\n\n" +
-                    "Pick a port to sample:"
+                    "It recovers on its own. Do it parked, not mid-drive."
             )
+            .setPositiveButton("Pick a port") { _, _ -> serialPortPicker() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun serialPortPicker() {
+        val ports = listOf("/dev/ttyS0", "/dev/ttyS1", "/dev/ttyS2", "/dev/ttyS3", "/dev/ttyS4")
+        Ui.dialog(this)
+            .setTitle("Sample which port?")
             .setItems(ports.toTypedArray()) { _, which -> serialRead(ports[which]) }
             .setNegativeButton("Cancel", null)
             .show()

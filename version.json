@@ -1,7 +1,7 @@
 {
-    "versionCode":  30,
-    "versionName":  "0.18.0",
-    "tag":  "v0.18.0",
+    "versionCode":  31,
+    "versionName":  "0.18.1",
+    "tag":  "v0.18.1",
     "apk":  "app-release.apk",
-    "notes":  "Scan 4 goes after the CAN service\u0027s AIDL itself. A vehicle scan now binds com.tw.carinfoservice (plus its PermissionService, the Dofun car service and the deck\u0027s TPMS service) and reports whether the bind was accepted, the interface descriptor behind it, and anything dump() volunteers. Section 5c of the report is the new part. It deliberately does not guess transaction codes - an unfilled parcel reads as 0, so poking an unknown code could call a setter on a live vehicle bus. DWM only reads what a binder owes it by contract. New in Settings: Export CAN app copies a vendor APK straight to Downloads (no adb, no cable) so the exact build off this deck can be decompiled - AIDL numbers its methods by position, so a copy from any other ROM would give plausible names with silently wrong codes. Also declares com.tw.carinfoservice.permission.USE_AIDL, measured as protection level normal, so it costs one manifest line and no prompt. Removed: the settings-store reverse watcher added in v0.17. Scan 3 showed system/revserse_status sits at 1 while the car is in drive and never moved across a scan where reverse was engaged and released, so it is a reverse-camera flag and not the gear. Reverse detection stays on the confirmed broadcast, which was right."
+    "notes":  "Fixes Export CAN app, which in v0.18.0 showed the explanation and then nothing to pick. A framework AlertDialog shows either a message or a list, never both - it only attaches the list when there is no message - so the picker was silently dropped. The explanation now ends in a Choose app button that opens the list. Read serial port had exactly the same bug and is fixed the same way: the warning now ends in Pick a port. Nothing else changed - the AIDL probe and the APK export itself were fine, they were just unreachable."
 }
