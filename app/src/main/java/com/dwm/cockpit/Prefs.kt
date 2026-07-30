@@ -167,4 +167,18 @@ object Prefs {
      *  interrupt CarPlay music. Default on. */
     fun muteOverlays(c: Context) = sp(c).getBoolean("mute_overlays", true)
     fun setMuteOverlays(c: Context, v: Boolean) = sp(c).edit().putBoolean("mute_overlays", v).apply()
+
+    /** The slim vehicle strip that floats over CarPlay: gear, speed, indicators. */
+    fun vehicleStrip(c: Context) = sp(c).getBoolean("vehicle_strip", false)
+    fun setVehicleStrip(c: Context, v: Boolean) = sp(c).edit().putBoolean("vehicle_strip", v).apply()
+
+    /**
+     * Feed the dashboard invented vehicle data. Purely a bench aid: the deck can't
+     * be driven from a desk, and with no CAN data every tile reads "—", so there is
+     * otherwise no way to see whether the layout is right before a drive. Never
+     * touches the CAN service or the real [CarInfo] fields — it is read at the
+     * snapshot boundary only. Off by default, and it says so loudly on screen.
+     */
+    fun demoData(c: Context) = sp(c).getBoolean("demo_data", false)
+    fun setDemoData(c: Context, v: Boolean) = sp(c).edit().putBoolean("demo_data", v).apply()
 }

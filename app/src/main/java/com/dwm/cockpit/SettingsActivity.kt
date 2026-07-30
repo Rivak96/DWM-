@@ -151,6 +151,32 @@ class SettingsActivity : DwmActivity() {
             }
         }
 
+        val swStrip = findViewById<Switch>(R.id.swVehicleStrip)
+        swStrip.isChecked = VehicleStripService.isRunning
+        swStrip.setOnCheckedChangeListener { _, v ->
+            Prefs.setVehicleStrip(this, v)
+            if (v) {
+                if (!canOverlay()) {
+                    Toast.makeText(this, "Allow 'Display over other apps' first", Toast.LENGTH_LONG).show()
+                    swStrip.isChecked = false
+                    return@setOnCheckedChangeListener
+                }
+                VehicleStripService.start(this)
+            } else VehicleStripService.stop(this)
+        }
+
+        val swDemo = findViewById<Switch>(R.id.swDemoData)
+        swDemo.isChecked = Prefs.demoData(this)
+        swDemo.setOnCheckedChangeListener { _, v ->
+            Prefs.setDemoData(this, v)
+            Toast.makeText(
+                this,
+                if (v) "Demo data on — the dashboard is inventing these readings"
+                else "Demo off — showing what the car actually reports",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
         // -- Vehicle ------------------------------------------------------
         findViewById<Button>(R.id.btnObdPick).setOnClickListener { pickObd() }
         findViewById<Button>(R.id.btnCamScan).setOnClickListener { scanCameras() }
@@ -810,7 +836,7 @@ class SettingsActivity : DwmActivity() {
                 val pkg = data.getStringExtra(AppDrawerActivity.EXTRA_PKG) ?: return
                 val favs = Apps.effectiveFavorites(this).toMutableList()
                 if (pkg !in favs) favs.add(pkg)
-                while (favs.size > com.dwm.cockpit.ui.FAV_SLOTS) favs.removeAt(0)
+                while (favs.size > Apps.FAV_SLOTS) favs.removeAt(0)
                 Prefs.saveFavorites(this, favs)
                 manageFavourites()
             }

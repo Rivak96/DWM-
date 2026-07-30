@@ -47,6 +47,14 @@ object Apps {
     }
 
     /** How many apps to pre-fill the dock with before the user picks their own —
-     *  enough to fill the home grid without burying it in whatever installed first. */
+     *  enough to be useful without burying it in whatever installed first. */
     private const val DEFAULT_FAVS = 10
+
+    /**
+     * Cap on saved favourites. Lived in the home screen's Compose file while the
+     * favourites grid existed; the grid is gone but favourites are not — the
+     * floating pill and the app drawer still use them — so the limit belongs here,
+     * with the list it actually governs.
+     */
+    const val FAV_SLOTS = 12
 }

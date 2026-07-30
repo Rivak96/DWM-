@@ -86,6 +86,12 @@
             android:exported="false"
             android:foregroundServiceType="location" />
 
+        <!-- Gear/speed/indicator strip over CarPlay. No foregroundServiceType:
+             it reads nothing but the already-bound CAN service. -->
+        <service
+            android:name=".VehicleStripService"
+            android:exported="false" />
+
         <!-- BOOT_COMPLETED is a protected broadcast (system-only sender). -->
         <receiver
             android:name=".BootReceiver"

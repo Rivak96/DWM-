@@ -336,6 +336,34 @@
                     android:textColor="@color/textPrimary"
                     android:textSize="13sp" />
 
+                <Switch
+                    android:id="@+id/swVehicleStrip"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:minHeight="44dp"
+                    android:text="Vehicle strip over CarPlay (gear, speed, indicators)"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <Switch
+                    android:id="@+id/swDemoData"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:minHeight="44dp"
+                    android:text="Demo vehicle data (bench testing only)"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="4dp"
+                    android:text="Demo fills the dashboard with invented readings so the layout can be checked with the engine off. It never touches the CAN service — turn it off to see what the car is really sending. The strip is passive and can't steal a tap from CarPlay."
+                    android:textColor="@color/textDim"
+                    android:textSize="11sp" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

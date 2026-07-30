@@ -35,12 +35,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.viewinterop.AndroidView
-import com.dwm.cockpit.ui.DwmFav
 import com.dwm.cockpit.ui.DwmHome
 import com.dwm.cockpit.ui.DwmTheme
-import com.dwm.cockpit.ui.FAV_SLOTS
 import com.dwm.cockpit.ui.HomeActions
-import com.dwm.cockpit.ui.drawableToImageBitmap
 
 /**
  * Launcher home. UI is Jetpack Compose (Material 3, glass cards). The
@@ -50,13 +47,9 @@ import com.dwm.cockpit.ui.drawableToImageBitmap
 class HomeActivity : DwmActivity() {
 
     private lateinit var panelHost: FrameLayout
-    private lateinit var preview: LayoutPreview
 
     // Compose-observable state
     private val overlaysOnState = mutableStateOf(false)
-    private val favsState = mutableStateOf<List<DwmFav>>(emptyList())
-    private val panelCountState = mutableStateOf(0)
-    private val modeNameState = mutableStateOf("Dashboard")
     private val showCanvasState = mutableStateOf(false)
     private val wallpaperState = mutableStateOf<ImageBitmap?>(null)
 
@@ -84,7 +77,6 @@ class HomeActivity : DwmActivity() {
         CarInfo.start(this)
 
         panelHost = FrameLayout(this)
-        preview = LayoutPreview(this)
 
         // Home launcher: swallow Back so it stays on the launcher.
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
@@ -100,10 +92,7 @@ class HomeActivity : DwmActivity() {
             edit = { startActivity(Intent(this, LayoutEditorActivity::class.java)) },
             settings = { startActivity(Intent(this, SettingsActivity::class.java)) },
             reload = { reloadCockpit() },
-            pill = { startPill() },
-            favTap = { pkg -> LaunchEngine.launchFullscreen(this, pkg) },
-            favLong = { pkg -> favMenu(pkg) },
-            checkUpdate = { checkUpdate() }
+            pill = { startPill() }
         )
 
         setContent {
@@ -114,12 +103,7 @@ class HomeActivity : DwmActivity() {
                     } else {
                         DwmHome(
                             wallpaper = wallpaperState.value,
-                            favourites = favsState.value,
                             overlaysOn = overlaysOnState.value,
-                            panelCount = panelCountState.value,
-                            modeName = modeNameState.value,
-                            version = Updater.currentVersionName(this@HomeActivity),
-                            previewView = preview,
                             actions = actions
                         )
                     }
@@ -133,13 +117,7 @@ class HomeActivity : DwmActivity() {
         if (recreateIfScaleChanged()) return
 
         wallpaperState.value = loadWallpaperBitmap()
-        favsState.value = favData()
         overlaysOnState.value = OverlayPanelsService.isRunning
-        preview.setColors(Ui.accent(this), Ui.th(this))
-        preview.panels = Prefs.panels(this)
-        val panels = Prefs.panels(this)
-        panelCountState.value = panels.size
-        modeNameState.value = if (Prefs.mode(this) == 1) "Solo + overlays" else "Dashboard"
 
         ensurePermissions()
         refreshPanelsIfChanged()
@@ -149,6 +127,9 @@ class HomeActivity : DwmActivity() {
             handler.postDelayed({ LaunchEngine.launchLayout(this, Prefs.panels(this)) }, 700)
         }
         if (Prefs.overlayOnStart(this) && canOverlay()) OverlayService.start(this)
+        if (Prefs.vehicleStrip(this) && canOverlay() && !VehicleStripService.isRunning) {
+            VehicleStripService.start(this)
+        }
         ensureOverlaysForMode()
 
         if (!didUpdateCheck && Prefs.autoUpdate(this) && Prefs.updateRepo(this).isNotBlank()) {
@@ -200,44 +181,7 @@ class HomeActivity : DwmActivity() {
         }
     }
 
-    private fun favMenu(pkg: String) {
-        Ui.dialog(this)
-            .setTitle(Apps.label(this, pkg))
-            .setItems(arrayOf("Open in window", "Remove from favourites")) { _, w ->
-                when (w) {
-                    0 -> {
-                        val s = LaunchEngine.displaySize(this)
-                        LaunchEngine.launchWindow(this, pkg, android.graphics.Rect(s.x / 6, s.y / 6, s.x * 5 / 6, s.y * 5 / 6))
-                    }
-                    1 -> {
-                        val cur = Apps.effectiveFavorites(this).toMutableList()
-                        cur.remove(pkg); Prefs.saveFavorites(this, cur); favsState.value = favData()
-                    }
-                }
-            }
-            .show()
-    }
-
-    private fun checkUpdate() {
-        Toast.makeText(this, "Checking for updates…", Toast.LENGTH_SHORT).show()
-        Updater.check(this) { result ->
-            when (result) {
-                is Updater.Result.UpToDate -> Toast.makeText(this, "You're on the latest", Toast.LENGTH_SHORT).show()
-                is Updater.Result.Error -> Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
-                is Updater.Result.Available -> autoPromptUpdate(result.info)
-            }
-        }
-    }
-
     // ---- data for Compose ------------------------------------------------
-
-    private fun favData(): List<DwmFav> {
-        val sizePx = (44 * resources.displayMetrics.density).toInt()
-        return Apps.effectiveFavorites(this).take(FAV_SLOTS).map { pkg ->
-            val icon = Apps.icon(this, pkg)?.let { drawableToImageBitmap(it, sizePx) }
-            DwmFav(pkg, Apps.label(this, pkg), icon)
-        }
-    }
 
     private fun loadWallpaperBitmap(): ImageBitmap? {
         val idx = Prefs.wallpaper(this)
