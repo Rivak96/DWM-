@@ -62,16 +62,8 @@ class SettingsActivity : DwmActivity() {
         findViewById<Button>(R.id.btnThemeTesla).setOnClickListener { applyThemePreset(0) }
         findViewById<Button>(R.id.btnThemeMidnight).setOnClickListener { applyThemePreset(1) }
         findViewById<Button>(R.id.btnThemeLight).setOnClickListener { applyThemePreset(2) }
-        findViewById<Button>(R.id.btnWallDefault).setOnClickListener { Prefs.setWallpaper(this, 0); wallToast() }
-        findViewById<Button>(R.id.btnWallBlue).setOnClickListener { Prefs.setWallpaper(this, 1); wallToast() }
-        findViewById<Button>(R.id.btnWallCarbon).setOnClickListener { Prefs.setWallpaper(this, 2); wallToast() }
-        findViewById<Button>(R.id.btnWallCustom).setOnClickListener {
-            val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
-                .addCategory(Intent.CATEGORY_OPENABLE)
-                .setType("image/*")
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            startActivityForResult(i, REQ_WALL)
-        }
+        // The wallpaper picker was removed with the SYNC-style home: that screen is
+        // flat dark by design and has no backdrop, so the control did nothing.
         findViewById<Button>(R.id.btnTextCompact).setOnClickListener { setScale(0.85f) }
         findViewById<Button>(R.id.btnTextNormal).setOnClickListener { setScale(1.0f) }
         findViewById<Button>(R.id.btnTextLarge).setOnClickListener { setScale(1.15f) }

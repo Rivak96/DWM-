@@ -117,7 +117,10 @@ object Prefs {
     fun setCamTrim(c: Context, v: Int) = sp(c).edit().putInt("cam_trim", v.coerceIn(-4, 4)).apply()
 
     /** Theme preset: 0 = Tesla (gray, default) · 1 = Midnight (black) · 2 = Light. */
-    fun theme(c: Context) = sp(c).getInt("theme", 0)
+    /** 0 Tesla charcoal · 1 Midnight · 2 Light. Defaults to Midnight since the
+     *  SYNC-style home is built against a near-black reference; Settings → Display
+     *  switches it back to the charcoal Tesla preset. */
+    fun theme(c: Context) = sp(c).getInt("theme", 1)
     fun setTheme(c: Context, v: Int) = sp(c).edit().putInt("theme", v).apply()
 
     fun topCollapsed(c: Context) = sp(c).getBoolean("top_collapsed", false)

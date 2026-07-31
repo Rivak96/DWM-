@@ -90,25 +90,6 @@
                     android:orientation="horizontal"
                     android:paddingBottom="4dp" />
 
-                <TextView style="@style/SectionHeader" android:text="Wallpaper" />
-
-                <HorizontalScrollView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:scrollbars="none">
-
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal">
-
-                        <Button android:id="@+id/btnWallDefault" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Flat" />
-                        <Button android:id="@+id/btnWallBlue" style="@style/ChipButton" android:text="Midnight" />
-                        <Button android:id="@+id/btnWallCarbon" style="@style/ChipButton" android:text="Carbon" />
-                        <Button android:id="@+id/btnWallCustom" style="@style/ChipButton" android:text="Pick image…" />
-                    </LinearLayout>
-                </HorizontalScrollView>
-
                 <TextView style="@style/SectionHeader" android:text="Interface scale" />
 
                 <LinearLayout

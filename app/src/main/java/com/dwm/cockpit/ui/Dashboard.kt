@@ -36,18 +36,13 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 
 /**
- * The dashboard, cut down to what this van actually sends.
+ * The pieces of the vehicle column.
  *
- * The getter dump of 2026-07-30 was unambiguous: every profile-indexed reading
- * returns -1 permanently — gear, rpm, coolant, fuel, TPMS, doors, belts, ambient,
- * the lot. Six readings are real: **speed, steering, indicators, headlights,
- * battery voltage and the sixteen parking sensors**, plus reverse from the
- * audio-duck broadcast. Tiles for the rest have been deleted rather than left
- * showing dashes, because a dash the vehicle can never fill is just clutter.
- *
- * If a different van, or a different profile in the head unit's car-select app,
- * starts answering those getters, [CarInfo] still polls a few of them and the
- * tiles can come back. Nothing about the AIDL layer was removed.
+ * Scoped hard to the six readings this van actually provides — speed, steering,
+ * indicators, headlights, battery voltage and the sixteen parking sensors. The
+ * reference screen the user supplied also shows tyre pressures, engine temperature
+ * and a PRND indicator; all three return -1 on this vehicle permanently, so those
+ * card slots carry real data instead of dashes pretending to be readings.
  */
 
 private val WARN_C = Color(0xFFFF453A)
@@ -57,7 +52,7 @@ private val OK_C = Color(0xFF34C759)
 /**
  * Text with tabular figures. Without `tnum` every digit has its own width, so a
  * speed readout visibly jitters as it counts — the number shifts sideways while
- * standing still. Costs nothing and is the single biggest polish win on screen.
+ * standing still. Costs nothing and is the biggest single polish win on screen.
  */
 @Composable
 fun DwmText(
@@ -79,76 +74,118 @@ fun DwmText(
     )
 }
 
-/* -------------------------------------------------------------------- drive */
-
+/** Speed, sized off the space it is given rather than a fixed dp — on a 13" panel
+ *  a hardcoded size left a tiny number floating in an acre of empty grey. */
 @Composable
-fun DriveZone(drive: DriveState, vitals: VitalsState, body: BodyState, accent: Color) {
-    // Sized off the card, not in fixed dp. The deck is a 13" panel and the fixed
-    // sizes this started with left a tiny "0" floating in an acre of grey — the
-    // exact wasted space the redesign was supposed to kill.
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+fun SpeedBlock(drive: DriveState, reverse: Boolean, modifier: Modifier = Modifier) {
+    BoxWithConstraints(modifier) {
+        // Captured before the inner scopes shadow the BoxWithConstraints receiver.
         val h = maxHeight
-        val speedSp = (h.value * 0.30f).coerceIn(56f, 190f).sp
-        val unitSp = (h.value * 0.05f).coerceIn(12f, 30f).sp
-        val chipSp = (h.value * 0.032f).coerceIn(9f, 18f).sp
-
-        Column(Modifier.fillMaxSize()) {
-            CardLabel("DRIVE")
-
-            Column(
-                Modifier.fillMaxWidth().weight(1f),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    DwmText(
-                        drive.speedKmh?.toString() ?: "—",
-                        size = speedSp,
-                        color = Color.White,
-                        weight = FontWeight.Light,
-                        tabular = true
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    DwmText(
-                        "km/h", size = unitSp, color = Color.White.copy(alpha = 0.55f),
-                        modifier = Modifier.padding(bottom = h * 0.045f)
-                    )
+        val speedSp = (h.value * 0.62f).coerceIn(40f, 150f).sp
+        Row(verticalAlignment = Alignment.Bottom) {
+            DwmText(
+                drive.speedKmh?.toString() ?: "—",
+                size = speedSp,
+                color = Color.White,
+                weight = FontWeight.Light,
+                tabular = true
+            )
+            Spacer(Modifier.width(6.dp))
+            Column(Modifier.padding(bottom = h * 0.10f)) {
+                DwmText("km/h", size = 11.sp, color = Color.White.copy(alpha = 0.5f))
+                if (reverse) {
+                    Spacer(Modifier.height(3.dp))
+                    Box(
+                        Modifier.clip(RoundedCornerShape(4.dp))
+                            .background(CAUTION_C.copy(alpha = 0.22f))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        DwmText("R", size = 10.sp, color = CAUTION_C, weight = FontWeight.Bold)
+                    }
                 }
-                Spacer(Modifier.height(h * 0.05f))
-                SteeringDial(vitals.track, accent, Modifier.size(h * 0.30f))
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                StateChip("LIGHTS", body.headlight, OK_C, chipSp)
-                StateChip("REVERSE", if (body.reverse) true else null, CAUTION_C, chipSp)
-                BatteryChip(vitals.voltage, chipSp)
             }
         }
     }
 }
 
 /**
- * Steering as a dial rather than a bar.
+ * Parking state in the card slot the reference screen gives to tyre pressures.
  *
- * A flat 5dp line at dead centre is indistinguishable from a flat 5dp line that
- * isn't working, which is precisely how the first build read. An arc with a
- * needle has an obvious rest position and an obvious sweep, so turning the wheel
- * while parked is instant proof the CAN link is alive — and steering is the only
- * live reading on this van that moves with the engine off.
+ * Sixteen values present means the sensors are genuinely reporting; all-zero then
+ * means nothing detected, which must read as ALL CLEAR. Dim pills with no words
+ * looked identical to a dead feature and were reported as one.
  */
 @Composable
-private fun SteeringDial(track: Int?, accent: Color, modifier: Modifier) {
+fun ParkingCard(body: BodyState, modifier: Modifier = Modifier) {
+    val live = body.radar.size >= 16
+    val nearest = body.radar.filter { it > 0 }.minOrNull()
+    Column(modifier) {
+        CardLabel("PARKING")
+        Spacer(Modifier.height(5.dp))
+        when {
+            !live -> DwmText("NO DATA", size = 13.sp, color = Color.White.copy(alpha = 0.3f), weight = FontWeight.Medium)
+            nearest == null -> DwmText("ALL CLEAR", size = 13.sp, color = OK_C, weight = FontWeight.Bold)
+            nearest <= 3 -> DwmText("STOP", size = 15.sp, color = WARN_C, weight = FontWeight.Bold)
+            nearest <= 7 -> DwmText("CLOSE", size = 14.sp, color = CAUTION_C, weight = FontWeight.Bold)
+            else -> DwmText("CLEAR", size = 13.sp, color = OK_C, weight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(6.dp))
+        // The four rear sensors as a mini bar — the ones that matter reversing.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            for (i in 0 until 4) {
+                val v = body.radar.getOrNull(8 + i) ?: -1
+                val c = when {
+                    v <= 0 -> Color.White.copy(alpha = 0.10f)
+                    v <= 3 -> WARN_C
+                    v <= 7 -> CAUTION_C
+                    else -> OK_C
+                }
+                Box(Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)).background(c))
+            }
+        }
+    }
+}
+
+/** Battery and steering, in the slot the reference screen gives to engine temp. */
+@Composable
+fun BatterySteerCard(vitals: VitalsState, accent: Color, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        CardLabel("BATTERY")
+        Spacer(Modifier.height(5.dp))
+        val v = vitals.voltage
+        val c = when {
+            v == null -> Color.White.copy(alpha = 0.3f)
+            v < 11.8f -> WARN_C
+            v < 12.2f -> CAUTION_C
+            else -> Color.White
+        }
+        DwmText(fmt(v, "V", 1), size = 17.sp, color = c, weight = FontWeight.Medium, tabular = true)
+        Spacer(Modifier.height(8.dp))
+        SteeringDial(vitals.track, accent, Modifier.size(46.dp))
+    }
+}
+
+/**
+ * Steering as a dial rather than a bar.
+ *
+ * A flat line at dead centre is indistinguishable from a flat line that is not
+ * working, which is exactly how the first build read. An arc with a needle has an
+ * obvious rest position and an obvious sweep — and steering is the only live
+ * reading on this van that moves with the engine off, so it doubles as the
+ * quickest proof the CAN link is alive: turn the wheel and watch it.
+ */
+@Composable
+fun SteeringDial(track: Int?, accent: Color, modifier: Modifier) {
     val deg = steeringDegrees(track)
     val frac = (((track ?: 240) - 240) / 240f).coerceIn(-1f, 1f)
     val shown by animateFloatAsState(frac, tween(220), label = "steer")
 
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            val stroke = size.minDimension * 0.075f
+            val stroke = size.minDimension * 0.10f
             val inset = stroke / 2f
             val sweep = 240f
             val start = 150f
-            // track
             drawArc(
                 color = Color.White.copy(alpha = 0.10f),
                 startAngle = start, sweepAngle = sweep, useCenter = false,
@@ -157,7 +194,6 @@ private fun SteeringDial(track: Int?, accent: Color, modifier: Modifier) {
                 style = Stroke(width = stroke, cap = StrokeCap.Round)
             )
             if (track != null) {
-                // needle arc from centre-top outward, so direction is unmistakable
                 val mid = start + sweep / 2f
                 drawArc(
                     color = accent,
@@ -170,22 +206,19 @@ private fun SteeringDial(track: Int?, accent: Color, modifier: Modifier) {
                 )
             }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            DwmText(
-                if (deg == null) "—" else "${if (deg > 0) "+" else ""}$deg°",
-                size = (maxOf(12f, 16f)).sp,
-                color = Color.White.copy(alpha = 0.92f),
-                weight = FontWeight.Medium,
-                tabular = true
-            )
-            DwmText("STEERING", size = 8.sp, color = Color.White.copy(alpha = 0.4f))
-        }
+        DwmText(
+            if (deg == null) "—" else "${if (deg > 0) "+" else ""}$deg",
+            size = 10.sp,
+            color = Color.White.copy(alpha = 0.9f),
+            weight = FontWeight.Medium,
+            tabular = true
+        )
     }
 }
 
 /** Null = the van has never said, which must not look like "off". */
 @Composable
-private fun StateChip(label: String, on: Boolean?, onColor: Color, size: TextUnit) {
+fun StateChip(label: String, on: Boolean?, onColor: Color, size: TextUnit = 8.sp) {
     val fg = when (on) {
         true -> onColor
         false -> Color.White.copy(alpha = 0.32f)
@@ -193,82 +226,23 @@ private fun StateChip(label: String, on: Boolean?, onColor: Color, size: TextUni
     }
     Box(
         Modifier
-            .clip(RoundedCornerShape(7.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(if (on == true) onColor.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.05f))
-            .padding(horizontal = 10.dp, vertical = 5.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         DwmText(label, size = size, color = fg, weight = FontWeight.Medium)
     }
 }
 
-@Composable
-private fun BatteryChip(v: Float?, size: TextUnit) {
-    // Below ~12V with the engine off is a battery worth knowing about.
-    val c = when {
-        v == null -> Color.White.copy(alpha = 0.16f)
-        v < 11.8f -> WARN_C
-        v < 12.2f -> CAUTION_C
-        else -> Color.White.copy(alpha = 0.8f)
-    }
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(7.dp))
-            .background(Color.White.copy(alpha = 0.05f))
-            .padding(horizontal = 10.dp, vertical = 5.dp)
-    ) {
-        DwmText(fmt(v, "V", 1), size = size, color = c, weight = FontWeight.Medium, tabular = true)
-    }
-}
-
-/* ----------------------------------------------------------------- parking */
-
-@Composable
-fun ParkingZone(body: BodyState, accent: Color) {
-    // 16 values present means the sensors are genuinely reporting. All-zero then
-    // means "nothing detected", which must read as ALL CLEAR — dim grey pills and
-    // no words looked identical to a dead feature, and got reported as one.
-    val live = body.radar.size >= 16
-    val nearest = body.radar.filter { it > 0 }.minOrNull()
-
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val statusSp = (maxHeight.value * 0.055f).coerceIn(11f, 26f).sp
-        Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                CardLabel(if (body.reverse) "PARKING · REVERSING" else "PARKING SENSORS")
-                Spacer(Modifier.weight(1f))
-                when {
-                    !live -> DwmText(
-                        "NO SENSOR DATA", size = statusSp,
-                        color = Color.White.copy(alpha = 0.3f), weight = FontWeight.Medium
-                    )
-                    nearest == null -> DwmText(
-                        "ALL CLEAR", size = statusSp, color = OK_C, weight = FontWeight.Bold
-                    )
-                    nearest <= 3 -> DwmText(
-                        "STOP", size = statusSp, color = WARN_C, weight = FontWeight.Bold
-                    )
-                    nearest <= 7 -> DwmText(
-                        "CLOSE", size = statusSp, color = CAUTION_C, weight = FontWeight.Bold
-                    )
-                    else -> DwmText(
-                        "CLEAR", size = statusSp, color = OK_C, weight = FontWeight.Bold
-                    )
-                }
-            }
-            CarDiagram(body, accent, Modifier.fillMaxWidth().weight(1f))
-        }
-    }
-}
-
-/** Tiny dim all-caps card heading — the J7 uses these above every card. */
+/** Tiny dim all-caps card heading. */
 @Composable
 fun CardLabel(text: String) {
     Text(
         text,
-        color = Color.White.copy(alpha = 0.5f),
-        fontSize = 9.sp,
+        color = Color.White.copy(alpha = 0.42f),
+        fontSize = 8.sp,
         fontWeight = FontWeight.Medium,
-        letterSpacing = 1.2.sp,
+        letterSpacing = 1.1.sp,
         maxLines = 1
     )
 }
@@ -284,11 +258,11 @@ fun CanDot(level: Int, demo: Boolean) {
         else -> Color.White.copy(alpha = 0.25f)
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(6.dp).height(6.dp).clip(RoundedCornerShape(3.dp)).background(c))
+        Box(Modifier.size(5.dp).clip(RoundedCornerShape(3.dp)).background(c))
         Spacer(Modifier.width(4.dp))
         DwmText(
             if (demo) "DEMO" else "CAN",
-            size = 9.sp,
+            size = 8.sp,
             color = if (level >= 1 || demo) c else Color.White.copy(alpha = 0.4f),
             weight = FontWeight.Medium
         )

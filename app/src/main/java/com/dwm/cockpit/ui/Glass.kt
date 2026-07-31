@@ -20,33 +20,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Frosted-glass card: translucent surface over the (blurred) background, with a
- *  hairline light border and a faint top sheen — the premium OEM look without
- *  per-frame blur cost. */
-@Composable
-fun GlassCard(
-    modifier: Modifier = Modifier,
-    radius: Dp = 22.dp,
-    padding: Dp = 14.dp,
-    content: @Composable BoxScope.() -> Unit
-) {
-    val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(radius)
-    Box(
-        modifier
-            .clip(shape)
-            .background(cs.surface.copy(alpha = 0.52f))
-            .background(
-                Brush.verticalGradient(
-                    0f to Color.White.copy(alpha = 0.06f),
-                    0.4f to Color.Transparent
-                )
-            )
-            .border(1.dp, Color.White.copy(alpha = 0.14f), shape)
-            .padding(padding),
-        content = content
-    )
-}
+// GlassCard lived here. The SYNC-style home is flat by design — solid panels on a
+// near-black field, no translucency, no hairline borders, no sheen — so it was
+// replaced by FlatCard, which is both the honest look and the cheaper one.
 
 /** Render any launcher icon Drawable into a Compose ImageBitmap. */
 fun drawableToImageBitmap(d: Drawable, sizePx: Int): ImageBitmap {

@@ -35,9 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.viewinterop.AndroidView
-import com.dwm.cockpit.ui.DwmHome
 import com.dwm.cockpit.ui.DwmTheme
 import com.dwm.cockpit.ui.HomeActions
+import com.dwm.cockpit.ui.HomeApp
+import com.dwm.cockpit.ui.SyncHome
+import com.dwm.cockpit.ui.drawableToImageBitmap
 
 /**
  * Launcher home. UI is Jetpack Compose (Material 3, glass cards). The
@@ -51,7 +53,8 @@ class HomeActivity : DwmActivity() {
     // Compose-observable state
     private val overlaysOnState = mutableStateOf(false)
     private val showCanvasState = mutableStateOf(false)
-    private val wallpaperState = mutableStateOf<ImageBitmap?>(null)
+    private val pagesState = mutableStateOf<List<HomeApp>>(emptyList())
+    private val allAppsState = mutableStateOf<List<HomeApp>>(emptyList())
 
     private val handler = Handler(Looper.getMainLooper())
     private var lastPanelsJson: String? = "_never"
@@ -85,14 +88,24 @@ class HomeActivity : DwmActivity() {
 
         actions = HomeActions(
             carplay = { launchCarplay() },
-            overlays = { toggleOverlays() },
+            overlayMenu = { overlayMenu() },
             bluetooth = { openSetting(Settings.ACTION_BLUETOOTH_SETTINGS) },
             wifi = { openSetting(Settings.ACTION_WIFI_SETTINGS) },
             apps = { startActivity(Intent(this, AppDrawerActivity::class.java)) },
             edit = { startActivity(Intent(this, LayoutEditorActivity::class.java)) },
             settings = { startActivity(Intent(this, SettingsActivity::class.java)) },
             reload = { reloadCockpit() },
-            pill = { startPill() }
+            pill = { startPill() },
+            launch = { pkg -> LaunchEngine.launchFullscreen(this, pkg) },
+            appMenu = { pkg -> appMenu(pkg) },
+            grantNotifications = {
+                runCatching {
+                    startActivity(
+                        Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }
         )
 
         setContent {
@@ -101,8 +114,9 @@ class HomeActivity : DwmActivity() {
                     if (showCanvasState.value) {
                         AndroidView(factory = { panelHost }, modifier = Modifier.fillMaxSize())
                     } else {
-                        DwmHome(
-                            wallpaper = wallpaperState.value,
+                        SyncHome(
+                            pages = pagesState.value,
+                            allApps = allAppsState.value,
                             overlaysOn = overlaysOnState.value,
                             actions = actions
                         )
@@ -116,8 +130,8 @@ class HomeActivity : DwmActivity() {
         super.onStart()
         if (recreateIfScaleChanged()) return
 
-        wallpaperState.value = loadWallpaperBitmap()
         overlaysOnState.value = OverlayPanelsService.isRunning
+        loadApps()
 
         ensurePermissions()
         refreshPanelsIfChanged()
@@ -181,28 +195,96 @@ class HomeActivity : DwmActivity() {
         }
     }
 
+    /**
+     * Overlays are working well and are deliberately untouched — this only opens
+     * their controls instead of the dock button silently toggling them, which was
+     * easy to hit by accident.
+     */
+    private fun overlayMenu() {
+        val running = OverlayPanelsService.isRunning
+        val items = arrayOf(
+            if (running) "Stop overlay panels" else "Start overlay panels",
+            "Edit overlay layout",
+            if (Prefs.overlayEdit(this)) "Lock panels (hide grips)" else "Unlock panels (show grips)",
+            "Show floating pill"
+        )
+        Ui.dialog(this)
+            .setTitle("Overlays")
+            .setItems(items) { _, w ->
+                when (w) {
+                    0 -> if (running) OverlayPanelsService.stop(this) else toggleOverlays()
+                    1 -> startActivity(Intent(this, LayoutEditorActivity::class.java))
+                    2 -> {
+                        Prefs.setOverlayEdit(this, !Prefs.overlayEdit(this))
+                        if (OverlayPanelsService.isRunning) {
+                            OverlayPanelsService.stop(this)
+                            handler.postDelayed({ OverlayPanelsService.start(this) }, 400)
+                        }
+                    }
+                    3 -> startPill()
+                }
+                handler.postDelayed({ overlaysOnState.value = OverlayPanelsService.isRunning }, 600)
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    /** Long-press on any app tile or grid icon. Pinning writes to the same
+     *  favourites list the pill uses, so the two stay in step. */
+    private fun appMenu(pkg: String) {
+        val pinned = pkg in Apps.effectiveFavorites(this).take(HOME_PAGES)
+        Ui.dialog(this)
+            .setTitle(Apps.label(this, pkg))
+            .setItems(
+                arrayOf(
+                    "Open fullscreen",
+                    "Open in window",
+                    if (pinned) "Unpin from home pages" else "Pin to home pages"
+                )
+            ) { _, w ->
+                when (w) {
+                    0 -> LaunchEngine.launchFullscreen(this, pkg)
+                    1 -> {
+                        val s = LaunchEngine.displaySize(this)
+                        LaunchEngine.launchWindow(
+                            this, pkg,
+                            android.graphics.Rect(s.x / 6, s.y / 6, s.x * 5 / 6, s.y * 5 / 6)
+                        )
+                    }
+                    2 -> {
+                        val cur = Apps.effectiveFavorites(this).toMutableList()
+                        if (pinned) cur.remove(pkg) else cur.add(0, pkg)
+                        while (cur.size > Apps.FAV_SLOTS) cur.removeAt(cur.size - 1)
+                        Prefs.saveFavorites(this, cur)
+                        loadApps()
+                    }
+                }
+            }
+            .show()
+    }
+
     // ---- data for Compose ------------------------------------------------
 
-    private fun loadWallpaperBitmap(): ImageBitmap? {
-        val idx = Prefs.wallpaper(this)
-        if (idx == 3) {
-            val uri = Prefs.wallpaperUri(this)
-            if (uri != null) {
-                val bmp = runCatching {
-                    contentResolver.openInputStream(Uri.parse(uri))?.use {
-                        val opts = BitmapFactory.Options().apply { inSampleSize = 2 }
-                        BitmapFactory.decodeStream(it, null, opts)
-                    }
-                }.getOrNull()
-                if (bmp != null) return bmp.asImageBitmap()
-            }
+    /**
+     * Icons are rasterised once per resume, not per frame — [Apps.all] walks the
+     * package manager and this deck is slow enough that doing it in composition
+     * would be visible.
+     */
+    private fun loadApps() {
+        val sizePx = (56 * resources.displayMetrics.density).toInt()
+        val gridPx = (44 * resources.displayMetrics.density).toInt()
+        val favs = Apps.effectiveFavorites(this).take(HOME_PAGES)
+        pagesState.value = favs.map { pkg ->
+            HomeApp(pkg, Apps.label(this, pkg), Apps.icon(this, pkg)?.let { drawableToImageBitmap(it, sizePx) })
         }
-        val d = Ui.wallpaperDrawable(this, idx)
-        val bmp = Bitmap.createBitmap(480, 288, Bitmap.Config.ARGB_8888)
-        d.setBounds(0, 0, 480, 288)
-        d.draw(Canvas(bmp))
-        return bmp.asImageBitmap()
+        allAppsState.value = Apps.all(this).map { e ->
+            HomeApp(e.pkg, e.label, Apps.icon(this, e.pkg)?.let { drawableToImageBitmap(it, gridPx) })
+        }
     }
+
+    // The wallpaper loader lived here. The SYNC-style home is flat dark by design,
+    // so there is no backdrop to blur any more — which also takes a full-screen
+    // blur pass off a low-RAM Unisoc chip.
 
     // ---- dashboard-mode canvas panels (View-based, hosted via AndroidView) --
 
@@ -435,5 +517,9 @@ class HomeActivity : DwmActivity() {
         private var didAutoLoad = false
         private var didUpdateCheck = false
         private const val REQ_PERMS = 301
+
+        /** How many favourites become full-size swipe pages before the grid. Four
+         *  is about the limit before swiping to the grid becomes a chore. */
+        private const val HOME_PAGES = 4
     }
 }
