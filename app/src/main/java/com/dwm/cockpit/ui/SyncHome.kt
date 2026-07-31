@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,9 +37,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,8 +52,21 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** One app on a swipe page or in the grid. */
-data class HomeApp(val pkg: String, val label: String, val icon: ImageBitmap?)
+/**
+ * One app on a swipe page or in the grid.
+ *
+ * [tint] is the icon's dominant colour, sampled once when the list is built. A
+ * full-bleed page holding nothing but a centred icon on flat grey looked like a
+ * placeholder; washing the page in the app's own colour is what turns it into
+ * something that looks designed. Sampling happens off the main thread — see
+ * `HomeActivity.loadApps`.
+ */
+data class HomeApp(
+    val pkg: String,
+    val label: String,
+    val icon: ImageBitmap?,
+    val tint: Color = Color(0xFF3E6AE1)
+)
 
 class HomeActions(
     val carplay: () -> Unit,
@@ -202,10 +218,10 @@ private fun TopStrip(head: HeadState, actions: HomeActions) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BigAppPage(app: HomeApp, actions: HomeActions) {
-    Box(
+    BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(MaterialTheme.colorScheme.surface)
             .combinedClickable(
                 onClick = { actions.launch(app.pkg) },
@@ -213,18 +229,43 @@ private fun BigAppPage(app: HomeApp, actions: HomeActions) {
             ),
         contentAlignment = Alignment.Center
     ) {
+        // Icon size follows the panel: a fixed 96dp icon is lost on a 13" screen.
+        val icon = (minOf(maxWidth.value, maxHeight.value) * 0.34f).coerceIn(64f, 190f).dp
+        val nameSp = (maxHeight.value * 0.075f).coerceIn(16f, 40f).sp
+
+        // The app's own colour, bled softly across the page. This is the single
+        // change that stops a swipe page reading as an unfinished placeholder.
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.radialGradient(
+                    colors = listOf(app.tint.copy(alpha = 0.26f), Color.Transparent),
+                    radius = with(LocalDensity.current) { (maxWidth * 0.85f).toPx() }
+                )
+            )
+        )
+
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (app.icon != null) {
-                Image(app.icon, contentDescription = app.label, modifier = Modifier.size(96.dp))
-                Spacer(Modifier.height(14.dp))
+                Image(app.icon, contentDescription = app.label, modifier = Modifier.size(icon))
+                Spacer(Modifier.height(18.dp))
             }
             Text(
                 app.label,
                 color = Color.White,
-                fontSize = 22.sp,
+                fontSize = nameSp,
                 fontWeight = FontWeight.Light,
                 maxLines = 1
             )
+            Spacer(Modifier.height(8.dp))
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color.White.copy(alpha = 0.10f))
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            ) {
+                Text("OPEN", color = Color.White.copy(alpha = 0.75f), fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium, letterSpacing = 1.5.sp)
+            }
         }
     }
 }

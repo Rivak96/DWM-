@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.viewinterop.AndroidView
@@ -266,20 +267,81 @@ class HomeActivity : DwmActivity() {
     // ---- data for Compose ------------------------------------------------
 
     /**
-     * Icons are rasterised once per resume, not per frame — [Apps.all] walks the
-     * package manager and this deck is slow enough that doing it in composition
-     * would be visible.
+     * Build the app lists off the main thread.
+     *
+     * [Apps.all] walks the package manager and every icon gets rasterised and
+     * colour-sampled; doing that on the main thread made returning to home stutter
+     * on this deck. Results are posted back once, so Compose sees a single state
+     * change rather than a drip.
      */
     private fun loadApps() {
-        val sizePx = (56 * resources.displayMetrics.density).toInt()
+        val sizePx = (72 * resources.displayMetrics.density).toInt()
         val gridPx = (44 * resources.displayMetrics.density).toInt()
-        val favs = Apps.effectiveFavorites(this).take(HOME_PAGES)
-        pagesState.value = favs.map { pkg ->
-            HomeApp(pkg, Apps.label(this, pkg), Apps.icon(this, pkg)?.let { drawableToImageBitmap(it, sizePx) })
+        Thread {
+            val favs = Apps.effectiveFavorites(this).take(HOME_PAGES)
+            val pages = favs.map { pkg ->
+                val d = Apps.icon(this, pkg)
+                val bmp = d?.let { drawableToBitmap(it, sizePx) }
+                HomeApp(
+                    pkg, Apps.label(this, pkg),
+                    bmp?.asImageBitmap(),
+                    bmp?.let { Color(dominantColor(it)) } ?: Color(Ui.accent(this))
+                )
+            }
+            val all = Apps.all(this).map { e ->
+                val d = Apps.icon(this, e.pkg)
+                HomeApp(e.pkg, e.label, d?.let { drawableToImageBitmap(it, gridPx) })
+            }
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                pagesState.value = pages
+                allAppsState.value = all
+            }
+        }.start()
+    }
+
+    private fun drawableToBitmap(d: android.graphics.drawable.Drawable, sizePx: Int): Bitmap {
+        val s = sizePx.coerceAtLeast(1)
+        val bmp = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888)
+        d.setBounds(0, 0, s, s)
+        d.draw(Canvas(bmp))
+        return bmp
+    }
+
+    /**
+     * Average colour of the icon's opaque, reasonably saturated pixels.
+     *
+     * Sampled on a stride rather than every pixel — this runs for every installed
+     * app and the result only feeds a soft background wash, so precision is worth
+     * nothing and speed is worth a lot. Near-white and near-black pixels are
+     * skipped: most icons have a lot of both, and averaging them in drags every
+     * app toward the same lifeless grey.
+     */
+    private fun dominantColor(bmp: Bitmap): Int {
+        var r = 0L; var g = 0L; var b = 0L; var n = 0L
+        val step = 3
+        var y = 0
+        while (y < bmp.height) {
+            var x = 0
+            while (x < bmp.width) {
+                val p = bmp.getPixel(x, y)
+                val a = (p ushr 24) and 0xFF
+                if (a > 128) {
+                    val pr = (p shr 16) and 0xFF
+                    val pg = (p shr 8) and 0xFF
+                    val pb = p and 0xFF
+                    val max = maxOf(pr, pg, pb)
+                    val min = minOf(pr, pg, pb)
+                    if (max > 40 && !(max > 225 && max - min < 25)) {
+                        r += pr; g += pg; b += pb; n++
+                    }
+                }
+                x += step
+            }
+            y += step
         }
-        allAppsState.value = Apps.all(this).map { e ->
-            HomeApp(e.pkg, e.label, Apps.icon(this, e.pkg)?.let { drawableToImageBitmap(it, gridPx) })
-        }
+        if (n == 0L) return Ui.accent(this)
+        return android.graphics.Color.rgb((r / n).toInt(), (g / n).toInt(), (b / n).toInt())
     }
 
     // The wallpaper loader lived here. The SYNC-style home is flat dark by design,

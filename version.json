@@ -1,7 +1,7 @@
 {
-    "versionCode":  39,
-    "versionName":  "0.22.1",
-    "tag":  "v0.22.1",
+    "versionCode":  40,
+    "versionName":  "0.22.2",
+    "tag":  "v0.22.2",
     "apk":  "app-release.apk",
-    "notes":  "The hand-drawn Ranger is gone. You were right - it was ugly, and I had even flagged that risk before shipping it, which makes it worse. Home now uses the actual Ford Ranger render, cropped out of the reference screen you sent, with the PRND text painted out and the frame trimmed. Tail lights are lit in the render itself, so only the states a still image cannot show are drawn on top - reverse wash and indicator chevrons - and those sit beside the truck rather than pixel-aligned onto it, so swapping the image later does not break them. Still no 3D engine: a live model on the launcher home screen of this chip is the same risk that got Lottie pulled, and a static render costs nothing per frame. If you want a sharper truck, the crop is only 206 pixels wide in your mockup so it is upscaled - open the Sketchfab model, angle it how you want, screenshot it at full size and drop the PNG in the folder, and I will swap it in."
+    "notes":  "Going after the unfinished feel. The worst offender was mine: a swipe page was a single app icon floating in an empty grey card, which is placeholder-grade. Each page now takes its colour from the app itself - the icon\u0027s dominant colour is sampled and bled softly across the page - so a Waze page looks like Waze and a Spotify page looks like Spotify, instead of every page looking like the same blank card. Icon and title now size themselves from the panel rather than fixed dp, so nothing is lost in the middle of a 13 inch screen, and there is a clear OPEN affordance. The app lists are also built off the main thread now. Rasterising every installed icon and sampling its colour on the UI thread made coming back to home stutter on this deck - it all happens in the background and lands in one go. The Ranger stays as the cropped render for now, as you asked. Send me a photo of this one and I will fix what is actually wrong rather than guessing - I have been wrong twice doing that."
 }
