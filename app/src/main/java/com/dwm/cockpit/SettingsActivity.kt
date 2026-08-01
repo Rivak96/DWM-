@@ -650,7 +650,9 @@ class SettingsActivity : DwmActivity() {
 
     private fun editUpdateRepo() {
         val input = android.widget.EditText(this).apply {
-            hint = "owner/DWM"
+            // The real repo name ends in a hyphen; a hint of "owner/DWM" sent the
+            // obvious guess straight to a 404.
+            hint = Prefs.DEFAULT_UPDATE_REPO
             setText(Prefs.updateRepo(this@SettingsActivity))
             inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
         }

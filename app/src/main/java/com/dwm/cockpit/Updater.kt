@@ -65,7 +65,17 @@ object Updater {
                     apkUrl = apkUrl
                 )
                 if (info.versionCode > currentVersionCode(c)) Result.Available(info) else Result.UpToDate
-            }.getOrElse { Result.Error(it.message ?: "check failed") }
+            }.getOrElse {
+                // Name the repo that was actually tried. "HTTP 404" on its own sent
+                // this exact investigation down the wrong path once: the release was
+                // fine and the repo string was one character out.
+                val why = it.message ?: "check failed"
+                if (why.contains("404")) {
+                    Result.Error("No version.json at '$repo' — check the name is exactly right, including any trailing characters.")
+                } else {
+                    Result.Error("$why (repo '$repo')")
+                }
+            }
             main.post { cb(result) }
         }.start()
     }

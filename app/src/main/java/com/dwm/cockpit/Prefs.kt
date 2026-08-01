@@ -164,11 +164,28 @@ object Prefs {
     fun pinWindows(c: Context) = sp(c).getBoolean("pin_windows", false)
     fun setPinWindows(c: Context, v: Boolean) = sp(c).edit().putBoolean("pin_windows", v).apply()
 
-    /** GitHub "owner/repo" hosting version.json + release APKs (auto-update). */
-    fun updateRepo(c: Context): String = sp(c).getString("update_repo", "")!!.trim()
+    /**
+     * GitHub "owner/repo" hosting version.json + release APKs (auto-update).
+     *
+     * Defaulted rather than blank. This is a personal build with exactly one
+     * upstream, and a blank default meant a fresh install — or any "clear data" —
+     * silently could not see updates at all: `Updater.check` bails before it makes
+     * a request and the only clue is a line in Settings → About that nobody has a
+     * reason to read.
+     *
+     * Note the trailing hyphen. The repository really is named `DWM-`; without it
+     * the raw URL 404s, which is a very easy thing to type wrong by hand.
+     */
+    const val DEFAULT_UPDATE_REPO = "Rivak96/DWM-"
+
+    fun updateRepo(c: Context): String =
+        sp(c).getString("update_repo", DEFAULT_UPDATE_REPO)!!.trim().ifBlank { DEFAULT_UPDATE_REPO }
+
     fun setUpdateRepo(c: Context, v: String) = sp(c).edit().putString("update_repo", v.trim()).apply()
 
-    fun autoUpdate(c: Context) = sp(c).getBoolean("auto_update", false)
+    /** On by default: it only ever *offers* an update — Android still shows its own
+     *  install confirmation — so the cost of checking is a few KB on start. */
+    fun autoUpdate(c: Context) = sp(c).getBoolean("auto_update", true)
     fun setAutoUpdate(c: Context, v: Boolean) = sp(c).edit().putBoolean("auto_update", v).apply()
 
     /** Mute audio from DWM's own overlay panels (web/media) so they never
