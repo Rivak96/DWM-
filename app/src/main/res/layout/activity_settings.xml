@@ -76,7 +76,8 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal">
 
-                    <Button android:id="@+id/btnThemeTesla" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Tesla" />
+                    <Button android:id="@+id/btnThemeCockpit" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Cockpit" />
+                    <Button android:id="@+id/btnThemeTesla" style="@style/ChipButton" android:text="Tesla" />
                     <Button android:id="@+id/btnThemeMidnight" style="@style/ChipButton" android:text="Midnight" />
                     <Button android:id="@+id/btnThemeLight" style="@style/ChipButton" android:text="Light" />
                 </LinearLayout>

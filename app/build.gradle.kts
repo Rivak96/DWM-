@@ -21,8 +21,8 @@ android {
         applicationId = "com.dwm.cockpit"
         minSdk = 26          // Android 8.0 — well below the deck's Android 12
         targetSdk = 33
-        versionCode = 40
-        versionName = "0.22.2"
+        versionCode = 41
+        versionName = "0.23.0"
     }
 
     signingConfigs {
@@ -78,6 +78,18 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.core:core-ktx:1.13.1")
+
+    // @Preview. Until these were added, every visual change cost a full build, a
+    // sideload and a walk out to the van, and the last two guesses at what was
+    // wrong were both wrong.
+    //
+    // Debug-only, and the previews themselves live in src/debug/java rather than
+    // src/main — shipping ui-tooling-preview in release added ~260 KB to an APK
+    // this project has twice cut dependencies to keep near 6 MB, for annotations
+    // that do nothing on a deck.
+    debugImplementation(composeBom)
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-tooling-preview")
 
     // JVM-only, never packaged. Proves the AXML reader against a real APK before
     // it ships to a deck we can't debug on.

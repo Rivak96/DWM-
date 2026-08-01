@@ -38,9 +38,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.viewinterop.AndroidView
 import com.dwm.cockpit.ui.DwmTheme
 import com.dwm.cockpit.ui.HomeActions
+import com.dwm.cockpit.ui.CockpitHome
 import com.dwm.cockpit.ui.HomeApp
-import com.dwm.cockpit.ui.SyncHome
-import com.dwm.cockpit.ui.drawableToImageBitmap
 
 /**
  * Launcher home. UI is Jetpack Compose (Material 3, glass cards). The
@@ -54,8 +53,7 @@ class HomeActivity : DwmActivity() {
     // Compose-observable state
     private val overlaysOnState = mutableStateOf(false)
     private val showCanvasState = mutableStateOf(false)
-    private val pagesState = mutableStateOf<List<HomeApp>>(emptyList())
-    private val allAppsState = mutableStateOf<List<HomeApp>>(emptyList())
+    private val favouritesState = mutableStateOf<List<HomeApp>>(emptyList())
 
     private val handler = Handler(Looper.getMainLooper())
     private var lastPanelsJson: String? = "_never"
@@ -115,9 +113,8 @@ class HomeActivity : DwmActivity() {
                     if (showCanvasState.value) {
                         AndroidView(factory = { panelHost }, modifier = Modifier.fillMaxSize())
                     } else {
-                        SyncHome(
-                            pages = pagesState.value,
-                            allApps = allAppsState.value,
+                        CockpitHome(
+                            favourites = favouritesState.value,
                             overlaysOn = overlaysOnState.value,
                             actions = actions
                         )
@@ -230,17 +227,17 @@ class HomeActivity : DwmActivity() {
             .show()
     }
 
-    /** Long-press on any app tile or grid icon. Pinning writes to the same
-     *  favourites list the pill uses, so the two stay in step. */
+    /** Long-press on any app tile. Pinning writes to the same favourites list the
+     *  pill and the app drawer use, so all three stay in step. */
     private fun appMenu(pkg: String) {
-        val pinned = pkg in Apps.effectiveFavorites(this).take(HOME_PAGES)
+        val pinned = pkg in Apps.effectiveFavorites(this).take(Apps.FAV_SLOTS)
         Ui.dialog(this)
             .setTitle(Apps.label(this, pkg))
             .setItems(
                 arrayOf(
                     "Open fullscreen",
                     "Open in window",
-                    if (pinned) "Unpin from home pages" else "Pin to home pages"
+                    if (pinned) "Remove from home" else "Add to home"
                 )
             ) { _, w ->
                 when (w) {
@@ -267,19 +264,23 @@ class HomeActivity : DwmActivity() {
     // ---- data for Compose ------------------------------------------------
 
     /**
-     * Build the app lists off the main thread.
+     * Build the favourites list off the main thread.
      *
-     * [Apps.all] walks the package manager and every icon gets rasterised and
-     * colour-sampled; doing that on the main thread made returning to home stutter
-     * on this deck. Results are posted back once, so Compose sees a single state
-     * change rather than a drip.
+     * Every icon gets rasterised and colour-sampled; doing that on the main thread
+     * made returning to home stutter on this deck. Results are posted back once, so
+     * Compose sees a single state change rather than a drip.
+     *
+     * Only favourites are loaded now. The home screen used to also rasterise
+     * *every installed app* for a full grid page — a package-manager walk plus a
+     * bitmap and a dominant-colour pass per app, every time home resumed, to fill a
+     * page reached by swiping past four others. The complete list already lives one
+     * tap away in [AppDrawerActivity], which builds it on demand.
      */
     private fun loadApps() {
         val sizePx = (72 * resources.displayMetrics.density).toInt()
-        val gridPx = (44 * resources.displayMetrics.density).toInt()
         Thread {
-            val favs = Apps.effectiveFavorites(this).take(HOME_PAGES)
-            val pages = favs.map { pkg ->
+            val favs = Apps.effectiveFavorites(this).take(Apps.FAV_SLOTS)
+            val tiles = favs.map { pkg ->
                 val d = Apps.icon(this, pkg)
                 val bmp = d?.let { drawableToBitmap(it, sizePx) }
                 HomeApp(
@@ -288,14 +289,9 @@ class HomeActivity : DwmActivity() {
                     bmp?.let { Color(dominantColor(it)) } ?: Color(Ui.accent(this))
                 )
             }
-            val all = Apps.all(this).map { e ->
-                val d = Apps.icon(this, e.pkg)
-                HomeApp(e.pkg, e.label, d?.let { drawableToImageBitmap(it, gridPx) })
-            }
             runOnUiThread {
                 if (isFinishing) return@runOnUiThread
-                pagesState.value = pages
-                allAppsState.value = all
+                favouritesState.value = tiles
             }
         }.start()
     }
@@ -580,8 +576,5 @@ class HomeActivity : DwmActivity() {
         private var didUpdateCheck = false
         private const val REQ_PERMS = 301
 
-        /** How many favourites become full-size swipe pages before the grid. Four
-         *  is about the limit before swiping to the grid becomes a chore. */
-        private const val HOME_PAGES = 4
     }
 }

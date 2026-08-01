@@ -73,7 +73,8 @@ object Prefs {
     /** Raw panels JSON — used to detect layout changes cheaply. */
     fun panelsRaw(c: Context): String? = sp(c).getString("panels", null)
 
-    fun accent(c: Context) = sp(c).getInt("accent", 0xFF3E6AE1.toInt())
+    /** Cockpit Blue — see the note on `Ui.ACCENTS` for why it is not Tesla Blue. */
+    fun accent(c: Context) = sp(c).getInt("accent", 0xFF4C8DFF.toInt())
     fun setAccent(c: Context, color: Int) = sp(c).edit().putInt("accent", color).apply()
 
     fun wallpaperUri(c: Context): String? = sp(c).getString("wall_uri", null)
@@ -116,11 +117,15 @@ object Prefs {
     fun camTrim(c: Context) = sp(c).getInt("cam_trim", 0)
     fun setCamTrim(c: Context, v: Int) = sp(c).edit().putInt("cam_trim", v.coerceIn(-4, 4)).apply()
 
-    /** Theme preset: 0 = Tesla (gray, default) · 1 = Midnight (black) · 2 = Light. */
-    /** 0 Tesla charcoal · 1 Midnight · 2 Light. Defaults to Midnight since the
-     *  SYNC-style home is built against a near-black reference; Settings → Display
-     *  switches it back to the charcoal Tesla preset. */
-    fun theme(c: Context) = sp(c).getInt("theme", 1)
+    /**
+     * Theme preset: 0 Tesla charcoal · 1 Midnight · 2 Light · 3 Cockpit.
+     *
+     * Cockpit is the default. The three older presets separate a card from its
+     * background by tone alone, which measures fine and disappears on this deck's
+     * panel; Cockpit adds a gradient and a hairline so the layering survives the
+     * hardware. The others stay selectable in Settings → Display.
+     */
+    fun theme(c: Context) = sp(c).getInt("theme", 3)
     fun setTheme(c: Context, v: Int) = sp(c).edit().putInt("theme", v).apply()
 
     fun topCollapsed(c: Context) = sp(c).getBoolean("top_collapsed", false)

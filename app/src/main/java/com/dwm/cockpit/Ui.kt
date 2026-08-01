@@ -28,6 +28,10 @@ object Ui {
     data class Accent(val name: String, val color: Int)
 
     val ACCENTS = listOf(
+        // Brighter than Tesla Blue on purpose: the deck's panel lifts blacks and
+        // mutes saturation, and #3E6AE1 sat too close to the background to read as
+        // an accent at all once it got there.
+        Accent("Cockpit Blue", 0xFF4C8DFF.toInt()),
         Accent("Tesla Blue", 0xFF3E6AE1.toInt()),
         Accent("Tesla Red", 0xFFE82127.toInt()),
         Accent("Mono", 0xFFE8E8EA.toInt()),
@@ -36,7 +40,13 @@ object Ui {
         Accent("Violet", 0xFFA78BFA.toInt())
     )
 
-    /** A theme preset: every colour the UI needs. */
+    /**
+     * A theme preset: every colour the UI needs.
+     *
+     * [cardTop]/[cardBottom] are a gradient pair rather than one flat fill. The
+     * deck's panel has a poor black level, and a card that differs from its
+     * background by tone alone disappears on it — see the "Cockpit" preset below.
+     */
     data class Theme(
         val light: Boolean,
         val bg: Int,
@@ -46,13 +56,32 @@ object Ui {
         val cardBorder: Int,
         val text: Int,
         val dim: Int,
+        val textTertiary: Int,
         val barBg: Int,
-        val hairline: Int
+        val hairline: Int,
+        val cardTop: Int,
+        val cardBottom: Int
     )
 
-    val THEMES = listOf("Tesla", "Midnight", "Light")
+    /** Index into this list *is* the stored `Prefs.theme` value. */
+    val THEMES = listOf("Tesla", "Midnight", "Light", "Cockpit")
 
     fun th(c: Context): Theme = when (Prefs.theme(c)) {
+        0 -> Theme( // Tesla — charcoal gray
+            light = false,
+            bg = 0xFF292B2E.toInt(),
+            surface = 0xFF3B3E43.toInt(),
+            surfacePressed = 0xFF4A4E55.toInt(),
+            card = 0xE62F3236.toInt(),
+            cardBorder = 0x1FFFFFFF,
+            text = 0xFFF2F2F2.toInt(),
+            dim = 0xFFA5A8AD.toInt(),
+            textTertiary = 0xFF7C8087.toInt(),
+            barBg = 0xE61E2023.toInt(),
+            hairline = 0x24FFFFFF,
+            cardTop = 0xFF44474D.toInt(),
+            cardBottom = 0xFF35383D.toInt()
+        )
         1 -> Theme( // Midnight — OLED black
             light = false,
             bg = 0xFF0A0A0C.toInt(),
@@ -62,8 +91,11 @@ object Ui {
             cardBorder = 0x14FFFFFF,
             text = 0xFFF2F2F2.toInt(),
             dim = 0xFF9A9AA0.toInt(),
+            textTertiary = 0xFF6E6E76.toInt(),
             barBg = 0xE0101013.toInt(),
-            hairline = 0x1AFFFFFF
+            hairline = 0x1AFFFFFF,
+            cardTop = 0xFF303035.toInt(),
+            cardBottom = 0xFF212124.toInt()
         )
         2 -> Theme( // Light — Tesla day mode
             light = true,
@@ -74,28 +106,46 @@ object Ui {
             cardBorder = 0x14000000,
             text = 0xFF171A20.toInt(),
             dim = 0xFF5C5E62.toInt(),
+            textTertiary = 0xFF8A8C90.toInt(),
             barBg = 0xF0FFFFFF.toInt(),
-            hairline = 0x1F000000
+            hairline = 0x1F000000,
+            cardTop = 0xFFFFFFFF.toInt(),
+            cardBottom = 0xFFECEDF0.toInt()
         )
-        else -> Theme( // Tesla — charcoal gray (default)
+        // Cockpit — the default, and the one built for this specific panel.
+        //
+        // Every earlier preset separated a card from its background by tone only:
+        // Tesla used #3B3E43 on #292B2E, an eighteen-point step. On a laptop that
+        // reads as two surfaces; on the deck's cheap IPS it collapsed into a single
+        // flat grey, which is most of why the launcher looked unfinished. This one
+        // separates them three ways at once — a bigger tonal step, a gradient
+        // inside the card, and a hairline border — because any one of the three
+        // washes out on its own.
+        else -> Theme(
             light = false,
-            bg = 0xFF292B2E.toInt(),
-            surface = 0xFF3B3E43.toInt(),
-            surfacePressed = 0xFF4A4E55.toInt(),
-            card = 0xE62F3236.toInt(),
-            cardBorder = 0x1FFFFFFF,
-            text = 0xFFF2F2F2.toInt(),
-            dim = 0xFFA5A8AD.toInt(),
-            barBg = 0xE61E2023.toInt(),
-            hairline = 0x24FFFFFF
+            bg = 0xFF08090B.toInt(),
+            surface = 0xFF1A1E24.toInt(),
+            surfacePressed = 0xFF262B33.toInt(),
+            card = 0xE61A1E24.toInt(),
+            cardBorder = 0x1AFFFFFF,
+            text = 0xFFFFFFFF.toInt(),
+            dim = 0xFFA8B0BC.toInt(),
+            textTertiary = 0xFF6C7480.toInt(),
+            barBg = 0xE60D0F12.toInt(),
+            hairline = 0x1FFFFFFF,
+            cardTop = 0xFF1D2128.toInt(),
+            cardBottom = 0xFF14171C.toInt()
         )
     }
 
     // Every palette colour that may appear on a TextView, so skin() can remap
     // between themes no matter which theme painted the view last.
-    private val TEXT_COLORS = setOf(0xFFF2F2F2.toInt(), 0xFF171A20.toInt())
+    private val TEXT_COLORS = setOf(
+        0xFFF2F2F2.toInt(), 0xFF171A20.toInt(), 0xFFFFFFFF.toInt()
+    )
     private val DIM_COLORS = setOf(
-        0xFF9A9AA0.toInt(), 0xFFA5A8AD.toInt(), 0xFF5C5E62.toInt(), 0xFF93A1A6.toInt()
+        0xFF9A9AA0.toInt(), 0xFFA5A8AD.toInt(), 0xFF5C5E62.toInt(),
+        0xFF93A1A6.toInt(), 0xFFA8B0BC.toInt()
     )
 
     fun accent(c: Context) = Prefs.accent(c)
@@ -166,8 +216,10 @@ object Ui {
     }
 
     /** Reference-style state colours (used sparingly, like the mock: blue =
-     *  primary action, green = active/on). */
-    const val GREEN = 0xFF34C759.toInt()
+     *  primary action, green = active/on). Defined once in the token layer — this
+     *  value used to exist as four separate literals across the Compose files and
+     *  this one, which is exactly how palettes drift apart. */
+    const val GREEN = com.dwm.cockpit.ui.theme.StatusOkArgb
 
     /** Dashboard tile: filled rounded square with ripple. */
     fun tileBg(c: Context, fill: Int): Drawable {

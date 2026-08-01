@@ -59,6 +59,8 @@ class SettingsActivity : DwmActivity() {
         findViewById<View>(R.id.close).setOnClickListener { finish() }
 
         // -- Display ------------------------------------------------------
+        // Indices are positions in Ui.THEMES and are stored as-is by Prefs.theme.
+        findViewById<Button>(R.id.btnThemeCockpit).setOnClickListener { applyThemePreset(3) }
         findViewById<Button>(R.id.btnThemeTesla).setOnClickListener { applyThemePreset(0) }
         findViewById<Button>(R.id.btnThemeMidnight).setOnClickListener { applyThemePreset(1) }
         findViewById<Button>(R.id.btnThemeLight).setOnClickListener { applyThemePreset(2) }
@@ -829,8 +831,20 @@ class SettingsActivity : DwmActivity() {
         val freeformGlobal = runCatching {
             Settings.Global.getInt(contentResolver, "enable_freeform_support", -1)
         }.getOrDefault(-1)
+        // Both version fields, because this deck disagrees with itself: it reports
+        // release "12" while SDK_INT is 29. The API number is the one that decides
+        // what actually runs — blur and RenderEffect need 31 and silently do
+        // nothing here, which cost a release to work out.
+        val dm = resources.displayMetrics
+        val wDp = (dm.widthPixels / (dm.densityDpi / 160f)).toInt()
+        val hDp = (dm.heightPixels / (dm.densityDpi / 160f)).toInt()
         findViewById<TextView>(R.id.diagnostics).text = buildString {
-            appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}  (API ${Build.VERSION.SDK_INT})")
+            appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
+            appendLine("Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}")
+            // Paste this straight into a @Preview device spec to iterate on the
+            // home screen without flashing the deck.
+            appendLine("Panel: ${dm.widthPixels}x${dm.heightPixels}px @ ${dm.densityDpi}dpi")
+            appendLine("Preview: spec:width=${wDp}dp,height=${hDp}dp,dpi=${dm.densityDpi}")
             appendLine("Freeform feature: ${if (freeform) "YES" else "no"}")
             appendLine("enable_freeform_support: $freeformGlobal")
             appendLine("Overlay permission: ${if (canOverlay()) "granted" else "not granted"}")
