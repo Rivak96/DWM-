@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.dwm.cockpit.ui.theme.Dwm
@@ -55,6 +56,9 @@ fun DwmText(
         fontWeight = weight,
         fontFamily = DwmType.family,
         maxLines = 1,
+        // Track titles are longer than any card that holds them. Without this they
+        // simply stopped mid-word, which reads as a bug rather than as a title.
+        overflow = TextOverflow.Ellipsis,
         style = if (tabular) TextStyle(fontFeatureSettings = DwmType.TABULAR) else TextStyle.Default
     )
 }

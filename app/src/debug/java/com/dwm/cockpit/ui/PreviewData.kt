@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.platform.LocalInspectionMode
 import com.dwm.cockpit.ui.theme.CockpitColors
 import com.dwm.cockpit.ui.theme.DwmColors
 import com.dwm.cockpit.ui.theme.DwmMaterialShapes
@@ -78,7 +79,15 @@ fun DwmPreviewTheme(
             onSurface = colors.textPrimary
         )
     }
-    CompositionLocalProvider(LocalDwmColors provides colors) {
+    // LocalInspectionMode is set for us inside an Android Studio @Preview but not
+    // under Paparazzi, which composes for real. Without it the polling effects go
+    // and query system services that do not exist off-device — MediaPanel answered
+    // NoAccess and painted over the state the caller passed in, so the "now
+    // playing" snapshot was silently rendering the permissions prompt.
+    CompositionLocalProvider(
+        LocalDwmColors provides colors,
+        LocalInspectionMode provides true
+    ) {
         MaterialTheme(
             colorScheme = scheme,
             typography = dwmTypography(),

@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("app.cash.paparazzi")
 }
 
 // Release signing lives in keystore.properties (gitignored). Back up the
@@ -21,8 +22,8 @@ android {
         applicationId = "com.dwm.cockpit"
         minSdk = 26          // Android 8.0 — well below the deck's Android 12
         targetSdk = 33
-        versionCode = 42
-        versionName = "0.23.1"
+        versionCode = 43
+        versionName = "0.24.0"
     }
 
     signingConfigs {

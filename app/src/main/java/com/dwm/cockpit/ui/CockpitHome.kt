@@ -1,7 +1,6 @@
 package com.dwm.cockpit.ui
 
 import androidx.annotation.DrawableRes
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -42,6 +41,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dwm.cockpit.Apps
+import com.dwm.cockpit.Media
 import com.dwm.cockpit.R
 import com.dwm.cockpit.ui.theme.Dwm
 import com.dwm.cockpit.ui.theme.DwmMotion
@@ -55,6 +56,7 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.ceil
 
 /**
  * One favourite app. [tint] is the icon's dominant colour, sampled off the main
@@ -110,9 +112,10 @@ fun CockpitHome(
     favourites: List<HomeApp>,
     overlaysOn: Boolean,
     actions: HomeActions,
-    // Injected rather than fetched, so a @Preview can hand this screen a van that
-    // is doing something. Defaulted so the HomeActivity call site stays simple.
-    vehicle: VehicleUi = rememberVehicleState(LocalContext.current)
+    // Injected rather than fetched, so a @Preview or a snapshot test can hand this
+    // screen a van and a track. Defaulted so the HomeActivity call site stays simple.
+    vehicle: VehicleUi = rememberVehicleState(LocalContext.current),
+    media: Media.State = Media.State.Idle
 ) {
     val colors = Dwm.colors
 
@@ -123,34 +126,42 @@ fun CockpitHome(
 
         Row(Modifier.fillMaxWidth().weight(1f)) {
 
-            // ------------------------------------------------ music / reversing
-            Box(Modifier.fillMaxHeight().weight(0.38f)) {
-                Crossfade(
-                    targetState = vehicle.body.value.reverse,
-                    animationSpec = DwmMotion.fade,
-                    label = "reverseTakeover"
-                ) { reversing ->
-                    if (reversing) {
-                        FlatCard(Modifier.fillMaxSize()) {
-                            ParkingDisplay(vehicle.body.value, Modifier.fillMaxSize())
-                        }
-                    } else {
-                        MediaPanel(
-                            onOpen = actions.launch,
-                            onGrantAccess = actions.grantNotifications,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+            // ------------------------------------------------ vehicle / music
+            //
+            // The proximity display is always up, not only in reverse. Swapping the
+            // whole column on gear change meant that for the 99% of the time the van
+            // is not reversing, this space was a music card with nothing playing —
+            // a third of the screen holding two lines of grey text. Reverse now
+            // promotes it rather than summoning it, and the front sensors do fire
+            // when creeping forward anyway.
+            val reversing = vehicle.body.value.reverse
+            Column(Modifier.fillMaxHeight().weight(0.34f)) {
+                FlatCard(Modifier.fillMaxWidth().weight(1f)) {
+                    ParkingDisplay(vehicle.body.value, Modifier.fillMaxSize())
+                }
+                if (!reversing) {
+                    Spacer(Modifier.height(DwmSpace.m))
+                    MediaPanel(
+                        onOpen = actions.launch,
+                        onGrantAccess = actions.grantNotifications,
+                        modifier = Modifier.fillMaxWidth().height(132.dp),
+                        initialState = media
+                    )
                 }
             }
 
             Spacer(Modifier.width(DwmSpace.m))
 
             // ------------------------------------------------------------ apps
-            Column(Modifier.fillMaxHeight().weight(0.62f)) {
-                CarPlayHero(actions.carplay, Modifier.fillMaxWidth().weight(0.28f))
+            Column(Modifier.fillMaxHeight().weight(0.66f)) {
+                // Split by how many rows of apps there actually are. A fixed split
+                // cannot serve both cases: bound the grid tightly enough for twelve
+                // apps and the hero shrinks to a strip when there are three; leave
+                // the hero greedy and twelve apps squeeze it to a sliver instead.
+                val gridWeight = gridWeightFor(favourites.size)
+                CarPlayHero(actions.carplay, Modifier.fillMaxWidth().weight(1f - gridWeight))
                 Spacer(Modifier.height(DwmSpace.m))
-                FavouriteGrid(favourites, actions, Modifier.fillMaxWidth().weight(0.72f))
+                FavouriteGrid(favourites, actions, Modifier.fillMaxWidth().weight(gridWeight))
             }
         }
 
@@ -262,30 +273,45 @@ private fun CarPlayHero(onClick: () -> Unit, modifier: Modifier) {
             )
             .border(DwmStroke.hairline, colors.accent.copy(alpha = 0.40f), DwmShapes.large)
             .clickable { onClick() }
-            .padding(horizontal = DwmSpace.xl, vertical = DwmSpace.m),
-        contentAlignment = Alignment.CenterStart
+            .padding(DwmSpace.l),
+        contentAlignment = Alignment.Center
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Icon(
-                painterResource(R.drawable.ic_car),
-                contentDescription = null,
-                tint = colors.accent,
-                modifier = Modifier.size(44.dp)
-            )
-            Spacer(Modifier.width(DwmSpace.l))
-            Column {
-                DwmText("CarPlay", size = DwmType.headline, color = colors.textPrimary, weight = FontWeight.Light)
+        // Centred and sized to the box rather than pinned to the left edge. As a
+        // left-aligned row this was a line of small text against an acre of empty
+        // blue — the tile was big, and nothing in it was.
+        //
+        // How much fits depends on how many apps are below: three favourites leave
+        // this tile roomy, twelve leave it squat. Sized from the box rather than
+        // fixed, because at a fixed size the OPEN pill was simply clipped away.
+        BoxWithConstraints(contentAlignment = Alignment.Center) {
+            val roomy = maxHeight > 190.dp
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    painterResource(R.drawable.ic_car),
+                    contentDescription = null,
+                    tint = colors.accent,
+                    modifier = Modifier.size(if (roomy) 64.dp else 40.dp)
+                )
+                Spacer(Modifier.height(DwmSpace.s))
+                DwmText(
+                    "CarPlay",
+                    size = if (roomy) DwmType.display else DwmType.headline,
+                    color = colors.textPrimary,
+                    weight = FontWeight.Light
+                )
                 DwmText("Phone projection", size = DwmType.label, color = colors.textSecondary)
-            }
-            Spacer(Modifier.weight(1f))
-            Box(
-                Modifier
-                    .clip(DwmShapes.pill)
-                    .background(colors.accent.copy(alpha = 0.22f))
-                    .border(DwmStroke.hairline, colors.accent.copy(alpha = 0.5f), DwmShapes.pill)
-                    .padding(horizontal = DwmSpace.xl, vertical = DwmSpace.s)
-            ) {
-                DwmText("OPEN", size = DwmType.label, color = colors.accent, weight = FontWeight.Medium)
+                if (roomy) {
+                    Spacer(Modifier.height(DwmSpace.m))
+                    Box(
+                        Modifier
+                            .clip(DwmShapes.pill)
+                            .background(colors.accent.copy(alpha = 0.22f))
+                            .border(DwmStroke.hairline, colors.accent.copy(alpha = 0.5f), DwmShapes.pill)
+                            .padding(horizontal = DwmSpace.xxl, vertical = DwmSpace.s)
+                    ) {
+                        DwmText("OPEN", size = DwmType.label, color = colors.accent, weight = FontWeight.Medium)
+                    }
+                }
             }
         }
     }
@@ -293,27 +319,57 @@ private fun CarPlayHero(onClick: () -> Unit, modifier: Modifier) {
 
 /* ------------------------------------------------------------- favourites */
 
+/** How much of the app column the grid should claim, by row count. */
+private fun gridWeightFor(appCount: Int): Float {
+    if (appCount <= 0) return 0.01f
+    val cols = minOf(4, appCount)
+    return when (ceil(appCount.coerceAtMost(Apps.FAV_SLOTS) / cols.toFloat()).toInt()) {
+        1 -> 0.42f
+        2 -> 0.58f
+        else -> 0.68f
+    }
+}
+
 /**
- * Every favourite, on screen, always.
+ * Every favourite, on screen, always — as square tiles that never stretch.
  *
- * Built from explicit weighted rows rather than a `LazyVerticalGrid` on purpose:
- * a lazy grid would happily scroll the last row off the bottom, and a row of apps
- * you have to scroll to reach is the same problem as a page you have to swipe to.
- * Twelve slots is `Apps.FAV_SLOTS`, which is exactly three rows of four.
+ * The first version gave each row `weight(1f)` and hardcoded four columns. That is
+ * fine with twelve apps and catastrophic with three, which is what this head unit
+ * actually exposes: one row taking the entire column height turned three icons into
+ * three full-height coloured slabs with a dead fourth slot beside them. It shipped,
+ * and it looked exactly as bad as that description.
+ *
+ * So the tile size is computed to fit both axes and the column count follows the
+ * number of apps. Three apps means three columns of squares, not a quarter-empty
+ * grid stretched to fill space it does not need.
  */
 @Composable
 private fun FavouriteGrid(apps: List<HomeApp>, actions: HomeActions, modifier: Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(DwmSpace.s)) {
-        for (row in apps.take(12).chunked(4)) {
-            Row(
-                Modifier.fillMaxWidth().weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(DwmSpace.s)
-            ) {
-                for (app in row) {
-                    FavouriteTile(app, actions, Modifier.weight(1f).fillMaxHeight())
+    if (apps.isEmpty()) return
+    val shown = apps.take(Apps.FAV_SLOTS)
+    val cols = minOf(4, shown.size)
+    val rows = ceil(shown.size / cols.toFloat()).toInt()
+
+    BoxWithConstraints(modifier) {
+        val gap = DwmSpace.s
+        val byWidth = (maxWidth - gap * (cols - 1)) / cols
+        // Height matters as much as width. Sizing on width alone let twelve apps
+        // demand three rows taller than the column, which squeezed the CarPlay
+        // tile above down to a blue sliver — the grid quietly ate the hero.
+        val byHeight = (maxHeight - gap * (rows - 1)) / rows
+        // Cap it too: on a 13" panel an unbounded tile becomes a billboard for a
+        // 48dp icon, which is the same failure in the other direction.
+        val tile = minOf(byWidth.value, byHeight.value, 168f).dp
+
+        Column(
+            Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(gap),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            for (row in shown.chunked(cols)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    for (app in row) FavouriteTile(app, actions, Modifier.size(tile))
                 }
-                // Keep a short last row's tiles the same width as a full one's.
-                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }

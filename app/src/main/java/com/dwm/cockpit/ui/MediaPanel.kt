@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -63,11 +64,18 @@ fun MediaPanel(
     initialState: Media.State = Media.State.Idle
 ) {
     val context = LocalContext.current
+    val inspecting = LocalInspectionMode.current
     var state by remember { mutableStateOf(initialState) }
 
     // 1s is plenty for a track change, and keeps binder chatter off the 4Hz
     // vehicle tick. Data-class equality means an unchanged track recomposes nothing.
-    LaunchedEffect(Unit) {
+    //
+    // Skipped under inspection. A preview or a Paparazzi render has no notification
+    // listener, so the poll immediately answered NoAccess and painted over whatever
+    // state the caller passed in — the "now playing" snapshot was quietly rendering
+    // the permissions prompt instead.
+    LaunchedEffect(inspecting) {
+        if (inspecting) return@LaunchedEffect
         while (true) {
             state = Media.state(context)
             delay(1000)

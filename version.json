@@ -1,7 +1,7 @@
 {
-    "versionCode":  42,
-    "versionName":  "0.23.1",
-    "tag":  "v0.23.1",
+    "versionCode":  43,
+    "versionName":  "0.24.0",
+    "tag":  "v0.24.0",
     "apk":  "app-release.apk",
-    "notes":  "Fixes \u0027cannot find update\u0027. The v0.23.0 release itself was fine - version.json and the APK were both live and correct - but the app could not look for it. The update repo defaulted to an empty string, so the updater gave up before making a single request, and the only sign was one line in Settings \u003e About. Worse, the text box hinted \u0027owner/DWM\u0027 while the repository is actually named DWM- with a trailing hyphen, so the obvious thing to type went straight to a 404. The repo now defaults to Rivak96/DWM-, the hint shows the real value, auto-check on start is on by default, and a failed check names the repo it tried instead of just saying HTTP 404. Everything from v0.23.0 is included: the design system, the rebuilt home screen with no swipe pager, the deleted Ranger render, and the reverse parking display with steering guides."
+    "notes":  "You were right, and I could not see it - so now I can. This build adds Paparazzi, which renders the home screen to a PNG on a laptop with no deck involved, and the first render reproduced your photo exactly. Everything below was then found and fixed by looking at it, not by guessing. The app tiles were full-height coloured slabs because the grid was written assuming twelve apps and this head unit exposes three: one row took the whole column, and a dead fourth slot sat beside them. Tiles are now squares sized to fit both axes, with the column count following the number of apps. The music card owned a third of the screen to say nothing was playing; the proximity display is now up permanently and music sits under it as a compact card, so reverse promotes that display rather than summoning it. The CarPlay tile was a line of small text against an acre of empty blue - its contents are now centred and sized to the box, and the box itself sizes against how many apps are below it, so it can neither swallow the grid nor be squeezed to a sliver. Track titles ellipsize instead of stopping mid-word. Nothing here is a guess. Four rendered states - three apps, twelve apps, playing, reversing - are committed as PNGs in the repo, and any future change that disturbs them fails the build."
 }
