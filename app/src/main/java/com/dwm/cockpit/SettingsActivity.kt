@@ -10,22 +10,57 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.Gravity
-import android.view.View
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.Switch
-import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import com.dwm.cockpit.ui.DwmTheme
+import com.dwm.cockpit.ui.HomeActions
+import com.dwm.cockpit.ui.SettingsActions
+import com.dwm.cockpit.ui.SettingsScreen
+import com.dwm.cockpit.ui.SettingsUi
 
 /**
- * Tesla-style two-pane settings: category sidebar on the left, content on the
- * right. Categories: Display · Cockpit · Overlay · Vehicle · System · About.
+ * Settings.
+ *
+ * The view layer is Compose now — `SettingsScreen` — and `activity_settings.xml`
+ * with it. That was not a preference: keeping this screen in View/XML meant a second
+ * implementation of the rail, the grid, the type scale and the card, restyled at
+ * runtime by `Ui.skin()` walking the tree remapping colours it recognised. A section
+ * header sitting at a colour that appeared in no palette went unremapped and stayed
+ * mid-grey through every theme the app ever had, which is the failure mode that
+ * approach produces. Sharing the actual composables with home is the only way two
+ * screens genuinely match.
+ *
+ * **All the logic below is unchanged** — permissions, dialogs, the CAN scan, the
+ * camera probe, the updater. Only the wiring moved.
  */
 class SettingsActivity : DwmActivity() {
 
-    private lateinit var navButtons: List<Button>
-    private lateinit var sections: List<View>
+    /**
+     * Bumped after every `Prefs` write so [readUi] recomposes. `Prefs` stays the one
+     * source of truth; this is a change signal, not a copy of it.
+     */
+    private val revision = mutableIntStateOf(0)
+
+    private fun bump() {
+        revision.intValue++
+    }
+
+    /* Text the activity computes and the screen displays. */
+    private val camTrimState = mutableStateOf("")
+    private val canStatusState = mutableStateOf("")
+    private val modeHintState = mutableStateOf("")
+    private val updateStatusState = mutableStateOf("")
+    private val aboutState = mutableStateOf("")
+    private val carplayState = mutableStateOf("")
+    private val obdState = mutableStateOf("")
+    private val diagnosticsState = mutableStateOf("")
+
+    /** The CAN scan is one button with two steps, so its label is state. */
+    private val canScanLabelState = mutableStateOf("Scan vehicle")
 
     /** CAN discovery state (see [VehicleProbe]). */
     private var canBefore: Map<String, String>? = null
@@ -42,151 +77,16 @@ class SettingsActivity : DwmActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_settings)
 
-        navButtons = listOf(
-            findViewById(R.id.navDisplay), findViewById(R.id.navCockpit),
-            findViewById(R.id.navOverlay), findViewById(R.id.navVehicle),
-            findViewById(R.id.navSystem), findViewById(R.id.navAbout)
-        )
-        sections = listOf(
-            findViewById(R.id.secDisplay), findViewById(R.id.secCockpit),
-            findViewById(R.id.secOverlay), findViewById(R.id.secVehicle),
-            findViewById(R.id.secSystem), findViewById(R.id.secAbout)
-        )
-        navButtons.forEachIndexed { i, b -> b.setOnClickListener { showSection(i) } }
-
-        findViewById<View>(R.id.close).setOnClickListener { finish() }
-
-        // -- Display ------------------------------------------------------
-        // Indices are positions in Ui.THEMES and are stored as-is by Prefs.theme.
-        findViewById<Button>(R.id.btnThemeCockpit).setOnClickListener { applyThemePreset(0) }
-        findViewById<Button>(R.id.btnThemeTesla).setOnClickListener { applyThemePreset(1) }
-        findViewById<Button>(R.id.btnThemeMidnight).setOnClickListener { applyThemePreset(2) }
-        // The wallpaper picker was removed with the SYNC-style home: that screen is
-        // flat dark by design and has no backdrop, so the control did nothing.
-        findViewById<Button>(R.id.btnTextCompact).setOnClickListener { setScale(0.85f) }
-        findViewById<Button>(R.id.btnTextNormal).setOnClickListener { setScale(1.0f) }
-        findViewById<Button>(R.id.btnTextLarge).setOnClickListener { setScale(1.15f) }
-        findViewById<Button>(R.id.btnUiTiny).setOnClickListener { setUiScale(0.7f) }
-        findViewById<Button>(R.id.btnUiCompact).setOnClickListener { setUiScale(0.8f) }
-        findViewById<Button>(R.id.btnUiCosy).setOnClickListener { setUiScale(0.9f) }
-        findViewById<Button>(R.id.btnUiStock).setOnClickListener { setUiScale(1.0f) }
-        // buildAccentRow() is not called: there is one accent now. The row is gone
-        // from the layout and the function stays only until Settings is rebuilt.
-
-        // -- Cockpit ------------------------------------------------------
-        findViewById<Button>(R.id.btnModeDash).setOnClickListener { setMode(0) }
-        findViewById<Button>(R.id.btnModeOverlay).setOnClickListener { setMode(1) }
+        refreshCarplayLabel()
+        refreshObdLabel()
+        refreshUpdateStatus()
         refreshModeHint()
-        val swFav = findViewById<Switch>(R.id.swFavGrid)
-        swFav.isChecked = Prefs.showFavGrid(this)
-        swFav.setOnCheckedChangeListener { _, v -> Prefs.setShowFavGrid(this, v) }
-        findViewById<Button>(R.id.btnManageFavs).setOnClickListener { manageFavourites() }
-        val swAuto = findViewById<Switch>(R.id.swAutoLoad)
-        swAuto.isChecked = Prefs.autoLoad(this)
-        swAuto.setOnCheckedChangeListener { _, v -> Prefs.setAutoLoad(this, v) }
-        findViewById<Button>(R.id.btnCarplay).setOnClickListener {
-            startActivityForResult(
-                Intent(this, AppDrawerActivity::class.java)
-                    .putExtra(AppDrawerActivity.EXTRA_PICK, true),
-                REQ_CARPLAY
-            )
-        }
-        findViewById<Button>(R.id.btnCompOff).setOnClickListener { setComp(0) }
-        findViewById<Button>(R.id.btnCompSmall).setOnClickListener { setComp(24) }
-        findViewById<Button>(R.id.btnCompMed).setOnClickListener { setComp(32) }
-        findViewById<Button>(R.id.btnCompLarge).setOnClickListener { setComp(44) }
-
-        // -- Overlay ------------------------------------------------------
-        val swOverlay = findViewById<Switch>(R.id.swOverlay)
-        swOverlay.isChecked = Prefs.overlayOnStart(this)
-        swOverlay.setOnCheckedChangeListener { _, v -> Prefs.setOverlayOnStart(this, v) }
-        findViewById<Button>(R.id.btnGrantOverlay).setOnClickListener {
-            startActivity(
-                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-            )
-        }
-        findViewById<Button>(R.id.btnStartOverlay).setOnClickListener {
-            if (canOverlay()) OverlayService.start(this)
-            else Toast.makeText(this, "Grant overlay permission first", Toast.LENGTH_SHORT).show()
-        }
-        findViewById<Button>(R.id.btnStopOverlay).setOnClickListener { OverlayService.stop(this) }
-        findViewById<Button>(R.id.btnPanelsOn).setOnClickListener {
-            if (canOverlay()) OverlayPanelsService.start(this)
-            else Toast.makeText(this, "Grant overlay permission first", Toast.LENGTH_SHORT).show()
-        }
-        findViewById<Button>(R.id.btnPanelsOff).setOnClickListener { OverlayPanelsService.stop(this) }
-        findViewById<Button>(R.id.btnRaiseNow).setOnClickListener {
-            LaunchEngine.raiseWindows(this, Prefs.panels(this))
-        }
-        val swEdit = findViewById<Switch>(R.id.swOverlayEdit)
-        swEdit.isChecked = Prefs.overlayEdit(this)
-        swEdit.setOnCheckedChangeListener { _, v ->
-            Prefs.setOverlayEdit(this, v)
-            // Grips are built at inflate time, so the panels have to be rebuilt.
-            if (OverlayPanelsService.isRunning) {
-                OverlayPanelsService.stop(this)
-                OverlayPanelsService.start(this)
-            }
-            Toast.makeText(
-                this,
-                if (v) "Grips shown — drag ✥ to move, ⤢ to resize" else "Panels locked — full content, no chrome",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-        val swMute = findViewById<Switch>(R.id.swMuteOverlays)
-        swMute.isChecked = Prefs.muteOverlays(this)
-        swMute.setOnCheckedChangeListener { _, v ->
-            Prefs.setMuteOverlays(this, v)
-            if (OverlayPanelsService.isRunning) {
-                OverlayPanelsService.stop(this)
-                OverlayPanelsService.start(this)
-            }
-        }
-
-        val swStrip = findViewById<Switch>(R.id.swVehicleStrip)
-        swStrip.isChecked = VehicleStripService.isRunning
-        swStrip.setOnCheckedChangeListener { _, v ->
-            Prefs.setVehicleStrip(this, v)
-            if (v) {
-                if (!canOverlay()) {
-                    Toast.makeText(this, "Allow 'Display over other apps' first", Toast.LENGTH_LONG).show()
-                    swStrip.isChecked = false
-                    return@setOnCheckedChangeListener
-                }
-                VehicleStripService.start(this)
-            } else VehicleStripService.stop(this)
-        }
-
-        val swDemo = findViewById<Switch>(R.id.swDemoData)
-        swDemo.isChecked = Prefs.demoData(this)
-        swDemo.setOnCheckedChangeListener { _, v ->
-            Prefs.setDemoData(this, v)
-            Toast.makeText(
-                this,
-                if (v) "Demo data on — the dashboard is inventing these readings"
-                else "Demo off — showing what the car actually reports",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-
-        // -- Vehicle ------------------------------------------------------
-        findViewById<Button>(R.id.btnObdPick).setOnClickListener { pickObd() }
-        findViewById<Button>(R.id.btnCamScan).setOnClickListener { scanCameras() }
-        findViewById<Button>(R.id.btnCamFill).setOnClickListener { setCamFit(CameraPanel.FILL) }
-        findViewById<Button>(R.id.btnCamFit).setOnClickListener { setCamFit(CameraPanel.FIT) }
-        findViewById<Button>(R.id.btnCamStretch).setOnClickListener { setCamFit(CameraPanel.STRETCH) }
-        findViewById<Button>(R.id.btnCamAuto).setOnClickListener { setCamDayNight(CameraPanel.AUTO) }
-        findViewById<Button>(R.id.btnCamDay).setOnClickListener { setCamDayNight(CameraPanel.FORCE_DAY) }
-        findViewById<Button>(R.id.btnCamNight).setOnClickListener { setCamDayNight(CameraPanel.FORCE_NIGHT) }
-        findViewById<Button>(R.id.btnCamDarker).setOnClickListener { nudgeCamTrim(-1) }
-        findViewById<Button>(R.id.btnCamBrighter).setOnClickListener { nudgeCamTrim(+1) }
         refreshCamTrimLabel()
-        findViewById<Button>(R.id.btnCanScan).setOnClickListener { canScanTapped() }
-        findViewById<Button>(R.id.btnCanSerial).setOnClickListener { serialReadPrompt() }
-        findViewById<Button>(R.id.btnCanApk).setOnClickListener { exportApkPrompt() }
-        findViewById<Button>(R.id.btnCanDump).setOnClickListener { dumpGetters() }
+        showDiagnostics()
+        showAbout()
+
+        // The CAN sniffer has to be armed before the screen can offer to scan.
         // Parsing every APK manifest takes a second or two; do it off the main
         // thread, then listen on the action names it found rather than guesses.
         Thread {
@@ -194,51 +94,159 @@ class SettingsActivity : DwmActivity() {
                 .getOrDefault(emptySet())
             runOnUiThread { if (!isFinishing) sniffer.start(this, discovered) }
         }.start()
-        findViewById<Button>(R.id.btnNotifAccess).setOnClickListener {
-            val granted = NotifStore.accessGranted(this)
-            runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
-                .onFailure { Toast.makeText(this, "Open Settings > Notification access", Toast.LENGTH_LONG).show() }
-            if (!granted) Toast.makeText(this, "Turn on DWM in the list", Toast.LENGTH_LONG).show()
+
+        setContent {
+            DwmTheme(this) {
+                SettingsScreen(
+                    ui = readUi(),
+                    actions = settingsActions(),
+                    home = homeActions(),
+                    overlaysOn = OverlayPanelsService.isRunning
+                )
+            }
         }
-
-        // -- System -------------------------------------------------------
-        findViewById<Button>(R.id.btnBt).setOnClickListener { open(Settings.ACTION_BLUETOOTH_SETTINGS) }
-        findViewById<Button>(R.id.btnWifi).setOnClickListener { open(Settings.ACTION_WIFI_SETTINGS) }
-        findViewById<Button>(R.id.btnDisplay).setOnClickListener { open(Settings.ACTION_DISPLAY_SETTINGS) }
-        findViewById<Button>(R.id.btnAllSettings).setOnClickListener { open(Settings.ACTION_SETTINGS) }
-        findViewById<Button>(R.id.btnDefaultLauncher).setOnClickListener {
-            runCatching { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
-                .onFailure {
-                    Toast.makeText(this, "Open Settings > Apps > Default apps > Home", Toast.LENGTH_LONG).show()
-                }
-        }
-
-        // -- Updates ------------------------------------------------------
-        findViewById<Button>(R.id.btnCheckUpdate).setOnClickListener { checkForUpdate() }
-        findViewById<Button>(R.id.btnUpdateRepo).setOnClickListener { editUpdateRepo() }
-        val swAutoUpd = findViewById<Switch>(R.id.swAutoUpdate)
-        swAutoUpd.isChecked = Prefs.autoUpdate(this)
-        swAutoUpd.setOnCheckedChangeListener { _, v -> Prefs.setAutoUpdate(this, v) }
-
-        refreshCarplayLabel()
-        refreshObdLabel()
-        refreshUpdateStatus()
-        showDiagnostics()
-        showAbout()
-
-        Ui.themeWindow(this)
-        Ui.skin(this, findViewById(android.R.id.content))
-        showSection(0)
     }
 
-    private fun showSection(idx: Int) {
-        val t = Ui.th(this)
-        sections.forEachIndexed { i, s -> s.visibility = if (i == idx) View.VISIBLE else View.GONE }
-        navButtons.forEachIndexed { i, b ->
-            b.background = Ui.navItemBg(this, i == idx)
-            b.setTextColor(if (i == idx) t.text else t.dim)
-            b.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+    /**
+     * The whole screen's state, rebuilt from [Prefs] on every recomposition.
+     *
+     * Reading [revision] is what makes that happen: every action below calls [bump]
+     * after writing, so `Prefs` stays the single source of truth and there is no
+     * second copy of it in Compose state to fall out of step. Seventeen individual
+     * `mutableStateOf` mirrors would have been the alternative, and mirrors of a
+     * preference store are exactly the kind of duplication this rebuild removed
+     * everywhere else.
+     */
+    @Composable
+    private fun readUi(): SettingsUi {
+        @Suppress("UNUSED_VARIABLE") val rev by revision
+        return SettingsUi(
+            themeMode = Prefs.theme(this).coerceIn(0, 2),
+            uiScale = Prefs.uiScale(this),
+            fontScale = Prefs.fontScale(this),
+            mode = Prefs.mode(this),
+            modeHint = modeHintState.value,
+            autoLoad = Prefs.autoLoad(this),
+            carplay = carplayState.value,
+            favGrid = Prefs.showFavGrid(this),
+            captionComp = Prefs.captionComp(this),
+            pillRunning = Prefs.overlaysOn(this),
+            panelsRunning = OverlayPanelsService.isRunning,
+            overlayEdit = Prefs.overlayEdit(this),
+            muteOverlays = Prefs.muteOverlays(this),
+            vehicleStrip = Prefs.vehicleStrip(this),
+            demoData = Prefs.demoData(this),
+            obd = obdState.value,
+            camFit = Prefs.camFit(this),
+            camDayNight = Prefs.camDayNight(this),
+            camTrim = camTrimState.value,
+            canStatus = canStatusState.value,
+            canScanLabel = canScanLabelState.value,
+            updateStatus = updateStatusState.value,
+            autoUpdate = Prefs.autoUpdate(this),
+            diagnostics = diagnosticsState.value,
+            about = aboutState.value
+        )
+    }
+
+    private fun settingsActions() = SettingsActions(
+        setThemeMode = { applyThemePreset(it) },
+        setUiScale = { setUiScale(it) },
+        setFontScale = { setScale(it) },
+        setMode = { setMode(it) },
+        setAutoLoad = { Prefs.setAutoLoad(this, it); bump() },
+        pickCarplay = { pickCarplay() },
+        setFavGrid = { Prefs.setShowFavGrid(this, it); bump() },
+        manageFavourites = { manageFavourites() },
+        // The cockpit layout editor. It used to be the "Cockpit" item in the home
+        // screen's bottom bar; that bar is now a five-item rail and configuration
+        // belongs here.
+        editLayout = { startActivity(Intent(this, LayoutEditorActivity::class.java)) },
+        setComp = { setComp(it) },
+        grantOverlay = {
+            runCatching {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                )
+            }
+        },
+        startPill = { OverlayService.start(this); bump() },
+        stopPill = { OverlayService.stop(this); bump() },
+        panelsOn = { OverlayPanelsService.start(this); bump() },
+        panelsOff = { OverlayPanelsService.stop(this); bump() },
+        setOverlayEdit = { Prefs.setOverlayEdit(this, it); restartOverlayPanels(); bump() },
+        raiseWindows = { LaunchEngine.launchLayout(this, Prefs.panels(this)) },
+        setMuteOverlays = { Prefs.setMuteOverlays(this, it); restartOverlayPanels(); bump() },
+        setVehicleStrip = {
+            Prefs.setVehicleStrip(this, it)
+            if (it) VehicleStripService.start(this) else VehicleStripService.stop(this)
+            bump()
+        },
+        setDemoData = { Prefs.setDemoData(this, it); bump() },
+        pickObd = { pickObd() },
+        scanCameras = { scanCameras() },
+        setCamFit = { setCamFit(it) },
+        setCamDayNight = { setCamDayNight(it) },
+        nudgeCamTrim = { nudgeCamTrim(it) },
+        canScan = { canScanTapped() },
+        canSerial = { serialReadPrompt() },
+        canApk = { exportApkPrompt() },
+        canDump = { dumpGetters() },
+        notifAccess = {
+            val was = NotifStore.accessGranted(this)
+            runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+                .onFailure {
+                    Toast.makeText(this, "Open Settings > Notification access", Toast.LENGTH_LONG).show()
+                }
+            if (!was) Toast.makeText(this, "Turn on DWM in the list", Toast.LENGTH_LONG).show()
+        },
+        openBluetooth = { open(Settings.ACTION_BLUETOOTH_SETTINGS) },
+        openWifi = { open(Settings.ACTION_WIFI_SETTINGS) },
+        openDisplay = { open(Settings.ACTION_DISPLAY_SETTINGS) },
+        openAllSettings = { open(Settings.ACTION_SETTINGS) },
+        defaultLauncher = {
+            runCatching { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
+                .onFailure {
+                    Toast.makeText(
+                        this, "Open Settings > Apps > Default apps > Home", Toast.LENGTH_LONG
+                    ).show()
+                }
+        },
+        checkUpdate = { checkForUpdate() },
+        editRepo = { editUpdateRepo() },
+        setAutoUpdate = { Prefs.setAutoUpdate(this, it); bump() },
+        close = { finish() }
+    )
+
+    /** The rail is shared with home, so its destinations are too. */
+    private fun homeActions() = HomeActions(
+        overlayMenu = {
+            if (OverlayPanelsService.isRunning) OverlayPanelsService.stop(this)
+            else OverlayPanelsService.start(this)
+            bump()
+        },
+        bluetooth = { open(Settings.ACTION_BLUETOOTH_SETTINGS) },
+        wifi = { open(Settings.ACTION_WIFI_SETTINGS) },
+        apps = { startActivity(Intent(this, AppDrawerActivity::class.java)) },
+        settings = {}
+    )
+
+    private fun restartOverlayPanels() {
+        if (OverlayPanelsService.isRunning) {
+            OverlayPanelsService.stop(this)
+            OverlayPanelsService.start(this)
         }
+    }
+
+    private fun pickCarplay() {
+        startActivityForResult(
+            Intent(this, AppDrawerActivity::class.java)
+                .putExtra(AppDrawerActivity.EXTRA_PICK, true),
+            REQ_CARPLAY
+        )
     }
 
     private fun setScale(v: Float) {
@@ -293,7 +301,7 @@ class SettingsActivity : DwmActivity() {
 
     private fun refreshCamTrimLabel() {
         val v = Prefs.camTrim(this)
-        findViewById<TextView>(R.id.camTrimLabel).text = if (v > 0) "+$v" else "$v"
+        camTrimState.value = if (v > 0) "+$v" else "$v"
     }
 
     // ---- CAN / vehicle-data discovery ------------------------------------
@@ -329,8 +337,8 @@ class SettingsActivity : DwmActivity() {
                 // Bound now so the connections have the whole scan window to
                 // arrive — bindService is async and the report is built inline.
                 aidl.start(this)
-                findViewById<Button>(R.id.btnCanScan).text = "Finish scan & save file"
-                findViewById<TextView>(R.id.canStatus).text =
+                canScanLabelState.value = "Finish scan & save file"
+                canStatusState.value =
                     "Scanning — ${canBefore!!.size} keys recorded, ${sniffer.watching} broadcast actions watched, ${aidl.bound} vendor service(s) binding, live settings watcher on. Go change the AC, lights and doors, then come back and tap Finish."
                 Toast.makeText(this, "Scanning — now go change the AC and lights", Toast.LENGTH_LONG).show()
             }
@@ -350,8 +358,8 @@ class SettingsActivity : DwmActivity() {
         // Unbound only after the report has read the binders.
         aidl.stop(this)
         canBefore = null
-        findViewById<Button>(R.id.btnCanScan).text = "Scan vehicle"
-        findViewById<TextView>(R.id.canStatus).text =
+        canScanLabelState.value = "Scan vehicle"
+        canStatusState.value =
             if (saved == null) "Could not write the file."
             else "Saved ${saved.second} · $live live change(s), ${changes.size} net."
 
@@ -443,7 +451,7 @@ class SettingsActivity : DwmActivity() {
             val saved = VehicleProbe.saveReport(this, text)
             runOnUiThread {
                 if (isFinishing) return@runOnUiThread
-                findViewById<TextView>(R.id.canStatus).text =
+                canStatusState.value =
                     saved?.let { "Getter dump saved ${it.second}" } ?: "Couldn't save the dump."
                 val named = text.lines().count { it.contains("[name]") && !it.contains("-1.0") && !it.trimEnd().endsWith("-1") }
                 Ui.dialog(this)
@@ -468,7 +476,7 @@ class SettingsActivity : DwmActivity() {
             val saved = VehicleProbe.saveApk(this, pkg)
             runOnUiThread {
                 if (isFinishing) return@runOnUiThread
-                findViewById<TextView>(R.id.canStatus).text =
+                canStatusState.value =
                     saved?.let { "APK saved ${it.second}" } ?: "Couldn't read $pkg's APK."
                 if (saved == null) {
                     Ui.dialog(this)
@@ -535,7 +543,7 @@ class SettingsActivity : DwmActivity() {
                     }
                     .setNegativeButton("Close", null)
                     .show()
-                findViewById<TextView>(R.id.canStatus).text =
+                canStatusState.value =
                     saved?.let { "Serial read saved ${it.second}" } ?: "Serial read done."
             }
         }.start()
@@ -611,39 +619,16 @@ class SettingsActivity : DwmActivity() {
 
     private fun refreshModeHint() {
         val mode = Prefs.mode(this)
-        findViewById<TextView>(R.id.modeHint).text = if (mode == 0)
+        modeHintState.value = if (mode == 0)
             "CURRENT: Dashboard — gauges/camera/web panels are drawn on the home screen; apps open in windows over it."
         else
             "CURRENT: Solo + overlays — your FULLSCREEN base app (e.g. CarPlay) opens on start, and every gauge/camera/web panel floats ON TOP of it. Mark the base app 'Open FULLSCREEN' in the layout editor."
     }
 
-    /** Tappable accent colour swatches; selected one gets a white ring. */
-    private fun buildAccentRow() {
-        val row = findViewById<LinearLayout>(R.id.accentRow)
-        row.removeAllViews()
-        val current = Prefs.accent(this)
-        val size = Ui.dp(this, 38)
-        val gap = Ui.dp(this, 12)
-        for (a in Ui.ACCENTS) {
-            val v = View(this)
-            val d = android.graphics.drawable.GradientDrawable().apply {
-                shape = android.graphics.drawable.GradientDrawable.OVAL
-                setColor(a.color)
-                if (a.color == current) setStroke(Ui.dp(this@SettingsActivity, 3), 0xFFFFFFFF.toInt())
-            }
-            v.background = d
-            v.layoutParams = LinearLayout.LayoutParams(size, size).apply { rightMargin = gap }
-            v.setOnClickListener {
-                Prefs.setAccent(this, a.color)
-                recreate()
-            }
-            row.addView(v)
-        }
-    }
 
     private fun refreshUpdateStatus() {
         val repo = Prefs.updateRepo(this)
-        findViewById<TextView>(R.id.updateStatus).text =
+        updateStatusState.value =
             "Installed: v${Updater.currentVersionName(this)}\n" +
                 "Repo: " + repo.ifBlank { "not set — tap 'Set update repo'" }
     }
@@ -727,7 +712,7 @@ class SettingsActivity : DwmActivity() {
             @Suppress("DEPRECATION")
             packageManager.getPackageInfo(packageName, 0).versionName
         }.getOrDefault("?")
-        findViewById<TextView>(R.id.aboutText).text =
+        aboutState.value =
             "DWM Cockpit v$version — your driving window manager.\n" +
                 "Panels: apps in freeform windows · AUX camera · web dashboards · " +
                 "custom HTML · OBD-II gauges · GPS speed · clock · images."
@@ -735,14 +720,14 @@ class SettingsActivity : DwmActivity() {
 
     private fun refreshCarplayLabel() {
         val cp = Prefs.carplay(this)
-        findViewById<TextView>(R.id.carplayLabel).text =
+        carplayState.value =
             "CarPlay app: " + if (cp != null) Apps.label(this, cp) else "not set"
     }
 
     private fun refreshObdLabel() {
         val name = Prefs.obdName(this)
         val mac = Prefs.obdMac(this)
-        findViewById<TextView>(R.id.obdLabel).text =
+        obdState.value =
             "OBD dongle: " + if (mac != null) "${name ?: "device"} ($mac)" else "not set"
     }
 
@@ -840,7 +825,7 @@ class SettingsActivity : DwmActivity() {
         val dm = resources.displayMetrics
         val wDp = (dm.widthPixels / (dm.densityDpi / 160f)).toInt()
         val hDp = (dm.heightPixels / (dm.densityDpi / 160f)).toInt()
-        findViewById<TextView>(R.id.diagnostics).text = buildString {
+        diagnosticsState.value = buildString {
             appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             appendLine("Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}")
             // Paste this straight into a @Preview device spec to iterate on the
@@ -850,6 +835,17 @@ class SettingsActivity : DwmActivity() {
             appendLine("Freeform feature: ${if (freeform) "YES" else "no"}")
             appendLine("enable_freeform_support: $freeformGlobal")
             appendLine("Overlay permission: ${if (canOverlay()) "granted" else "not granted"}")
+            // The performance budget, in the one place it can be read without a
+            // laptop and a cable. This SoC is a Unisoc SC9863A with a Mali-G51
+            // driving 2.3 million pixels; what is left of the RAM decides how much
+            // this launcher may keep alive at once, and it was never reported.
+            val mi = android.app.ActivityManager.MemoryInfo()
+            (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager)
+                .getMemoryInfo(mi)
+            appendLine(
+                "Memory: ${mi.availMem / 1048576} MB free of ${mi.totalMem / 1048576} MB" +
+                    if (mi.lowMemory) " (LOW)" else ""
+            )
             appendLine("Vehicle: ${Vehicle.summary()}")
             appendLine(CarInfo.summary())
         }

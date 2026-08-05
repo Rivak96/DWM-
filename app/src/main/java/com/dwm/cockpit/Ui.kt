@@ -233,12 +233,10 @@ object Ui {
     fun slotBg(c: Context): Drawable =
         rounded(0xCC232326.toInt(), dp(c, 10).toFloat(), dp(c, 1), 0x33FFFFFF)
 
-    /** Tesla settings-sidebar item: flat when idle, surface when selected. */
-    fun navItemBg(c: Context, selected: Boolean): Drawable {
-        val t = th(c)
-        return if (selected) rounded(t.surface, dp(c, 10).toFloat(), 0, 0)
-        else rounded(0x00000000, dp(c, 10).toFloat(), 0, 0)
-    }
+    // `navItemBg` lived here: the settings sidebar's selection rect, a 10dp rounded
+    // fill that matched nothing else in the app and was the "highlight pill with no
+    // relationship to anything" on the old screen. Settings is Compose now and its
+    // selection is the accent bar, the same one the nav rail uses.
 
     /**
      * Semantic green, for the View screens.

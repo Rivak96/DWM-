@@ -114,3 +114,51 @@ val previewVehicle: VehicleUi = VehicleUi(
 )
 
 val previewActions = HomeActions()
+
+/**
+ * Settings as this deck actually reports it: nothing paired, nothing scanned, and a
+ * diagnostics block that is real output from the van rather than lorem ipsum. The
+ * empty states are the ones worth rendering — they are what the screen shows on a
+ * truck that has never had an OBD dongle plugged into it.
+ */
+val previewSettings = SettingsUi(
+    themeMode = 0,
+    uiScale = 1.0f,
+    fontScale = 1.0f,
+    mode = 1,
+    modeHint = "Solo + overlays — a fullscreen base app opens on start and every " +
+        "gauge, camera and web panel floats on top of it.",
+    autoLoad = true,
+    carplay = "CarPlay app: not set",
+    favGrid = true,
+    captionComp = 32,
+    pillRunning = false,
+    panelsRunning = true,
+    overlayEdit = false,
+    muteOverlays = true,
+    vehicleStrip = false,
+    demoData = false,
+    obd = "OBD dongle: not set",
+    camFit = 0,
+    camDayNight = 0,
+    camTrim = "0",
+    canStatus = "Bound to the vehicle service. No signals have arrived yet.",
+    canScanLabel = "Scan vehicle",
+    updateStatus = "Installed: v0.25.0\nRepo: Rivak96/DWM-",
+    autoUpdate = true,
+    diagnostics = """
+        Device: SPRD s9863a1h10_Natv
+        Android 12 / API 29
+        Panel: 1920x1200px @ 192dpi
+        Preview: spec:width=1600dp,height=1000dp,dpi=192
+        Freeform feature: no
+        enable_freeform_support: 0
+        Overlay permission: granted
+        Memory: 412 MB free of 1876 MB
+        Vehicle: gear unknown, 0 km/h
+        CAN: bound, 0 updates, 41 signals absent
+    """.trimIndent(),
+    about = "DWM Cockpit v0.25.0 — your driving window manager.\n" +
+        "Panels: apps in freeform windows · AUX camera · web dashboards · " +
+        "custom HTML · OBD-II gauges · GPS speed · clock · images."
+)
