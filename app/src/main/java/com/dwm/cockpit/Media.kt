@@ -77,6 +77,31 @@ object Media {
     }
 
     /**
+     * How far through the track we are, 0..1, or 0 when it cannot be known.
+     *
+     * Both halves are optional on a real session — a stream has no duration, and some
+     * apps never publish a position — so anything missing returns 0 and the bar draws
+     * empty rather than guessing at a fraction. Same rule as every vehicle reading:
+     * an unknown value is shown as absent, never as a plausible number.
+     *
+     * `PlaybackState.position` is a snapshot taken at `lastPositionUpdateTime`, so it
+     * is extrapolated forward by the elapsed time and the playback speed; without that
+     * the bar would only move when the app happened to publish a new state.
+     */
+    fun progress(): Float {
+        val ctl = controller ?: return 0f
+        val ps = runCatching { ctl.playbackState }.getOrNull() ?: return 0f
+        val duration = runCatching {
+            ctl.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)
+        }.getOrNull() ?: 0L
+        if (duration <= 0L) return 0f
+
+        val elapsed = android.os.SystemClock.elapsedRealtime() - ps.lastPositionUpdateTime
+        val position = ps.position + (elapsed * ps.playbackSpeed).toLong()
+        return (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    }
+
+    /**
      * The session to show. Prefers a genuinely playing one, then a known music
      * app, then whatever is first — so a paused podcast doesn't outrank live
      * music.

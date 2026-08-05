@@ -1,6 +1,7 @@
 package com.dwm.cockpit.ui
 
 import androidx.compose.animation.Crossfade
+import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,6 +42,7 @@ import com.dwm.cockpit.ui.theme.DwmMotion
 import com.dwm.cockpit.ui.theme.DwmShapes
 import com.dwm.cockpit.ui.theme.DwmSize
 import com.dwm.cockpit.ui.theme.DwmSpace
+import com.dwm.cockpit.ui.theme.DwmStroke
 import com.dwm.cockpit.ui.theme.DwmType
 import kotlinx.coroutines.delay
 
@@ -153,12 +156,14 @@ private fun Playing(s: Media.State.Playing, onOpen: (String) -> Unit) {
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Artwork(Modifier.fillMaxHeight().aspectRatio(1f))
+        Artwork(s.art, Modifier.size(DwmSize.albumArt))
         Spacer(Modifier.width(DwmSpace.l))
 
         Column(Modifier.weight(1f)) {
             DwmText(s.title, style = DwmType.title, color = colors.text)
             DwmText(s.artist, style = DwmType.label, color = colors.muted)
+            Spacer(Modifier.height(DwmSpace.s))
+            Progress()
         }
 
         Spacer(Modifier.width(DwmSpace.l))
@@ -174,23 +179,70 @@ private fun Playing(s: Media.State.Playing, onOpen: (String) -> Unit) {
     }
 }
 
+/**
+ * The album art, actually drawn.
+ *
+ * `Media.State.Playing.art` has always been a real `Bitmap` and the previous version
+ * threw it away for a placeholder glyph, which is a large part of why the strip
+ * looked like a wireframe of a music player rather than a music player.
+ *
+ * Art is **displayed, never sampled.** Tinting the surface from it is the same
+ * mistake as tinting a tile from an app icon, and produces the same mud.
+ */
 @Composable
-private fun Artwork(modifier: Modifier = Modifier) {
+private fun Artwork(art: Bitmap?, modifier: Modifier = Modifier) {
     val colors = Dwm.colors
-    // Album art is displayed, never sampled. Extracting a colour from it and tinting
-    // the surface is the same mistake as extracting one from an app icon.
     Box(
         modifier
             .clip(DwmShapes.small)
             .background(colors.raised),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_dwm_media),
-            contentDescription = null,
-            tint = colors.muted,
-            modifier = Modifier.size(DwmSize.icon)
-        )
+        if (art != null) {
+            Image(
+                bitmap = art.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                painter = painterResource(R.drawable.ic_dwm_media),
+                contentDescription = null,
+                tint = colors.muted,
+                modifier = Modifier.size(DwmSize.icon)
+            )
+        }
+    }
+}
+
+/**
+ * The progress bar.
+ *
+ * A hairline track with a filled portion, drawn from the controller's position.
+ * `MediaController.playbackState` gives a position and the metadata a duration; when
+ * either is missing the track draws empty rather than guessing, on the same principle
+ * as every other reading here.
+ */
+@Composable
+private fun Progress() {
+    val colors = Dwm.colors
+    val fraction = Media.progress()
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(DwmStroke.hairline * 3)
+            .clip(DwmShapes.small)
+            .background(colors.hairline)
+    ) {
+        if (fraction > 0f) {
+            Box(
+                Modifier
+                    .fillMaxWidth(fraction)
+                    .fillMaxHeight()
+                    .background(colors.accent)
+            )
+        }
     }
 }
 

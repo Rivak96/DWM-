@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Rect
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -40,7 +41,7 @@ import com.dwm.cockpit.ui.DwmTheme
 import com.dwm.cockpit.ui.HomeActions
 import com.dwm.cockpit.ui.CockpitHome
 import com.dwm.cockpit.ui.HomeApp
-import com.dwm.cockpit.ui.ReservedRegion
+import com.dwm.cockpit.ui.PaneState
 import com.dwm.cockpit.ui.theme.DwmIcons
 
 /**
@@ -56,7 +57,11 @@ class HomeActivity : DwmActivity() {
     private val overlaysOnState = mutableStateOf(false)
     private val showCanvasState = mutableStateOf(false)
     private val favouritesState = mutableStateOf<List<HomeApp>>(emptyList())
-    private val reservedState = mutableStateOf<List<ReservedRegion>>(emptyList())
+    private val reservedState = mutableStateOf<List<Rect>>(emptyList())
+    private val allAppsState = mutableStateOf<List<HomeApp>>(emptyList())
+    private val panesState = mutableStateOf<List<PaneState>>(emptyList())
+    private val splitState = mutableStateOf(0.5f)
+    private val boostState = mutableStateOf<Float?>(null)
 
     private val handler = Handler(Looper.getMainLooper())
     private var lastPanelsJson: String? = "_never"
@@ -117,10 +122,18 @@ class HomeActivity : DwmActivity() {
                         AndroidView(factory = { panelHost }, modifier = Modifier.fillMaxSize())
                     } else {
                         CockpitHome(
+                            panes = panesState.value,
+                            splitFraction = splitState.value,
                             favourites = favouritesState.value,
+                            allApps = allAppsState.value,
                             overlaysOn = overlaysOnState.value,
                             actions = actions,
-                            reserved = reservedState.value
+                            boost = boostState.value,
+                            onSwipe = ::swipePane,
+                            onSplitChange = ::setSplit,
+                            onPickSource = ::pickPaneSource,
+                            onPaneBounds = ::onPaneBounds,
+                            drawnView = ::buildPanelView
                         )
                     }
                 }
@@ -133,8 +146,9 @@ class HomeActivity : DwmActivity() {
         if (recreateIfScaleChanged()) return
 
         overlaysOnState.value = OverlayPanelsService.isRunning
-        reservedState.value = reservedRegions()
+        loadPanes()
         loadApps()
+        resumeVisibleWeb()
 
         ensurePermissions()
         refreshPanelsIfChanged()
@@ -159,6 +173,10 @@ class HomeActivity : DwmActivity() {
         super.onStop()
         stopLocation()
         stopObd()
+        // Nothing is visible, so nothing should be running. A web panel used to keep
+        // its timers, its JavaScript and any video going while the launcher was in
+        // the background, on a deck that cannot afford it.
+        WebPanelHost.pauseAll()
     }
 
     // ---- actions ---------------------------------------------------------
@@ -283,35 +301,160 @@ class HomeActivity : DwmActivity() {
      */
     private fun loadApps() {
         Thread {
-            val favs = Apps.effectiveFavorites(this).take(Apps.FAV_SLOTS)
-            val tiles = favs.map { pkg ->
+            val favs = Apps.effectiveFavorites(this).take(Apps.FAV_SLOTS).map { pkg ->
                 val label = Apps.label(this, pkg)
                 HomeApp(pkg, label, DwmIcons.forApp(pkg, label))
             }
+            // The full list, for a pane showing the drawer. Built on the same
+            // background thread as the favourites so returning to home costs one
+            // package-manager walk rather than two.
+            val all = Apps.all(this)
+                .map { e -> HomeApp(e.pkg, e.label, DwmIcons.forApp(e.pkg, e.label)) }
+                .sortedBy { it.label.lowercase() }
             runOnUiThread {
                 if (isFinishing) return@runOnUiThread
-                favouritesState.value = tiles
+                favouritesState.value = favs
+                allAppsState.value = all
             }
         }.start()
     }
 
+    /* ------------------------------------------------------------------ panes */
+
     /**
-     * Where the drawn overlay panels currently are, so the home layout can avoid
-     * drawing underneath them.
+     * Resume the one web panel that is on screen, and hold the rest.
      *
-     * An overlay is a separate `TYPE_APPLICATION_OVERLAY` window with
-     * `FLAG_LAYOUT_NO_LIMITS`; nothing in this activity's hierarchy can clip it or
-     * reflow around it, which is why the camera used to sit on top of the CarPlay
-     * card and crop it. `OverlayPanelsService` already persists each panel's bounds
-     * as fractions of the screen, so reading them back here costs no IPC, needs no
-     * change to the window manager, and stays correct when a panel is dragged —
-     * [refreshPanelsIfChanged] already notices.
+     * "Visible" is the source a pane is currently showing — a WEB or HTML panel in a
+     * pane that has been swiped away from is off screen even though its View still
+     * exists.
      */
-    private fun reservedRegions(): List<ReservedRegion> {
-        if (!OverlayPanelsService.isRunning) return emptyList()
-        return Prefs.panels(this)
-            .filter { it.isDrawn() }
-            .map { ReservedRegion(it.l, it.t, it.r, it.b) }
+    private fun resumeVisibleWeb() {
+        val shown = panesState.value.mapNotNull { it.current }
+        val wantsWeb = shown.any { it.type == PanelType.WEB || it.type == PanelType.HTML }
+        if (!wantsWeb) {
+            WebPanelHost.pauseAll()
+            return
+        }
+        // The View for the visible source is the one most recently built for it;
+        // panes build lazily, so hand the host whatever is currently attached.
+        WebPanelHost.resumeOnly(firstAttachedWebView(panelHost))
+    }
+
+    private fun firstAttachedWebView(v: View): WebView? = when {
+        v is WebView -> v
+        v is android.view.ViewGroup -> (0 until v.childCount)
+            .asSequence()
+            .mapNotNull { firstAttachedWebView(v.getChildAt(it)) }
+            .firstOrNull()
+        else -> null
+    }
+
+    private fun loadPanes() {
+        val sources = Prefs.panes(this)
+        splitState.value = Prefs.splitFraction(this)
+        panesState.value = sources.mapIndexed { i, list ->
+            PaneState(list, Prefs.paneIndex(this, i).coerceIn(0, maxOf(0, list.lastIndex)))
+        }
+    }
+
+    /**
+     * Cycle a pane to the next or previous source.
+     *
+     * Wraps, and persists, so the cockpit comes back showing what it was showing.
+     */
+    private fun swipePane(pane: Int, delta: Int) {
+        val panes = panesState.value.toMutableList()
+        val p = panes.getOrNull(pane) ?: return
+        if (p.sources.size < 2) return
+
+        val was = p.current
+        val next = ((p.index + delta) % p.sources.size + p.sources.size) % p.sources.size
+        panes[pane] = p.copy(index = next)
+        panesState.value = panes
+        Prefs.setPaneIndex(this, pane, next)
+        resumeVisibleWeb()
+
+        // Leaving a live app behind: its window is a separate task floating above
+        // this activity and DWM cannot close it, so it gets parked off-screen.
+        // Whether this ROM honours out-of-bounds launch bounds is unverified on
+        // hardware — if it clamps, the window stays visible in a corner and the
+        // fallback is to stop offering a swipe on panes holding a live app.
+        if (was?.isWindowedApp() == true && panes[pane].current?.pkg != was.pkg) {
+            parkWindow(was)
+        }
+        launchPaneApps()
+    }
+
+    private fun setSplit(v: Float) {
+        Prefs.setSplitFraction(this, v)
+        splitState.value = Prefs.splitFraction(this)
+        // Windows only move once the gesture is finished — relaunching per frame
+        // would restart the app dozens of times across a single drag.
+        launchPaneApps()
+    }
+
+    private fun pickPaneSource(pane: Int) {
+        val p = panesState.value.getOrNull(pane) ?: return
+        val names = p.sources.map { it.displayLabel() }.toTypedArray()
+        Ui.dialog(this)
+            .setTitle("Show in this pane")
+            .setItems(names) { _, i ->
+                val panes = panesState.value.toMutableList()
+                val was = panes[pane].current
+                panes[pane] = panes[pane].copy(index = i)
+                panesState.value = panes
+                Prefs.setPaneIndex(this, pane, i)
+                if (was?.isWindowedApp() == true && panes[pane].current?.pkg != was.pkg) {
+                    parkWindow(was)
+                }
+                launchPaneApps()
+            }
+            .show()
+    }
+
+    /**
+     * Where each pane landed on screen, reported by the layout.
+     *
+     * These are window pixels, which is exactly what `LaunchEngine.launchWindow`
+     * wants, so the app window lands precisely inside the pane that asked for it —
+     * no fractions, no assumptions about the rail's width or the margins.
+     */
+    private fun onPaneBounds(rects: List<Rect>) {
+        if (rects == paneRects) return
+        paneRects = rects
+        launchPaneApps()
+    }
+
+    private var paneRects: List<Rect> = emptyList()
+
+    /**
+     * Launch or move the app window for every pane currently showing an APP source.
+     *
+     * `launchWindow` uses `FLAG_ACTIVITY_NEW_TASK` alone, so relaunching an
+     * already-running app moves and resizes its existing task rather than spawning a
+     * second copy. Never add `FLAG_ACTIVITY_MULTIPLE_TASK` here — it is what made
+     * apps close by themselves on this low-RAM deck.
+     */
+    private fun launchPaneApps() {
+        val rects = paneRects
+        if (rects.isEmpty()) return
+        panesState.value.forEachIndexed { i, pane ->
+            val src = pane.current ?: return@forEachIndexed
+            val rect = rects.getOrNull(i) ?: return@forEachIndexed
+            if (src.isWindowedApp()) {
+                LaunchEngine.launchWindow(this, src.pkg!!, rect)
+            }
+        }
+    }
+
+    /** Move a window out of sight when its pane has moved on to something else. */
+    private fun parkWindow(p: Panel) {
+        val pkg = p.pkg ?: return
+        val size = LaunchEngine.displaySize(this)
+        LaunchEngine.launchWindow(
+            this, pkg,
+            Rect(size.x + 40, size.y + 40, size.x + 40 + size.x / 3, size.y + 40 + size.y / 3)
+        )
     }
 
     // The wallpaper loader lived here. The SYNC-style home is flat dark by design,
@@ -385,7 +528,7 @@ class HomeActivity : DwmActivity() {
     }
 
     private fun destroyWebViews(v: View) {
-        if (v is WebView) runCatching { v.destroy() }
+        if (v is WebView) runCatching { WebPanelHost.forget(v); v.destroy() }
         else if (v is android.view.ViewGroup) for (i in 0 until v.childCount) destroyWebViews(v.getChildAt(i))
     }
 
@@ -400,7 +543,9 @@ class HomeActivity : DwmActivity() {
         PanelType.OBD -> gaugeFor(p.metric).also { obdGauges.add((p.metric ?: "") to it) }
         PanelType.CAMERA -> CameraPanel(this, p.camId, p.pkg, p.rotation)
         PanelType.NOTIF -> p.pkg?.let { NotifPanel(this, it) }
-        PanelType.APP -> null
+        // Both are drawn by Compose in the pane itself rather than as a View: APP is
+        // a freeform window floating above this activity, DRAWER is the app grid.
+        PanelType.APP, PanelType.DRAWER -> null
     }
 
     private fun buildClockCard(): View {
@@ -447,6 +592,8 @@ class HomeActivity : DwmActivity() {
     private fun buildWeb(p: Panel): WebView {
         val wv = WebView(this)
         Ui.configureWeb(wv, Prefs.muteOverlays(this))
+        // Tracked so exactly one WebView is ever running — see [WebPanelHost].
+        WebPanelHost.register(wv)
         if (p.type == PanelType.HTML) wv.loadDataWithBaseURL(null, p.html ?: "<h2>DWM</h2>", "text/html", "utf-8", null)
         else wv.loadUrl(p.url ?: "about:blank")
         return wv

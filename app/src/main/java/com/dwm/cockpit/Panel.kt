@@ -3,7 +3,18 @@ package com.dwm.cockpit
 import org.json.JSONObject
 
 /** The kinds of thing a layout cell can be. */
-enum class PanelType { APP, WEB, HTML, IMAGE, CLOCK, SPEED, OBD, CAMERA, NOTIF }
+enum class PanelType {
+    APP, WEB, HTML, IMAGE, CLOCK, SPEED, OBD, CAMERA, NOTIF,
+
+    /**
+     * The app grid, drawn inside a cockpit pane.
+     *
+     * A pane can be swiped onto the drawer the same way it is swiped onto the camera
+     * or a gauge, so reaching an app never requires leaving the cockpit. DWM draws
+     * it, so unlike [APP] it involves no window management at all.
+     */
+    DRAWER
+}
 
 /**
  * One cell in the cockpit. Position is stored as screen fractions (0..1) so the
@@ -50,6 +61,7 @@ data class Panel(
         PanelType.OBD -> "OBD · ${Obd.metricName(metric)}"
         PanelType.CAMERA -> "Camera · ${camId ?: "auto"}"
         PanelType.NOTIF -> "Notif · ${label ?: pkg ?: ""}"
+        PanelType.DRAWER -> "Apps"
     }
 
     fun toJson(): JSONObject = JSONObject().apply {

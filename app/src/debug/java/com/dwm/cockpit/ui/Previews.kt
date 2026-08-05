@@ -15,21 +15,25 @@ import com.dwm.cockpit.ui.theme.DwmSpace
  * Studio previews.
  *
  * The device spec is the real panel: 1920x1200px at 192dpi is a 1600x1000dp canvas.
- * It was `1280dp x 720dp @ 160dpi`, a placeholder that made every preview the right
- * shape at the wrong size. This must stay in step with `DECK` in `HomeSnapshotTest`
- * — same geometry, two syntaxes, and nothing enforces the agreement but this note.
+ * This must stay in step with `DECK` in the snapshot tests — same geometry, two
+ * syntaxes, and nothing enforces the agreement but this note.
  *
- * `Prefs.uiScale` is now 1.0, so a preview at this spec and the deck are finally
- * showing the same thing; while the default was 0.8 they never were.
+ * A pane holding a live app renders empty here, because the app is a separate
+ * freeform task that neither Studio nor Paparazzi can see. That is honest rather
+ * than a gap: what the golden proves is the chrome and the geometry the window will
+ * land in, and only the deck can prove the window lands in it.
  */
 private const val DECK = "spec:width=1600dp,height=1000dp,dpi=192"
 
-@Preview(name = "Home · no CAN signal (the real deck)", device = DECK)
+@Preview(name = "Cockpit · camera + drawer (the default)", device = DECK)
 @Composable
-private fun PreviewHomeNoSignal() {
+private fun PreviewCockpitDefault() {
     DwmPreviewTheme {
         CockpitHome(
+            panes = previewPanesDefault,
+            splitFraction = 0.5f,
             favourites = previewDeckApps,
+            allApps = previewFavourites,
             overlaysOn = true,
             actions = previewActions,
             vehicle = previewVehicleNoSignal
@@ -37,25 +41,31 @@ private fun PreviewHomeNoSignal() {
     }
 }
 
-@Preview(name = "Home · twelve favourites", device = DECK)
+@Preview(name = "Cockpit · live map + camera", device = DECK)
 @Composable
-private fun PreviewHomeFull() {
+private fun PreviewCockpitApps() {
     DwmPreviewTheme {
         CockpitHome(
-            favourites = previewFavourites,
-            overlaysOn = false,
+            panes = previewPanesApps,
+            splitFraction = 0.58f,
+            favourites = previewDeckApps,
+            allApps = previewFavourites,
+            overlaysOn = true,
             actions = previewActions,
             vehicle = previewVehicleIdle
         )
     }
 }
 
-@Preview(name = "Home · reversing", device = DECK)
+@Preview(name = "Cockpit · reversing", device = DECK)
 @Composable
-private fun PreviewHomeReversing() {
+private fun PreviewCockpitReversing() {
     DwmPreviewTheme {
         CockpitHome(
+            panes = previewPanesDefault,
+            splitFraction = 0.5f,
             favourites = previewDeckApps,
+            allApps = previewFavourites,
             overlaysOn = false,
             actions = previewActions,
             vehicle = previewVehicle
@@ -63,12 +73,15 @@ private fun PreviewHomeReversing() {
     }
 }
 
-@Preview(name = "Home · night", device = DECK)
+@Preview(name = "Cockpit · night", device = DECK)
 @Composable
-private fun PreviewHomeNight() {
+private fun PreviewCockpitNight() {
     DwmPreviewTheme(night = true) {
         CockpitHome(
+            panes = previewPanesDefault,
+            splitFraction = 0.5f,
             favourites = previewDeckApps,
+            allApps = previewFavourites,
             overlaysOn = true,
             actions = previewActions,
             vehicle = previewVehicleNoSignal
@@ -78,32 +91,19 @@ private fun PreviewHomeNight() {
 
 /* ------------------------------------------------------------- fragments */
 
-@Preview(name = "Proximity · no signal", widthDp = 380, heightDp = 460)
+@Preview(name = "Vehicle diagram · no signal", widthDp = 380, heightDp = 260)
 @Composable
-private fun PreviewProximityNoSignal() = Fragment {
-    ProximityCard(BodyState(), Modifier.fillMaxSize())
+private fun PreviewVehicleNoSignal() = Fragment {
+    VehicleDiagram(BodyState(), Modifier.fillMaxSize())
 }
 
-@Preview(name = "Proximity · close", widthDp = 380, heightDp = 460)
+@Preview(name = "Vehicle diagram · door open, reversing", widthDp = 380, heightDp = 260)
 @Composable
-private fun PreviewProximityClose() = Fragment {
-    ProximityCard(
-        BodyState(
-            reverse = true,
-            track = 300,
-            radar = listOf(0, 0, 0, 0, 0, 0, 9, 5, 7, 3, 2, 8, 0, 0, 0, 0)
-        ),
-        Modifier.fillMaxSize()
-    )
+private fun PreviewVehicleActive() = Fragment {
+    VehicleDiagram(previewBodyActive, Modifier.fillMaxSize())
 }
 
-@Preview(name = "Media · idle", widthDp = 900, heightDp = 160)
-@Composable
-private fun PreviewMediaIdle() = Fragment {
-    MediaStrip(Media.State.Idle, {}, {}, Modifier.fillMaxSize())
-}
-
-@Preview(name = "Media · playing", widthDp = 900, heightDp = 160)
+@Preview(name = "Media · playing", widthDp = 520, heightDp = 220)
 @Composable
 private fun PreviewMediaPlaying() = Fragment {
     MediaStrip(

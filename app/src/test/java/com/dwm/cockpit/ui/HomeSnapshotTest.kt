@@ -6,7 +6,9 @@ import com.android.resources.Density
 import com.android.resources.ScreenOrientation
 import com.android.resources.ScreenRatio
 import com.android.resources.ScreenSize
+import androidx.compose.runtime.Composable
 import com.dwm.cockpit.Media
+import com.dwm.cockpit.Panel
 import org.junit.Rule
 import org.junit.Test
 
@@ -37,112 +39,113 @@ class HomeSnapshotTest {
         useDeviceResolution = true
     )
 
-    /**
-     * **The state this deck is actually in.** Three launchable apps and no CAN data
-     * at all, which is what the truck shows every time it is switched on. If the
-     * screen looks unfinished here, the design is wrong.
-     */
+    /** The default cockpit: camera left, app drawer right, no CAN data. This is
+     *  exactly what the deck shows the first morning, and it has to look finished. */
     @Test
-    fun `home as the deck really is - three apps, no CAN signal`() {
-        paparazzi.snapshot {
-            DwmPreviewTheme {
-                CockpitHome(
-                    favourites = previewDeckApps,
-                    overlaysOn = true,
-                    actions = previewActions,
-                    vehicle = previewVehicleNoSignal
-                )
-            }
-        }
+    fun `cockpit default - camera and drawer, no CAN`() = snap {
+        CockpitHome(
+            panes = previewPanesDefault,
+            splitFraction = 0.5f,
+            favourites = previewDeckApps,
+            allApps = previewFavourites,
+            overlaysOn = true,
+            actions = previewActions,
+            vehicle = previewVehicleNoSignal,
+            drawnView = drawn
+        )
     }
 
-    /** The other end of the range. The grid used to assume this case and break on
-     *  the one above. */
+    /** Both panes holding a live app. The bodies render empty because the windows
+     *  are separate tasks; the golden proves the chrome and the rects. */
     @Test
-    fun `home with a full twelve favourites`() {
-        paparazzi.snapshot {
-            DwmPreviewTheme {
-                CockpitHome(
-                    favourites = previewFavourites,
-                    overlaysOn = true,
-                    actions = previewActions,
-                    vehicle = previewVehicleIdle
-                )
-            }
-        }
+    fun `cockpit with two live app windows`() = snap {
+        CockpitHome(
+            panes = previewPanesApps,
+            splitFraction = 0.58f,
+            favourites = previewDeckApps,
+            allApps = previewFavourites,
+            overlaysOn = true,
+            actions = previewActions,
+            vehicle = previewVehicleIdle,
+            drawnView = drawn
+        )
     }
 
     @Test
-    fun `home with music playing`() {
-        paparazzi.snapshot {
-            DwmPreviewTheme {
-                CockpitHome(
-                    favourites = previewDeckApps,
-                    overlaysOn = false,
-                    actions = previewActions,
-                    vehicle = previewVehicleIdle,
-                    media = Media.State.Playing(
-                        pkg = "com.spotify.music",
-                        title = "Everything In Its Right Place",
-                        artist = "Radiohead",
-                        art = null,
-                        playing = true
-                    )
-                )
-            }
-        }
+    fun `cockpit reversing`() = snap {
+        CockpitHome(
+            panes = previewPanesDefault,
+            splitFraction = 0.5f,
+            favourites = previewDeckApps,
+            allApps = previewFavourites,
+            overlaysOn = false,
+            actions = previewActions,
+            vehicle = previewVehicle,
+            drawnView = drawn
+        )
     }
 
     @Test
-    fun `home reversing`() {
-        paparazzi.snapshot {
-            DwmPreviewTheme {
-                CockpitHome(
-                    favourites = previewDeckApps,
-                    overlaysOn = false,
-                    actions = previewActions,
-                    vehicle = previewVehicle
-                )
-            }
-        }
+    fun `cockpit with music playing`() = snap {
+        CockpitHome(
+            panes = previewPanesDefault,
+            splitFraction = 0.5f,
+            favourites = previewDeckApps,
+            allApps = previewFavourites,
+            overlaysOn = false,
+            actions = previewActions,
+            vehicle = previewVehicleIdle,
+            media = Media.State.Playing(
+                pkg = "com.spotify.music",
+                title = "Everything In Its Right Place",
+                artist = "Radiohead",
+                art = null,
+                playing = true
+            ),
+            drawnView = drawn
+        )
     }
 
-    /** Night. Same layout, dimmed palette, nothing near white. */
     @Test
-    fun `home at night`() {
-        paparazzi.snapshot {
-            DwmPreviewTheme(night = true) {
-                CockpitHome(
-                    favourites = previewDeckApps,
-                    overlaysOn = true,
-                    actions = previewActions,
-                    vehicle = previewVehicleNoSignal
-                )
-            }
-        }
+    fun `cockpit at night`() = snap(night = true) {
+        CockpitHome(
+            panes = previewPanesDefault,
+            splitFraction = 0.5f,
+            favourites = previewDeckApps,
+            allApps = previewFavourites,
+            overlaysOn = true,
+            actions = previewActions,
+            vehicle = previewVehicleNoSignal,
+            drawnView = drawn
+        )
     }
 
-    /**
-     * The camera overlay parked top-right, which is where it actually sits. The
-     * reserved rect must push the proximity card down rather than letting the
-     * overlay crop it.
-     */
+    /** One pane, full width — the other supported layout. */
     @Test
-    fun `home with the camera overlay reserving its corner`() {
-        paparazzi.snapshot {
-            DwmPreviewTheme {
-                CockpitHome(
-                    favourites = previewDeckApps,
-                    overlaysOn = true,
-                    actions = previewActions,
-                    vehicle = previewVehicleNoSignal,
-                    reserved = listOf(ReservedRegion(0.62f, 0.02f, 0.99f, 0.34f))
-                )
-            }
-        }
+    fun `cockpit single pane`() = snap {
+        CockpitHome(
+            panes = listOf(previewPanesDefault[0]),
+            splitFraction = 1f,
+            favourites = previewDeckApps,
+            allApps = previewFavourites,
+            overlaysOn = true,
+            actions = previewActions,
+            vehicle = previewVehicleIdle,
+            drawnView = drawn
+        )
+    }
+
+    private fun snap(night: Boolean = false, content: @Composable () -> Unit) {
+        paparazzi.snapshot { DwmPreviewTheme(night = night) { content() } }
+    }
+
+    /** Golden-only stand-ins, so a drawn pane shows as occupied rather than empty. */
+    private val drawn: (Panel) -> android.view.View? = { p ->
+        previewDrawnView(paparazzi.context, p)
     }
 
     private companion object {
+
 
         /**
          * The real panel: 1920x1200px at 192dpi, which is a 1600x1000dp canvas.

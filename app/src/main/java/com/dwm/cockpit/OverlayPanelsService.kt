@@ -226,6 +226,7 @@ class OverlayPanelsService : Service() {
         PanelType.WEB, PanelType.HTML -> {
             val wv = WebView(this)
             Ui.configureWeb(wv, Prefs.muteOverlays(this))
+            WebPanelHost.register(wv)
             if (p.type == PanelType.HTML)
                 wv.loadDataWithBaseURL(null, p.html ?: "", "text/html", "utf-8", null)
             else wv.loadUrl(p.url ?: "about:blank")
@@ -236,7 +237,9 @@ class OverlayPanelsService : Service() {
             p.url?.let { u -> runCatching { setImageURI(Uri.parse(u)) } }
         }
         PanelType.NOTIF -> p.pkg?.let { NotifPanel(this, it) }
-        PanelType.APP -> null
+        // DRAWER is a cockpit-pane source drawn by Compose on the home screen; it has
+        // no meaning as a floating overlay panel, so it is not built here.
+        PanelType.APP, PanelType.DRAWER -> null
     }
 
     private fun gauge(metric: String?): GaugeView {
@@ -437,7 +440,7 @@ class OverlayPanelsService : Service() {
     /** WebViews leak unless destroy() is called — walk and release them. */
     private fun destroyWebViews(v: View) {
         if (v is WebView) {
-            runCatching { v.destroy() }
+            runCatching { WebPanelHost.forget(v); v.destroy() }
         } else if (v is android.view.ViewGroup) {
             for (i in 0 until v.childCount) destroyWebViews(v.getChildAt(i))
         }

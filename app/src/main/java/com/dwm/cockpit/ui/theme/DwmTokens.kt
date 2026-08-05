@@ -72,7 +72,18 @@ object DwmPalette {
     const val HAIRLINE   = 0xFF39414D.toInt()
     const val TEXT       = 0xFFE8EBF0.toInt()
     const val MUTED      = 0xFF808B9B.toInt()
-    const val ACCENT     = 0xFF4C8FD8.toInt()
+    /**
+     * Ice blue, not the phone-default blue it was (`#4C8FD8`).
+     *
+     * Two reasons. It reads Ford/Rivian rather than Android, which is the whole
+     * point of the exercise; and it holds up against a bright map or a daylight
+     * camera feed sitting right beside it, which the old blue did not — that matters
+     * now that most of the screen is live content rather than dark cards.
+     *
+     * 11.2 / 10.2 / 9.3 : 1 against background / surface / raised. Bright, but still
+     * below [TEXT] at 13.6:1, so the accent never out-shouts the type.
+     */
+    const val ACCENT     = 0xFF5FD3E8.toInt()
     const val OK         = 0xFF4FA97C.toInt()
     const val WARN       = 0xFFD9A03C.toInt()
 
@@ -92,7 +103,7 @@ object DwmPalette {
     const val N_HAIRLINE   = 0xFF333B47.toInt()
     const val N_TEXT       = 0xFFC3C9D2.toInt()
     const val N_MUTED      = 0xFF7B8695.toInt()
-    const val N_ACCENT     = 0xFF5089C4.toInt()
+    const val N_ACCENT     = 0xFF4FB8CE.toInt()
     const val N_OK         = 0xFF4A9873.toInt()
     const val N_WARN       = 0xFFAE8030.toInt()
 
@@ -277,6 +288,21 @@ object DwmSize {
      */
     val tile: Dp = 176.dp
 
+    /** A tile in the in-pane app drawer. Smaller than [tile] because the drawer is
+     *  browsed while parked, not hit while moving. */
+    val drawerTile: Dp = 120.dp
+
+    /**
+     * Album art. Fixed, not derived from the card's height.
+     *
+     * It was `fillMaxHeight().aspectRatio(1f)`, which meant the art grew with the row
+     * and at 260dp took a 220dp square — squeezing the title and artist column to
+     * zero width so the track name simply vanished. Artwork is an illustration of
+     * what is playing; the title is the information, and the information does not get
+     * to lose a fight with the decoration.
+     */
+    val albumArt: Dp = 112.dp
+
     val icon: Dp = 24.dp
     val iconLarge: Dp = 32.dp
 
@@ -291,6 +317,16 @@ object DwmSize {
 
     /** Top status strip. */
     val topStrip: Dp = 88.dp
+
+    /**
+     * A cockpit pane's header strip.
+     *
+     * Load-bearing, not trim. A live app window covers its pane exactly and consumes
+     * every touch inside it, so a swipe started over a map would go to the map. This
+     * strip is the one part of a pane that always belongs to DWM, which makes it the
+     * only place the source swipe and the position dots can live.
+     */
+    val paneHeader: Dp = 48.dp
 
     /**
      * Vertical room one `Reading` needs — overline, value and breathing space.
@@ -310,6 +346,19 @@ object DwmSize {
      * height whether something is playing or not and the layout never reflows.
      */
     val mediaStrip: Dp = touchTargetMoving
+
+    /** The one-line vehicle instrument strip: overline plus a 28sp value, padded. */
+    val vehicleBar: Dp = 104.dp
+
+    /**
+     * Media, vehicle diagram and quick toggles share this row.
+     *
+     * 260 rather than 200 because the vehicle diagram needs a portrait region to draw
+     * a vehicle into. At 200 the drawable area came out wider than it was tall and
+     * the truck rendered as a landscape box, which is not what one looks like from
+     * above.
+     */
+    val bottomRow: Dp = 260.dp
 
     /** Overlay grab handle: a bar, not a glyph, and always visible. */
     val grabWidth: Dp = DwmSpace.xxxl
