@@ -40,6 +40,8 @@ import com.dwm.cockpit.ui.DwmTheme
 import com.dwm.cockpit.ui.HomeActions
 import com.dwm.cockpit.ui.CockpitHome
 import com.dwm.cockpit.ui.HomeApp
+import com.dwm.cockpit.ui.ReservedRegion
+import com.dwm.cockpit.ui.theme.DwmIcons
 
 /**
  * Launcher home. UI is Jetpack Compose (Material 3, glass cards). The
@@ -54,6 +56,7 @@ class HomeActivity : DwmActivity() {
     private val overlaysOnState = mutableStateOf(false)
     private val showCanvasState = mutableStateOf(false)
     private val favouritesState = mutableStateOf<List<HomeApp>>(emptyList())
+    private val reservedState = mutableStateOf<List<ReservedRegion>>(emptyList())
 
     private val handler = Handler(Looper.getMainLooper())
     private var lastPanelsJson: String? = "_never"
@@ -116,7 +119,8 @@ class HomeActivity : DwmActivity() {
                         CockpitHome(
                             favourites = favouritesState.value,
                             overlaysOn = overlaysOnState.value,
-                            actions = actions
+                            actions = actions,
+                            reserved = reservedState.value
                         )
                     }
                 }
@@ -129,6 +133,7 @@ class HomeActivity : DwmActivity() {
         if (recreateIfScaleChanged()) return
 
         overlaysOnState.value = OverlayPanelsService.isRunning
+        reservedState.value = reservedRegions()
         loadApps()
 
         ensurePermissions()
@@ -277,17 +282,11 @@ class HomeActivity : DwmActivity() {
      * tap away in [AppDrawerActivity], which builds it on demand.
      */
     private fun loadApps() {
-        val sizePx = (72 * resources.displayMetrics.density).toInt()
         Thread {
             val favs = Apps.effectiveFavorites(this).take(Apps.FAV_SLOTS)
             val tiles = favs.map { pkg ->
-                val d = Apps.icon(this, pkg)
-                val bmp = d?.let { drawableToBitmap(it, sizePx) }
-                HomeApp(
-                    pkg, Apps.label(this, pkg),
-                    bmp?.asImageBitmap(),
-                    bmp?.let { Color(dominantColor(it)) } ?: Color(Ui.accent(this))
-                )
+                val label = Apps.label(this, pkg)
+                HomeApp(pkg, label, DwmIcons.forApp(pkg, label))
             }
             runOnUiThread {
                 if (isFinishing) return@runOnUiThread
@@ -296,48 +295,23 @@ class HomeActivity : DwmActivity() {
         }.start()
     }
 
-    private fun drawableToBitmap(d: android.graphics.drawable.Drawable, sizePx: Int): Bitmap {
-        val s = sizePx.coerceAtLeast(1)
-        val bmp = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888)
-        d.setBounds(0, 0, s, s)
-        d.draw(Canvas(bmp))
-        return bmp
-    }
-
     /**
-     * Average colour of the icon's opaque, reasonably saturated pixels.
+     * Where the drawn overlay panels currently are, so the home layout can avoid
+     * drawing underneath them.
      *
-     * Sampled on a stride rather than every pixel — this runs for every installed
-     * app and the result only feeds a soft background wash, so precision is worth
-     * nothing and speed is worth a lot. Near-white and near-black pixels are
-     * skipped: most icons have a lot of both, and averaging them in drags every
-     * app toward the same lifeless grey.
+     * An overlay is a separate `TYPE_APPLICATION_OVERLAY` window with
+     * `FLAG_LAYOUT_NO_LIMITS`; nothing in this activity's hierarchy can clip it or
+     * reflow around it, which is why the camera used to sit on top of the CarPlay
+     * card and crop it. `OverlayPanelsService` already persists each panel's bounds
+     * as fractions of the screen, so reading them back here costs no IPC, needs no
+     * change to the window manager, and stays correct when a panel is dragged —
+     * [refreshPanelsIfChanged] already notices.
      */
-    private fun dominantColor(bmp: Bitmap): Int {
-        var r = 0L; var g = 0L; var b = 0L; var n = 0L
-        val step = 3
-        var y = 0
-        while (y < bmp.height) {
-            var x = 0
-            while (x < bmp.width) {
-                val p = bmp.getPixel(x, y)
-                val a = (p ushr 24) and 0xFF
-                if (a > 128) {
-                    val pr = (p shr 16) and 0xFF
-                    val pg = (p shr 8) and 0xFF
-                    val pb = p and 0xFF
-                    val max = maxOf(pr, pg, pb)
-                    val min = minOf(pr, pg, pb)
-                    if (max > 40 && !(max > 225 && max - min < 25)) {
-                        r += pr; g += pg; b += pb; n++
-                    }
-                }
-                x += step
-            }
-            y += step
-        }
-        if (n == 0L) return Ui.accent(this)
-        return android.graphics.Color.rgb((r / n).toInt(), (g / n).toInt(), (b / n).toInt())
+    private fun reservedRegions(): List<ReservedRegion> {
+        if (!OverlayPanelsService.isRunning) return emptyList()
+        return Prefs.panels(this)
+            .filter { it.isDrawn() }
+            .map { ReservedRegion(it.l, it.t, it.r, it.b) }
     }
 
     // The wallpaper loader lived here. The SYNC-style home is flat dark by design,

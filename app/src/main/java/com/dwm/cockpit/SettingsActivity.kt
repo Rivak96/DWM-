@@ -60,10 +60,9 @@ class SettingsActivity : DwmActivity() {
 
         // -- Display ------------------------------------------------------
         // Indices are positions in Ui.THEMES and are stored as-is by Prefs.theme.
-        findViewById<Button>(R.id.btnThemeCockpit).setOnClickListener { applyThemePreset(3) }
-        findViewById<Button>(R.id.btnThemeTesla).setOnClickListener { applyThemePreset(0) }
-        findViewById<Button>(R.id.btnThemeMidnight).setOnClickListener { applyThemePreset(1) }
-        findViewById<Button>(R.id.btnThemeLight).setOnClickListener { applyThemePreset(2) }
+        findViewById<Button>(R.id.btnThemeCockpit).setOnClickListener { applyThemePreset(0) }
+        findViewById<Button>(R.id.btnThemeTesla).setOnClickListener { applyThemePreset(1) }
+        findViewById<Button>(R.id.btnThemeMidnight).setOnClickListener { applyThemePreset(2) }
         // The wallpaper picker was removed with the SYNC-style home: that screen is
         // flat dark by design and has no backdrop, so the control did nothing.
         findViewById<Button>(R.id.btnTextCompact).setOnClickListener { setScale(0.85f) }
@@ -73,7 +72,8 @@ class SettingsActivity : DwmActivity() {
         findViewById<Button>(R.id.btnUiCompact).setOnClickListener { setUiScale(0.8f) }
         findViewById<Button>(R.id.btnUiCosy).setOnClickListener { setUiScale(0.9f) }
         findViewById<Button>(R.id.btnUiStock).setOnClickListener { setUiScale(1.0f) }
-        buildAccentRow()
+        // buildAccentRow() is not called: there is one accent now. The row is gone
+        // from the layout and the function stays only until Settings is rebuilt.
 
         // -- Cockpit ------------------------------------------------------
         findViewById<Button>(R.id.btnModeDash).setOnClickListener { setMode(0) }

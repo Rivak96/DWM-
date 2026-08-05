@@ -1,54 +1,58 @@
 package com.dwm.cockpit.ui.theme
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.TweenSpec
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.unit.Dp
 
 /**
- * Motion, as a small fixed vocabulary.
+ * Exactly two durations, one curve, and transform or opacity only.
  *
- * Before this file the entire app contained one animation — a 220ms `tween` on the
- * steering dial — across roughly 8,600 lines. Everything else changed value by
- * simply being a different number on the next frame. A cockpit where nothing ever
- * moves reads as a screenshot of an interface rather than an interface, and that
- * was a real part of "it feels basic".
+ * This replaces five spring specs. Springs read better in isolation and were the
+ * wrong choice here for two reasons. A spring has no duration, so "nothing over
+ * 250ms" is not something it can be held to — a soft spring on a value that keeps
+ * changing settles whenever it settles. And a spring invites animating whatever feels
+ * good, which on this SoC is how a 60fps budget quietly disappears.
  *
- * Springs rather than tweens throughout. A tween has to be given a duration, which
- * means guessing one per call site and getting a different guess each time; a
- * spring is defined by how it feels and stays consistent wherever it is used. This
- * is the same idea as Material 3 Expressive's motion schemes, expressed with the
- * `spring()` that has always been in Compose — the deck is API 29 and this project
- * is deliberately not chasing a dependency bump to get the newer names for it.
+ * The rules, and they are not stylistic:
+ *
+ * - **[FAST] (120ms)** — anything the finger caused. Feedback slower than this reads
+ *   as lag on a resistive-feeling panel.
+ * - **[BASE] (200ms)** — anything the system caused. The rail's travelling bar, a
+ *   crossfade, a state change.
+ * - **Nothing else.** No third duration, no per-call-site number.
+ * - **`graphicsLayer` transform and opacity only.** Never height, width, padding or
+ *   any other property that triggers measure and layout. The Unisoc SC9863A has a
+ *   Mali-G51 driving 2.3 million pixels; a relayout every frame is the one thing it
+ *   genuinely cannot afford, and it is why the media widget is a fixed-height strip
+ *   that crossfades its contents rather than a card that grows.
+ * - Frame cost is measured on the deck with `dumpsys gfxinfo … framestats`, not
+ *   assumed. Anything over 16.6ms at the 95th percentile gets simplified.
  */
 object DwmMotion {
 
-    /** Needles, arcs and bars tracking a live vehicle reading. Slow and slightly
-     *  soft, so a jittering CAN value does not turn into a twitching gauge. */
-    val gauge: SpringSpec<Float> = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow)
+    /** Touch feedback. Must settle before the finger lifts. */
+    const val FAST = 120
 
-    /** General interface state — fades, dot indicators, colour changes. */
-    val ui: SpringSpec<Float> = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)
-
-    /** Touch feedback. Has to settle before the finger lifts or it feels laggy. */
-    val press: SpringSpec<Float> = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium)
-
-    /** Things arriving on screen — a hair of overshoot, deliberately. */
-    val enter: SpringSpec<Float> = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow)
-
-    /** Sizes, for `animateDpAsState`. */
-    val size: SpringSpec<Dp> = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
+    /** System-initiated change. Nothing in DWM is slower than this. */
+    const val BASE = 200
 
     /**
-     * Swapping one panel for another — the reverse-gear takeover, mainly.
-     *
-     * The one place a tween is right rather than a spring: a crossfade has no
-     * physical thing being moved, so overshoot would only look like a glitch.
+     * One curve everywhere: quick to leave, gentle to arrive. A single easing is
+     * most of what makes separate screens feel like one machine.
      */
-    val fade: TweenSpec<Float> = tween(240)
+    val easing: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
-    /** How far a card sinks when pressed. */
+    val fast: TweenSpec<Float> = tween(FAST, easing = easing)
+    val base: TweenSpec<Float> = tween(BASE, easing = easing)
+
+    /** [BASE], for `animateDpAsState`. Same curve, same duration, different type. */
+    val baseDp: TweenSpec<Dp> = tween(BASE, easing = easing)
+
+    /**
+     * How far a pressed surface sinks. A scale, so it runs on `graphicsLayer` and
+     * costs no layout pass.
+     */
     const val PRESS_SCALE = 0.97f
 }

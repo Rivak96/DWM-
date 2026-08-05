@@ -1,142 +1,105 @@
 package com.dwm.cockpit.ui
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.graphics.Canvas
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.platform.LocalInspectionMode
-import com.dwm.cockpit.ui.theme.CockpitColors
-import com.dwm.cockpit.ui.theme.DwmColors
-import com.dwm.cockpit.ui.theme.DwmMaterialShapes
-import com.dwm.cockpit.ui.theme.LocalDwmColors
-import com.dwm.cockpit.ui.theme.dwmTypography
+import com.dwm.cockpit.R
+import com.dwm.cockpit.ui.theme.DwmIcons
 
 /**
- * Fixtures for `@Preview`.
+ * Fixtures for previews and snapshot tests.
  *
- * The point of this file is that visual work no longer requires a build, a
- * sideload and a walk out to the van. Three releases in a row were spent guessing
- * what was wrong with a screen from a description, and two of those guesses were
- * wrong; being able to look at the thing on a laptop is worth more than any single
- * change in this rebuild.
- *
- * Nothing here touches `Prefs`, `CarInfo` or `Media`, so previews render without a
- * device, a `SharedPreferences` instance or a bound vendor service.
+ * These live in `src/debug` rather than `src/main` because shipping
+ * `ui-tooling-preview` in release cost about 260 KB for annotations that do nothing
+ * on a deck, in a project that has twice cut dependencies to stay near 6 MB.
  */
 
-/* ------------------------------------------------------------------- theming */
-
-/** The Light palette as `Ui.th()` builds it, without reading SharedPreferences. */
-val LightPreviewColors = DwmColors(
-    bg = Color(0xFFF4F5F6),
-    cardTop = Color(0xFFFFFFFF),
-    cardBottom = Color(0xFFECEDF0),
-    cardBorder = Color(0x14000000),
-    surfaceLow = Color(0xFFEEEFF0),
-    accent = Color(0xFF3E6AE1),
-    textPrimary = Color(0xFF171A20),
-    textSecondary = Color(0xFF5C5E62),
-    textTertiary = Color(0xFF8A8C90),
-    hairline = Color(0x1F000000),
-    press = Color(0x14000000),
-    light = true
-)
-
 /**
- * `DwmTheme` without the `Context`.
+ * The theme, without a `Context` or a vehicle.
  *
- * The real one derives everything from `Ui.th(context)`, which is right at runtime
- * and unusable in a preview. This takes the palette directly, which also means a
- * preview can show the Light theme without changing a stored preference — and the
- * Light theme is exactly what the old hardcoded `Color.White` calls had quietly
- * broken.
+ * [LocalInspectionMode] is provided as `true` on purpose. Studio previews set it;
+ * Paparazzi composes for real and does not. [MediaStrip] polls a system service, and
+ * off-device that poll answers "no notification access" and paints the permission
+ * prompt over whatever state the test passed in — which silently turned every
+ * snapshot of a playing track into a snapshot of a permissions error. Any new
+ * composable that reads a system service needs the same guard or its snapshot is a
+ * lie.
  */
 @Composable
-fun DwmPreviewTheme(
-    colors: DwmColors = CockpitColors,
-    content: @Composable () -> Unit
-) {
-    val scheme = if (colors.light) {
-        lightColorScheme(
-            primary = colors.accent,
-            background = colors.bg,
-            onBackground = colors.textPrimary,
-            surface = colors.cardTop,
-            onSurface = colors.textPrimary
-        )
-    } else {
-        darkColorScheme(
-            primary = colors.accent,
-            background = colors.bg,
-            onBackground = colors.textPrimary,
-            surface = colors.cardTop,
-            onSurface = colors.textPrimary
-        )
-    }
-    // LocalInspectionMode is set for us inside an Android Studio @Preview but not
-    // under Paparazzi, which composes for real. Without it the polling effects go
-    // and query system services that do not exist off-device — MediaPanel answered
-    // NoAccess and painted over the state the caller passed in, so the "now
-    // playing" snapshot was silently rendering the permissions prompt.
-    CompositionLocalProvider(
-        LocalDwmColors provides colors,
-        LocalInspectionMode provides true
-    ) {
-        MaterialTheme(
-            colorScheme = scheme,
-            typography = dwmTypography(),
-            shapes = DwmMaterialShapes,
-            content = content
-        )
+fun DwmPreviewTheme(night: Boolean = false, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalInspectionMode provides true) {
+        DwmThemeFrom(night = night, content = content)
     }
 }
 
-/* ---------------------------------------------------------------- fake icons */
-
-/** A flat colour square standing in for a launcher icon. Drawn with Compose's own
- *  Canvas rather than `android.graphics`, so it works in a static preview. */
-fun swatch(color: Color, size: Int = 128): ImageBitmap {
-    val bmp = ImageBitmap(size, size)
-    Canvas(bmp).drawRect(
-        left = 0f, top = 0f, right = size.toFloat(), bottom = size.toFloat(),
-        paint = Paint().apply { this.color = color }
-    )
-    return bmp
-}
-
-/* ----------------------------------------------------------------- fake data */
-
-/** Twelve, because `Apps.FAV_SLOTS` is twelve and the grid is three rows of four. */
-val previewFavourites: List<HomeApp> = listOf(
-    "Spotify" to Color(0xFF1DB954),
-    "Maps" to Color(0xFF4285F4),
-    "Waze" to Color(0xFF33CCFF),
-    "Chrome" to Color(0xFFEA4335),
-    "Music" to Color(0xFFFA243C),
-    "YouTube" to Color(0xFFFF0000),
-    "Gmail" to Color(0xFFD93025),
-    "Podcasts" to Color(0xFF9C27B0),
-    "Camera" to Color(0xFF5AC8FA),
-    "Torque" to Color(0xFFFFC107),
-    "Files" to Color(0xFF34A853),
-    "Clock" to Color(0xFFFF9500)
-).map { (name, c) -> HomeApp("com.demo.${name.lowercase()}", name, swatch(c), c) }
+/* ------------------------------------------------------------------- apps */
 
 /**
- * A van that is actually doing something: reversing at walking pace with two rear
- * sensors picking something up, wheel slightly off centre, healthy battery.
- *
- * Deliberately not all-clear — the states worth looking at in a preview are the
- * ones with colour in them.
+ * What this head unit actually exposes. Three apps, and two of them are vendor
+ * builds whose package names are guesses — which is the case [DwmIcons.forApp] is
+ * built to survive, since it matches on keywords across the package and the label
+ * rather than on an exact identifier.
  */
+val previewDeckApps: List<HomeApp> = listOf(
+    app("com.deck.aux", "AUX"),
+    app("com.deck.bluetooth", "Bluetooth"),
+    app("com.deck.tpms", "TPMS")
+)
+
+/** The other end of the range: a full favourites bar, including two apps with no
+ *  custom glyph so the monogram fallback is visible in a golden rather than only in
+ *  theory. */
+val previewFavourites: List<HomeApp> = listOf(
+    app("com.spotify.music", "Spotify"),
+    app("com.google.android.apps.maps", "Maps"),
+    app("com.waze", "Waze"),
+    app("com.android.chrome", "Chrome"),
+    app("com.deck.aux", "AUX"),
+    app("com.google.android.youtube", "YouTube"),
+    app("com.deck.tpms", "TPMS"),
+    app("com.deck.bluetooth", "Bluetooth"),
+    app("com.android.gallery3d", "Gallery"),
+    app("org.prowl.torque", "Torque"),
+    app("com.acme.dashcam", "Dashcam"),
+    app("com.acme.notes", "Trip Notes")
+)
+
+private fun app(pkg: String, label: String) =
+    HomeApp(pkg, label, DwmIcons.forApp(pkg, label))
+
+/* ---------------------------------------------------------------- vehicle */
+
+/**
+ * **The truck as it is today: no CAN data at all.**
+ *
+ * This is the fixture that matters most and the one the primary golden uses. There
+ * is no signal on this vehicle yet — the CAN service is bound but silent — so every
+ * reading is `null` and the radar list is empty rather than sixteen zeros. Sixteen
+ * zeros would be a live sensor ring reporting all-clear, which is a different thing
+ * and must not be what a disconnected bus looks like.
+ *
+ * If the screen looks unfinished in this state, the design is wrong, because this is
+ * the state the deck is in every time it is switched on.
+ */
+val previewVehicleNoSignal: VehicleUi = VehicleUi(
+    head = mutableStateOf(HeadState(canLevel = 1)),
+    drive = mutableStateOf(DriveState()),
+    body = mutableStateOf(BodyState()),
+    vitals = mutableStateOf(VitalsState())
+)
+
+/** CAN alive, vehicle stationary, sensors reporting all clear. */
+val previewVehicleIdle: VehicleUi = VehicleUi(
+    head = mutableStateOf(HeadState(canLevel = 2, updates = 400)),
+    drive = mutableStateOf(DriveState(speedKmh = 0)),
+    body = mutableStateOf(BodyState(radar = List(16) { 0 })),
+    vitals = mutableStateOf(VitalsState(voltage = 12.4f, coolant = 82f, track = 240))
+)
+
+/** Reversing at walking pace with two rear sensors picking something up. */
 val previewVehicle: VehicleUi = VehicleUi(
-    head = mutableStateOf(HeadState(canLevel = 2, updates = 812, demo = false)),
+    head = mutableStateOf(HeadState(canLevel = 2, updates = 812)),
     drive = mutableStateOf(DriveState(speedKmh = 4, gear = 2, headlight = true)),
     body = mutableStateOf(
         BodyState(
@@ -147,20 +110,7 @@ val previewVehicle: VehicleUi = VehicleUi(
             radar = listOf(0, 0, 0, 0, 0, 0, 9, 5, 7, 3, 2, 8, 0, 0, 0, 0)
         )
     ),
-    vitals = mutableStateOf(VitalsState(voltage = 12.7f, track = 300))
+    vitals = mutableStateOf(VitalsState(voltage = 12.7f, coolant = 91f, track = 300))
 )
 
-/** A van sitting still with nothing to report — the state this deck is in most of
- *  the time, and the one that has to look intentional rather than broken. */
-val previewVehicleIdle: VehicleUi = VehicleUi(
-    head = mutableStateOf(HeadState(canLevel = 1)),
-    drive = mutableStateOf(DriveState(speedKmh = 0)),
-    body = mutableStateOf(BodyState(radar = List(16) { 0 })),
-    vitals = mutableStateOf(VitalsState(voltage = 12.4f, track = 240))
-)
-
-val previewActions = HomeActions(
-    carplay = {}, overlayMenu = {}, bluetooth = {}, wifi = {}, apps = {},
-    edit = {}, settings = {}, reload = {}, pill = {}, launch = {},
-    appMenu = {}, grantNotifications = {}
-)
+val previewActions = HomeActions()

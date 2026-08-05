@@ -16,6 +16,7 @@ import android.view.ViewOutlineProvider
 import android.widget.Button
 import android.widget.Switch
 import android.widget.TextView
+import com.dwm.cockpit.ui.theme.DwmPalette
 
 /**
  * Runtime theme kit. The user picks a theme preset (Tesla gray / Midnight black /
@@ -27,18 +28,18 @@ object Ui {
 
     data class Accent(val name: String, val color: Int)
 
-    val ACCENTS = listOf(
-        // Brighter than Tesla Blue on purpose: the deck's panel lifts blacks and
-        // mutes saturation, and #3E6AE1 sat too close to the background to read as
-        // an accent at all once it got there.
-        Accent("Cockpit Blue", 0xFF4C8DFF.toInt()),
-        Accent("Tesla Blue", 0xFF3E6AE1.toInt()),
-        Accent("Tesla Red", 0xFFE82127.toInt()),
-        Accent("Mono", 0xFFE8E8EA.toInt()),
-        Accent("Teal", 0xFF2DD4BF.toInt()),
-        Accent("Amber", 0xFFF5A623.toInt()),
-        Accent("Violet", 0xFFA78BFA.toInt())
-    )
+    /**
+     * One accent, and this list exists only so the Settings screen keeps compiling
+     * until it is rebuilt.
+     *
+     * There were seven, and the screen was worse for every one of them. The home
+     * screen was simultaneously showing a green nav highlight, a blue floating
+     * button and orange warning badges — three colours competing to be the one that
+     * meant something, so none of them did. The rule now is one accent, on one
+     * element per screen: the nav rail's travelling bar. Green, amber and red are
+     * semantic and belong to the vehicle, never to the interface.
+     */
+    val ACCENTS = listOf(Accent("Cockpit Blue", DwmPalette.ACCENT))
 
     /**
      * A theme preset: every colour the UI needs.
@@ -63,92 +64,116 @@ object Ui {
         val cardBottom: Int
     )
 
-    /** Index into this list *is* the stored `Prefs.theme` value. */
-    val THEMES = listOf("Tesla", "Midnight", "Light", "Cockpit")
+    /** Index into this list *is* the stored `Prefs.theme` value. See [night]. */
+    val THEMES = listOf("Auto", "Day", "Night")
 
-    fun th(c: Context): Theme = when (Prefs.theme(c)) {
-        0 -> Theme( // Tesla — charcoal gray
-            light = false,
-            bg = 0xFF292B2E.toInt(),
-            surface = 0xFF3B3E43.toInt(),
-            surfacePressed = 0xFF4A4E55.toInt(),
-            card = 0xE62F3236.toInt(),
-            cardBorder = 0x1FFFFFFF,
-            text = 0xFFF2F2F2.toInt(),
-            dim = 0xFFA5A8AD.toInt(),
-            textTertiary = 0xFF7C8087.toInt(),
-            barBg = 0xE61E2023.toInt(),
-            hairline = 0x24FFFFFF,
-            cardTop = 0xFF44474D.toInt(),
-            cardBottom = 0xFF35383D.toInt()
-        )
-        1 -> Theme( // Midnight — OLED black
-            light = false,
-            bg = 0xFF0A0A0C.toInt(),
-            surface = 0xFF2A2A2D.toInt(),
-            surfacePressed = 0xFF3A3A3E.toInt(),
-            card = 0xE61B1B1E.toInt(),
-            cardBorder = 0x14FFFFFF,
-            text = 0xFFF2F2F2.toInt(),
-            dim = 0xFF9A9AA0.toInt(),
-            textTertiary = 0xFF6E6E76.toInt(),
-            barBg = 0xE0101013.toInt(),
-            hairline = 0x1AFFFFFF,
-            cardTop = 0xFF303035.toInt(),
-            cardBottom = 0xFF212124.toInt()
-        )
-        2 -> Theme( // Light — Tesla day mode
-            light = true,
-            bg = 0xFFF4F5F6.toInt(),
-            surface = 0xFFE3E4E7.toInt(),
-            surfacePressed = 0xFFD4D6DA.toInt(),
-            card = 0xF2FFFFFF.toInt(),
-            cardBorder = 0x14000000,
-            text = 0xFF171A20.toInt(),
-            dim = 0xFF5C5E62.toInt(),
-            textTertiary = 0xFF8A8C90.toInt(),
-            barBg = 0xF0FFFFFF.toInt(),
-            hairline = 0x1F000000,
-            cardTop = 0xFFFFFFFF.toInt(),
-            cardBottom = 0xFFECEDF0.toInt()
-        )
-        // Cockpit — the default, and the one built for this specific panel.
-        //
-        // Every earlier preset separated a card from its background by tone only:
-        // Tesla used #3B3E43 on #292B2E, an eighteen-point step. On a laptop that
-        // reads as two surfaces; on the deck's cheap IPS it collapsed into a single
-        // flat grey, which is most of why the launcher looked unfinished. This one
-        // separates them three ways at once — a bigger tonal step, a gradient
-        // inside the card, and a hairline border — because any one of the three
-        // washes out on its own.
-        else -> Theme(
-            light = false,
-            bg = 0xFF08090B.toInt(),
-            surface = 0xFF1A1E24.toInt(),
-            surfacePressed = 0xFF262B33.toInt(),
-            card = 0xE61A1E24.toInt(),
-            cardBorder = 0x1AFFFFFF,
-            text = 0xFFFFFFFF.toInt(),
-            dim = 0xFFA8B0BC.toInt(),
-            textTertiary = 0xFF6C7480.toInt(),
-            barBg = 0xE60D0F12.toInt(),
-            hairline = 0x1FFFFFFF,
-            cardTop = 0xFF1D2128.toInt(),
-            cardBottom = 0xFF14171C.toInt()
-        )
+    /**
+     * The palette, for the View half of the app.
+     *
+     * There were four presets here: Tesla, Midnight, Light and Cockpit. Three of
+     * them were abandoned work and the fourth was the only one anyone used, but all
+     * four had to keep compiling, so every screen was written against a palette that
+     * might be light or dark and consequently committed to neither. A Light preset
+     * also flatly contradicts a design premised on near-black surfaces with nothing
+     * pure white on them.
+     *
+     * One design now, in two variants, both defined in [DwmPalette]. The variant is
+     * decided by [night], which is a fact about the world rather than a preference.
+     *
+     * The [Theme] shape is unchanged so the existing view screens keep compiling.
+     * Two of its fields no longer mean what their names suggest and are kept only
+     * for that reason: [Theme.cardTop] and [Theme.cardBottom] are now the same
+     * colour, because the card gradient is gone. It existed to stop a mid-grey card
+     * dissolving into a mid-grey field; against a near-black background separated by
+     * a 2.3x luminance step and a hairline at 1.7:1, a flat fill reads cleanly and a
+     * gradient is just decoration.
+     */
+    fun th(c: Context): Theme = theme(night(c))
+
+    fun theme(night: Boolean): Theme = if (night) Theme(
+        light = false,
+        bg = DwmPalette.N_BACKGROUND,
+        surface = DwmPalette.N_SURFACE,
+        surfacePressed = DwmPalette.N_RAISED,
+        card = DwmPalette.N_SURFACE,
+        cardBorder = DwmPalette.N_HAIRLINE,
+        text = DwmPalette.N_TEXT,
+        dim = DwmPalette.N_MUTED,
+        textTertiary = DwmPalette.N_MUTED,
+        barBg = DwmPalette.N_SURFACE,
+        hairline = DwmPalette.N_HAIRLINE,
+        cardTop = DwmPalette.N_SURFACE,
+        cardBottom = DwmPalette.N_SURFACE
+    ) else Theme(
+        light = false,
+        bg = DwmPalette.BACKGROUND,
+        surface = DwmPalette.SURFACE,
+        surfacePressed = DwmPalette.RAISED,
+        card = DwmPalette.SURFACE,
+        cardBorder = DwmPalette.HAIRLINE,
+        text = DwmPalette.TEXT,
+        dim = DwmPalette.MUTED,
+        textTertiary = DwmPalette.MUTED,
+        barBg = DwmPalette.SURFACE,
+        hairline = DwmPalette.HAIRLINE,
+        cardTop = DwmPalette.SURFACE,
+        cardBottom = DwmPalette.SURFACE
+    )
+
+    /**
+     * Day or night.
+     *
+     * `Prefs.theme` now means 0 auto / 1 day / 2 night rather than a preset index.
+     *
+     * Auto reads the vehicle. `CarInfo.headlight` is a real signal on this van — the
+     * CAN service exposes `getHeadlight` and it answered during the scan — and
+     * headlights are a better night detector than either a clock or a light sensor
+     * because they are already correct in a tunnel, under a bridge and at dusk, and
+     * they cost nothing to read.
+     *
+     * The fallback when CAN is silent is the clock, not the ambient light sensor.
+     * Trinidad sits at about 10.6 degrees north, so sunrise and sunset barely move
+     * across the year — a fixed window is accurate to within about half an hour in
+     * every month, needs no wake-ups, and cannot flicker under a passing streetlight
+     * the way a sensor does.
+     */
+    fun night(c: Context): Boolean = when (Prefs.theme(c)) {
+        1 -> false
+        2 -> true
+        else -> CarInfo.headlight ?: clockSaysNight()
     }
 
-    // Every palette colour that may appear on a TextView, so skin() can remap
-    // between themes no matter which theme painted the view last.
+    private fun clockSaysNight(): Boolean {
+        val h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return h >= 18 || h < 6
+    }
+
+    // Every palette colour that may appear on a TextView, so skin() can remap it to
+    // the live variant no matter which palette painted the view last. The current
+    // values are listed alongside the abandoned ones because a view may have been
+    // painted before a day/night switch, and because the layouts still carry
+    // hardcoded literals until they are rebuilt.
+    //
+    // A colour missing from these sets is silently left alone, which is not an
+    // obvious failure mode: Settings' section headers were #8E8E93, in neither set,
+    // and so stayed mid-grey through every theme the app ever had.
     private val TEXT_COLORS = setOf(
+        DwmPalette.TEXT, DwmPalette.N_TEXT,
         0xFFF2F2F2.toInt(), 0xFF171A20.toInt(), 0xFFFFFFFF.toInt()
     )
     private val DIM_COLORS = setOf(
-        0xFF9A9AA0.toInt(), 0xFFA5A8AD.toInt(), 0xFF5C5E62.toInt(),
-        0xFF93A1A6.toInt(), 0xFFA8B0BC.toInt()
+        DwmPalette.MUTED, DwmPalette.N_MUTED,
+        0xFF8E8E93.toInt(), 0xFF9A9AA0.toInt(), 0xFFA5A8AD.toInt(),
+        0xFF5C5E62.toInt(), 0xFF93A1A6.toInt(), 0xFFA8B0BC.toInt()
     )
 
-    fun accent(c: Context) = Prefs.accent(c)
+    /**
+     * The accent, which is a token and not a preference. `Prefs.accent` is no longer
+     * consulted — a colour that carries a meaning cannot also be a matter of taste.
+     * The debug tweak panel can still move it live; that is a design tool, gated on
+     * `BuildConfig.DEBUG`, not a user setting.
+     */
+    fun accent(c: Context) = if (night(c)) DwmPalette.N_ACCENT else DwmPalette.ACCENT
 
     fun dp(c: Context, v: Int) = (v * c.resources.displayMetrics.density).toInt()
 
@@ -215,11 +240,16 @@ object Ui {
         else rounded(0x00000000, dp(c, 10).toFloat(), 0, 0)
     }
 
-    /** Reference-style state colours (used sparingly, like the mock: blue =
-     *  primary action, green = active/on). Defined once in the token layer — this
-     *  value used to exist as four separate literals across the Compose files and
-     *  this one, which is exactly how palettes drift apart. */
-    const val GREEN = com.dwm.cockpit.ui.theme.StatusOkArgb
+    /**
+     * Semantic green, for the View screens.
+     *
+     * This is a *vehicle* colour and not an interface one. It says a reading is in
+     * range or a system is live; it never means "selected", "active" or "on" for
+     * anything DWM itself owns. The green pill under the old bottom bar's Overlays
+     * icon was exactly that misuse, and it was one of three colours on the home
+     * screen all competing to be the meaningful one.
+     */
+    const val GREEN = DwmPalette.OK
 
     /** Dashboard tile: filled rounded square with ripple. */
     fun tileBg(c: Context, fill: Int): Drawable {

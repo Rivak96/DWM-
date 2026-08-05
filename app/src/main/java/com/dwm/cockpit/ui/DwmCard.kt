@@ -15,7 +15,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import com.dwm.cockpit.ui.theme.Dwm
@@ -25,47 +24,62 @@ import com.dwm.cockpit.ui.theme.DwmSpace
 import com.dwm.cockpit.ui.theme.DwmStroke
 
 /**
- * The card, and most of the reason the rebuilt screen reads as layered.
+ * The card. Every surface in DWM that is not the background is one of these.
  *
- * The previous version was a single solid fill of `colorScheme.surface` — no
- * border, no gradient, nothing. That is genuinely the right call on a good panel,
- * and it is what the flat reference screen does. It fails here for a hardware
- * reason: the deck's display lifts blacks badly, so the tonal step between a card
- * and the field behind it washed out and the whole screen became one grey plane.
+ * ### Flat, not gradient
  *
- * So a card is now separated from its background three ways simultaneously — a
- * larger tonal step in the palette, a vertical gradient within the fill, and a
- * hairline border. On a good screen that reads as subtle depth; on this one it is
- * the difference between seeing panels and seeing a wash. None of it costs a GPU
- * feature: a linear gradient and a 1dp stroke are close to free, which matters
- * because real blur is not an option here at all — `Modifier.blur` needs API 31
- * and the deck is API 29 despite reporting Android 12.
+ * This replaces `FlatCard`, which drew a vertical gradient inside every card. That
+ * gradient was a fix for a problem that no longer exists: the old palette put a
+ * `#3B3E43` card on a `#292B2E` field, an eighteen-point step that collapsed into
+ * one wash on this deck's IPS, and the gradient was one of three tricks stacked up
+ * to rescue it. The palette is now near-black — `#14171C` on `#0A0C0F` is a 2.3x
+ * luminance ratio — and with a hairline at 1.7:1 on top of that, a flat fill reads
+ * cleanly. A gradient that is no longer load-bearing is just decoration, and there
+ * is none of that here.
+ *
+ * ### Depth without blur or shadow
+ *
+ * Real-time blur needs API 31 and the deck is API 29, so glassmorphism was never
+ * available; ambient shadow on a near-black field is invisible on a panel that lifts
+ * blacks. Depth is therefore a tonal step plus a hairline, which is what
+ * `DwmElevation` encodes. [raised] picks the second step, and it is for overlay
+ * panels and for content that sits *on* a card — never for a card inside a card,
+ * which does not happen anywhere in this app.
+ *
+ * The press response is a `graphicsLayer` scale, so it costs no measure or layout
+ * pass. That matters on a Mali-G51 pushing 2.3 million pixels.
  */
 @Composable
-fun FlatCard(
+fun DwmCard(
     modifier: Modifier = Modifier,
+    raised: Boolean = false,
     radius: Dp = DwmRadius.m,
-    padding: Dp = DwmSpace.m,
+    padding: Dp = DwmSpace.cardPadding,
+    border: Boolean = true,
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
     val colors = Dwm.colors
-    val shape = RoundedCornerShape(radius)
-
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed && onClick != null) DwmMotion.PRESS_SCALE else 1f,
-        animationSpec = DwmMotion.press,
+        animationSpec = DwmMotion.fast,
         label = "cardPress"
     )
 
     Box(
         modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(shape)
-            .background(Brush.verticalGradient(listOf(colors.cardTop, colors.cardBottom)))
-            .border(DwmStroke.hairline, colors.cardBorder, shape)
+            .clip(RoundedCornerShape(radius))
+            .background(if (raised) colors.raised else colors.surface)
+            .then(
+                if (border) Modifier.border(
+                    DwmStroke.hairline,
+                    colors.hairline,
+                    RoundedCornerShape(radius)
+                ) else Modifier
+            )
             .then(
                 if (onClick != null) Modifier.clickable(
                     interactionSource = interaction,

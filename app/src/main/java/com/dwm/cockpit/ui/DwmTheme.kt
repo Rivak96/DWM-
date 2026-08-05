@@ -3,78 +3,61 @@ package com.dwm.cockpit.ui
 import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.graphics.Color
 import com.dwm.cockpit.Ui
-import com.dwm.cockpit.ui.theme.DwmColors
+import com.dwm.cockpit.ui.theme.DwmDayColors
 import com.dwm.cockpit.ui.theme.DwmMaterialShapes
+import com.dwm.cockpit.ui.theme.DwmNightColors
 import com.dwm.cockpit.ui.theme.LocalDwmColors
-import com.dwm.cockpit.ui.theme.StatusDanger
 import com.dwm.cockpit.ui.theme.dwmTypography
 
 /**
- * The one place a `Ui.Theme` preset becomes Compose state.
+ * Where the palette becomes Compose state.
  *
- * `Ui.th()` stays the single source of truth for the palette, which is what lets a
- * single preset restyle both halves of this app: the Compose home reads it through
- * here, and the XML screens — Settings, the app drawer, the layout editor — get the
- * same colours through `Ui.skin()` walking their view trees. Neither of those
- * screens had to be rewritten to follow the new look.
+ * There used to be four presets here — Tesla, Midnight, Light and Cockpit — and a
+ * Light one in particular cannot coexist with a design whose premise is near-black
+ * surfaces and nothing pure white. There is now **one design in two variants**, day
+ * and night, and the variant is a fact about the world rather than a preference.
+ * See [Ui.night] for how that fact is established.
  *
- * The dependency runs one way. `ui.theme` defines the tokens and knows nothing
- * about `Ui`; this file is the adapter between them.
+ * The dependency still runs one way: `ui.theme` holds the numbers and knows nothing
+ * about `Ui`; this file and `Ui.th()` are the two adapters that read them, one for
+ * each half of the app.
  */
 @Composable
 fun DwmTheme(context: Context, content: @Composable () -> Unit) {
-    val t = Ui.th(context)
-    val accent = Color(Ui.accent(context))
+    DwmThemeFrom(night = Ui.night(context), content = content)
+}
 
-    val colors = DwmColors(
-        bg = Color(t.bg),
-        cardTop = Color(t.cardTop),
-        cardBottom = Color(t.cardBottom),
-        cardBorder = Color(t.cardBorder),
-        // A step above the background but below a card, for the surfaces that hold
-        // cards rather than being one — the app grid page, mainly.
-        surfaceLow = Color(Ui.blend(t.bg, t.surface, 0.35f)),
-        accent = accent,
-        textPrimary = Color(t.text),
-        textSecondary = Color(t.dim),
-        textTertiary = Color(t.textTertiary),
-        hairline = Color(t.hairline),
-        press = if (t.light) Color(0x14000000) else Color(0x14FFFFFF),
-        light = t.light
+/**
+ * The variant-explicit form. Previews, snapshot tests and the debug tweak panel use
+ * this so they can render a variant without a `Context` or a vehicle attached.
+ */
+@Composable
+fun DwmThemeFrom(night: Boolean, content: @Composable () -> Unit) {
+    val colors = if (night) DwmNightColors else DwmDayColors
+
+    // M3's scheme is filled in so that any Material component drawing itself lands on
+    // the same palette instead of falling back to purple. Nothing in DWM should be
+    // reaching for these rather than Dwm.colors, but an unstyled stock component is
+    // one of the failure modes this rebuild exists to eliminate, and the cheapest
+    // insurance is for the fallback to be right too.
+    val scheme = darkColorScheme(
+        primary = colors.accent,
+        onPrimary = colors.text,
+        background = colors.background,
+        onBackground = colors.text,
+        surface = colors.surface,
+        onSurface = colors.text,
+        surfaceVariant = colors.raised,
+        onSurfaceVariant = colors.muted,
+        outline = colors.hairline,
+        outlineVariant = colors.hairline,
+        error = colors.critical,
+        onError = colors.text,
+        scrim = colors.scrim
     )
-
-    val scheme = if (t.light) {
-        lightColorScheme(
-            primary = accent,
-            onPrimary = Color.White,
-            background = colors.bg,
-            onBackground = colors.textPrimary,
-            surface = Color(t.surface),
-            onSurface = colors.textPrimary,
-            surfaceVariant = colors.surfaceLow,
-            onSurfaceVariant = colors.textSecondary,
-            outline = colors.cardBorder,
-            error = StatusDanger
-        )
-    } else {
-        darkColorScheme(
-            primary = accent,
-            onPrimary = Color.White,
-            background = colors.bg,
-            onBackground = colors.textPrimary,
-            surface = Color(t.surface),
-            onSurface = colors.textPrimary,
-            surfaceVariant = colors.surfaceLow,
-            onSurfaceVariant = colors.textSecondary,
-            outline = colors.cardBorder,
-            error = StatusDanger
-        )
-    }
 
     CompositionLocalProvider(LocalDwmColors provides colors) {
         MaterialTheme(

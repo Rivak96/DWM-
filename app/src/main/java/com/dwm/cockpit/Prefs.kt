@@ -95,12 +95,21 @@ object Prefs {
 
     /**
      * Global interface scale — a density multiplier applied to every DWM screen.
-     * The deck reports a density meant for a phone-sized panel, so at 1.0 every
-     * control eats far more of the 13" glass than it needs to. Below 1.0 shrinks
-     * dp *and* sp together, so the whole UI gets smaller and more fits on screen.
-     * 0.7 tiny · 0.8 compact (default) · 0.9 cosy · 1.0 stock.
+     * 0.7 tiny · 0.8 compact · 0.9 cosy · 1.0 stock (default).
+     *
+     * **The default was 0.8 and that was the single biggest reason the launcher
+     * looked cheap.** `Scale.wrap` multiplies the whole display density by this, so
+     * the panel's 1600x1000dp canvas was really being laid out at ~2000x1250dp and
+     * every size in the token file arrived 20% smaller than it was written: a 20sp
+     * body reached the eye at 16sp, the 13sp floor at 10.4sp. Four releases were
+     * spent making text bigger inside a system that was quietly shrinking all of it.
+     *
+     * At 1.0 the numbers in `DwmTokens`/`DwmType` mean what they say, which is the
+     * precondition for an 18sp body floor and 72dp touch targets. The setting stays
+     * — someone may still want more on screen — but the design is drawn at 1.0 and
+     * that is the only value it is judged at.
      */
-    fun uiScale(c: Context) = sp(c).getFloat("ui_scale", 0.8f)
+    fun uiScale(c: Context) = sp(c).getFloat("ui_scale", 1.0f)
     fun setUiScale(c: Context, v: Float) = sp(c).edit().putFloat("ui_scale", v).apply()
 
     /** Camera picture fit: 0 = fill (crop to panel) · 1 = fit (letterbox) ·

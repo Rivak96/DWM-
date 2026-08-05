@@ -22,8 +22,8 @@ android {
         applicationId = "com.dwm.cockpit"
         minSdk = 26          // Android 8.0 — well below the deck's Android 12
         targetSdk = 33
-        versionCode = 43
-        versionName = "0.24.0"
+        versionCode = 44
+        versionName = "0.25.0"
     }
 
     signingConfigs {
@@ -50,6 +50,14 @@ android {
 
     buildFeatures {
         compose = true
+
+        // AGP 8 does not generate BuildConfig unless asked. The debug tweak panel
+        // — live sliders for accent, radius, type scale, density, gutter and motion,
+        // so the design can be dialled in sitting in the truck rather than guessed
+        // at on a laptop — is gated on BuildConfig.DEBUG and cannot compile without
+        // this. It costs one generated class in release.
+        buildConfig = true
+
         // AGP 8 defaults AIDL off. On for the vendor's own CarServiceAidl /
         // CarServiceCallBack definitions in src/main/aidl, copied byte-for-byte
         // out of com.tw.carinfoservice.apk. Letting the build generate the stubs

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DWM icon family. Do not edit by hand and do not add an icon that was drawn
+     elsewhere: one stroke weight (2), one cap (round), one join (round), one
+     24x24 viewport, content inside a 20x20 optical box, one colour, tinted at
+     the call site. The previous set was three unrelated families side by side -
+     stock filled Material glyphs, two hand-drawn square grids on different unit
+     systems, and a play triangle whose optical centre sat 1.5 units right of the
+     box centre - which is most of why the launcher read as assembled.
+     apps -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M4,4h6v6h-6z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M14,4h6v6h-6z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M4,14h6v6h-6z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M14,14h6v6h-6z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

@@ -4,6 +4,8 @@ import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.Density
 import com.android.resources.ScreenOrientation
+import com.android.resources.ScreenRatio
+import com.android.resources.ScreenSize
 import com.dwm.cockpit.Media
 import org.junit.Rule
 import org.junit.Test
@@ -27,29 +29,35 @@ class HomeSnapshotTest {
     val paparazzi = Paparazzi(
         deviceConfig = DECK,
         theme = "android:Theme.Material.NoActionBar",
-        showSystemUi = false
+        showSystemUi = false,
+        // Without this Paparazzi scales every golden down to a 1000px long edge
+        // (`ImageUtils.getThumbnailScale`), which is why the first four committed
+        // PNGs were 1000x562 rather than the panel size. Judging type on a
+        // resampled image is exactly the mistake this test exists to prevent.
+        useDeviceResolution = true
     )
 
     /**
-     * The case that actually broke: this head unit exposes only three launchable
-     * apps. The favourites grid was written assuming twelve, and with one row the
-     * row's `weight(1f)` let it swallow the entire column — three icons stranded in
-     * the middle of three full-height coloured slabs.
+     * **The state this deck is actually in.** Three launchable apps and no CAN data
+     * at all, which is what the truck shows every time it is switched on. If the
+     * screen looks unfinished here, the design is wrong.
      */
     @Test
-    fun `home with the three apps this deck really has`() {
+    fun `home as the deck really is - three apps, no CAN signal`() {
         paparazzi.snapshot {
             DwmPreviewTheme {
                 CockpitHome(
-                    favourites = previewFavourites.take(3),
+                    favourites = previewDeckApps,
                     overlaysOn = true,
                     actions = previewActions,
-                    vehicle = previewVehicleIdle
+                    vehicle = previewVehicleNoSignal
                 )
             }
         }
     }
 
+    /** The other end of the range. The grid used to assume this case and break on
+     *  the one above. */
     @Test
     fun `home with a full twelve favourites`() {
         paparazzi.snapshot {
@@ -64,13 +72,12 @@ class HomeSnapshotTest {
         }
     }
 
-    /** Nothing playing, which is how the deck sits most of the time. */
     @Test
     fun `home with music playing`() {
         paparazzi.snapshot {
             DwmPreviewTheme {
                 CockpitHome(
-                    favourites = previewFavourites.take(3),
+                    favourites = previewDeckApps,
                     overlaysOn = false,
                     actions = previewActions,
                     vehicle = previewVehicleIdle,
@@ -91,7 +98,7 @@ class HomeSnapshotTest {
         paparazzi.snapshot {
             DwmPreviewTheme {
                 CockpitHome(
-                    favourites = previewFavourites.take(3),
+                    favourites = previewDeckApps,
                     overlaysOn = false,
                     actions = previewActions,
                     vehicle = previewVehicle
@@ -100,17 +107,70 @@ class HomeSnapshotTest {
         }
     }
 
+    /** Night. Same layout, dimmed palette, nothing near white. */
+    @Test
+    fun `home at night`() {
+        paparazzi.snapshot {
+            DwmPreviewTheme(night = true) {
+                CockpitHome(
+                    favourites = previewDeckApps,
+                    overlaysOn = true,
+                    actions = previewActions,
+                    vehicle = previewVehicleNoSignal
+                )
+            }
+        }
+    }
+
+    /**
+     * The camera overlay parked top-right, which is where it actually sits. The
+     * reserved rect must push the proximity card down rather than letting the
+     * overlay crop it.
+     */
+    @Test
+    fun `home with the camera overlay reserving its corner`() {
+        paparazzi.snapshot {
+            DwmPreviewTheme {
+                CockpitHome(
+                    favourites = previewDeckApps,
+                    overlaysOn = true,
+                    actions = previewActions,
+                    vehicle = previewVehicleNoSignal,
+                    reserved = listOf(ReservedRegion(0.62f, 0.02f, 0.99f, 0.34f))
+                )
+            }
+        }
+    }
+
     private companion object {
+
         /**
-         * Landscape at 160dpi so dp maps 1:1 to px and the numbers in the token
-         * file can be read straight off the image. Replace with the real panel
-         * geometry once Settings → System has been read on the deck.
+         * The real panel: 1920x1200px at 192dpi, which is a 1600x1000dp canvas.
+         *
+         * This was 1280x720 at 160dpi — a placeholder chosen so dp mapped 1:1 to px,
+         * and 320dp narrower than the truth in logical terms. Everything laid out
+         * against it was the right shape at the wrong size.
+         *
+         * `Density.create(192)` rather than a constant: in the layoutlib Paparazzi
+         * 1.3.5 pulls, `com.android.resources.Density` is a class, not an enum, and
+         * `create()` returns a real instance for any dpi that has no named constant.
+         * `xdpi`/`ydpi`/`size`/`ratio` are set explicitly because `PIXEL_5.copy`
+         * otherwise leaves a phone's 442dpi and `ScreenSize.NORMAL` behind, which
+         * would mis-resolve the moment a size-qualified resource appears.
+         *
+         * Note this renders at `Prefs.uiScale` = 1.0 by construction — Paparazzi
+         * never runs `Scale.wrap`. That is now also the on-device default, so the
+         * golden and the deck agree; they did not while the default was 0.8.
          */
         val DECK: DeviceConfig = DeviceConfig.PIXEL_5.copy(
-            screenWidth = 1280,
-            screenHeight = 720,
-            density = Density.MEDIUM,
+            screenWidth = 1920,
+            screenHeight = 1200,
+            xdpi = 192,
+            ydpi = 192,
+            density = Density.create(192),
             orientation = ScreenOrientation.LANDSCAPE,
+            size = ScreenSize.XLARGE,
+            ratio = ScreenRatio.NOTLONG,
             softButtons = false
         )
     }

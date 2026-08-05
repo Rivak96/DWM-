@@ -76,20 +76,24 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal">
 
-                    <Button android:id="@+id/btnThemeCockpit" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Cockpit" />
-                    <Button android:id="@+id/btnThemeTesla" style="@style/ChipButton" android:text="Tesla" />
-                    <Button android:id="@+id/btnThemeMidnight" style="@style/ChipButton" android:text="Midnight" />
-                    <Button android:id="@+id/btnThemeLight" style="@style/ChipButton" android:text="Light" />
+                    <!-- One design, two variants. Auto follows the headlights.
+                         The Tesla / Midnight / Light presets are gone; keeping a
+                         Light option would contradict a palette premised on
+                         near-black surfaces with nothing pure white on them. -->
+                    <Button android:id="@+id/btnThemeCockpit" style="@style/ChipButton" android:layout_marginStart="0dp" android:text="Auto" />
+                    <Button android:id="@+id/btnThemeTesla" style="@style/ChipButton" android:text="Day" />
+                    <Button android:id="@+id/btnThemeMidnight" style="@style/ChipButton" android:text="Night" />
+                    <Button android:id="@+id/btnThemeLight" style="@style/ChipButton" android:visibility="gone" android:text="" />
                 </LinearLayout>
 
-                <TextView style="@style/SectionHeader" android:text="Accent colour" />
-
+                <!-- The accent picker is gone: there is one accent, and a colour
+                     that carries a meaning cannot also be a matter of taste. -->
                 <LinearLayout
                     android:id="@+id/accentRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:paddingBottom="4dp" />
+                    android:visibility="gone" />
 
                 <TextView style="@style/SectionHeader" android:text="Interface scale" />
 

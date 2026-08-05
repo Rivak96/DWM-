@@ -12,44 +12,50 @@ import com.dwm.cockpit.ui.theme.Dwm
 import com.dwm.cockpit.ui.theme.DwmSpace
 
 /**
- * Previews.
+ * Studio previews.
  *
- * **The device spec below is a placeholder and should be corrected once.** Open
- * Settings → System on the deck; it now prints a line reading
- * `Preview: spec:width=…dp,height=…dp,dpi=…`. Paste that over [DECK] and every
- * preview here starts matching the real panel, including the effect of
- * `Scale.kt`'s density override. Until then these are the right shapes at roughly
- * the wrong size.
+ * The device spec is the real panel: 1920x1200px at 192dpi is a 1600x1000dp canvas.
+ * It was `1280dp x 720dp @ 160dpi`, a placeholder that made every preview the right
+ * shape at the wrong size. This must stay in step with `DECK` in `HomeSnapshotTest`
+ * — same geometry, two syntaxes, and nothing enforces the agreement but this note.
+ *
+ * `Prefs.uiScale` is now 1.0, so a preview at this spec and the deck are finally
+ * showing the same thing; while the default was 0.8 they never were.
  */
-private const val DECK = "spec:width=1280dp,height=720dp,dpi=160"
+private const val DECK = "spec:width=1600dp,height=1000dp,dpi=192"
 
-/* --------------------------------------------------------------- whole screen */
-
-@Preview(name = "Home · driving", device = DECK, showBackground = true)
+@Preview(name = "Home · no CAN signal (the real deck)", device = DECK)
 @Composable
-private fun PreviewHomeDriving() {
+private fun PreviewHomeNoSignal() {
+    DwmPreviewTheme {
+        CockpitHome(
+            favourites = previewDeckApps,
+            overlaysOn = true,
+            actions = previewActions,
+            vehicle = previewVehicleNoSignal
+        )
+    }
+}
+
+@Preview(name = "Home · twelve favourites", device = DECK)
+@Composable
+private fun PreviewHomeFull() {
     DwmPreviewTheme {
         CockpitHome(
             favourites = previewFavourites,
-            overlaysOn = true,
+            overlaysOn = false,
             actions = previewActions,
             vehicle = previewVehicleIdle
         )
     }
 }
 
-/**
- * Reverse engaged — the left column hands over from music to the sensors.
- *
- * The state worth looking at most often and the hardest to reach on the deck,
- * since reproducing it means actually putting the van in reverse.
- */
-@Preview(name = "Home · reversing", device = DECK, showBackground = true)
+@Preview(name = "Home · reversing", device = DECK)
 @Composable
 private fun PreviewHomeReversing() {
     DwmPreviewTheme {
         CockpitHome(
-            favourites = previewFavourites,
+            favourites = previewDeckApps,
             overlaysOn = false,
             actions = previewActions,
             vehicle = previewVehicle
@@ -57,87 +63,69 @@ private fun PreviewHomeReversing() {
     }
 }
 
-/**
- * The regression test for the design-system rebuild.
- *
- * Selecting Light used to produce white-on-white, because the palette said one
- * thing and roughly forty `Color.White.copy(alpha = …)` call sites said another.
- * If this preview is legible, those are all gone.
- */
-@Preview(name = "Home · Light", device = DECK, showBackground = true)
+@Preview(name = "Home · night", device = DECK)
 @Composable
-private fun PreviewHomeLight() {
-    DwmPreviewTheme(colors = LightPreviewColors) {
+private fun PreviewHomeNight() {
+    DwmPreviewTheme(night = true) {
         CockpitHome(
-            favourites = previewFavourites,
-            overlaysOn = false,
+            favourites = previewDeckApps,
+            overlaysOn = true,
             actions = previewActions,
-            vehicle = previewVehicleIdle
+            vehicle = previewVehicleNoSignal
         )
     }
 }
 
-/* ------------------------------------------------------------------ fragments */
+/* ------------------------------------------------------------- fragments */
 
-/** Sensors and the steering-predicted path, at the size the column gives them. */
-@Preview(name = "Parking · object behind", widthDp = 300, heightDp = 460)
+@Preview(name = "Proximity · no signal", widthDp = 380, heightDp = 460)
 @Composable
-private fun PreviewParkingClose() {
-    DwmPreviewTheme {
-        Box(Modifier.fillMaxSize().background(Dwm.colors.bg).padding(DwmSpace.m)) {
-            FlatCard(Modifier.fillMaxSize()) {
-                ParkingDisplay(previewVehicle.body.value, Modifier.fillMaxSize())
-            }
-        }
-    }
+private fun PreviewProximityNoSignal() = Fragment {
+    ProximityCard(BodyState(), Modifier.fillMaxSize())
 }
 
-/** Wheel straight, nothing detected — has to read as working, not as blank. */
-@Preview(name = "Parking · all clear", widthDp = 300, heightDp = 460)
+@Preview(name = "Proximity · close", widthDp = 380, heightDp = 460)
 @Composable
-private fun PreviewParkingClear() {
-    DwmPreviewTheme {
-        Box(Modifier.fillMaxSize().background(Dwm.colors.bg).padding(DwmSpace.m)) {
-            FlatCard(Modifier.fillMaxSize()) {
-                ParkingDisplay(previewVehicleIdle.body.value, Modifier.fillMaxSize())
-            }
-        }
-    }
+private fun PreviewProximityClose() = Fragment {
+    ProximityCard(
+        BodyState(
+            reverse = true,
+            track = 300,
+            radar = listOf(0, 0, 0, 0, 0, 0, 9, 5, 7, 3, 2, 8, 0, 0, 0, 0)
+        ),
+        Modifier.fillMaxSize()
+    )
 }
 
-@Preview(name = "Media · hero playing", widthDp = 300, heightDp = 460)
+@Preview(name = "Media · idle", widthDp = 900, heightDp = 160)
 @Composable
-private fun PreviewMediaHero() {
-    DwmPreviewTheme {
-        Box(Modifier.fillMaxSize().background(Dwm.colors.bg).padding(DwmSpace.m)) {
-            MediaPanel(
-                onOpen = {},
-                onGrantAccess = {},
-                modifier = Modifier.fillMaxSize(),
-                initialState = Media.State.Playing(
-                    pkg = "com.spotify.music",
-                    title = "Everything In Its Right Place",
-                    artist = "Radiohead",
-                    art = null,
-                    playing = true
-                )
-            )
-        }
-    }
+private fun PreviewMediaIdle() = Fragment {
+    MediaStrip(Media.State.Idle, {}, {}, Modifier.fillMaxSize())
 }
 
-/** Nothing playing, in the tall slot — the state most at risk of reading as an
- *  empty card rather than a deliberate one. */
-@Preview(name = "Media · hero idle", widthDp = 300, heightDp = 460)
+@Preview(name = "Media · playing", widthDp = 900, heightDp = 160)
 @Composable
-private fun PreviewMediaHeroIdle() {
+private fun PreviewMediaPlaying() = Fragment {
+    MediaStrip(
+        Media.State.Playing(
+            pkg = "com.spotify.music",
+            title = "Everything In Its Right Place",
+            artist = "Radiohead",
+            art = null,
+            playing = true
+        ),
+        {}, {}, Modifier.fillMaxSize()
+    )
+}
+
+@Composable
+private fun Fragment(content: @Composable () -> Unit) {
     DwmPreviewTheme {
-        Box(Modifier.fillMaxSize().background(Dwm.colors.bg).padding(DwmSpace.m)) {
-            MediaPanel(
-                onOpen = {},
-                onGrantAccess = {},
-                modifier = Modifier.fillMaxSize()
-            )
-        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Dwm.colors.background)
+                .padding(DwmSpace.l)
+        ) { content() }
     }
 }
