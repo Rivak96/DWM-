@@ -263,17 +263,21 @@ object DwmSize {
     val touchTarget: Dp = 72.dp
     val touchTargetMoving: Dp = 96.dp
 
-    /** The nav rail — DWM's signature, and the one thing on every screen. */
-    val railWidth: Dp = touchTargetMoving
-    val railItem: Dp = touchTargetMoving
+    /**
+     * The system bar along the bottom — DWM's navigation, on every screen.
+     *
+     * It replaced a right-edge rail. The rail was the better ergonomic argument in a
+     * right-hand-drive truck, and it was not where the driver wanted the controls;
+     * v0.24 had them along the bottom. Where a control lives is the driver's call.
+     */
+    val systemBar: Dp = 88.dp
     val railIcon: Dp = 32.dp
 
     /**
      * The travelling accent bar. The only accent-coloured element on a screen.
      *
-     * It sits on the rail's **inner** edge. On the outer edge it was against the
-     * panel bezel, where the first render showed it reading as a rendering artifact
-     * rather than as the one element the whole design is built around.
+     * It sits above the active item on the system bar, and under the active tab in
+     * Settings — one element, two orientations, once per screen.
      */
     val railBarWidth: Dp = DwmSpace.xs
     val railBarLength: Dp = DwmSpace.xxxl

@@ -47,15 +47,22 @@ import java.util.Locale
  * The cockpit.
  *
  * ```
- *  ┌──────────────────────────────┬──────────────────────────────┬──────┐
- *  │  ‹ swipe ›                   ║  ‹ swipe ›                   │ DWM  │
- *  │   PANE 1 — live content      ║   PANE 2 — live content      │ rail │
- *  ├──────────────────────────────┴──────────────────────────────┤  96  │
- *  │  speed  gear  coolant  volts  fuel  rpm  boost  outside     │  dp  │
- *  ├──────────────┬───────────────────┬──────────────────────────┤      │
- *  │ media 4      │ vehicle 3         │ toggles 5                │      │
- *  └──────────────┴───────────────────┴──────────────────────────┴──────┘
+ *  ┌──────────────────────────────┬──────────────────────────────────────┐
+ *  │  ‹ swipe ›                   ║  ‹ swipe ›                           │
+ *  │   PANE 1 — live content      ║   PANE 2 — live content              │
+ *  ├──────────────────────────────┴──────────────────────────────────────┤
+ *  │  speed  gear  coolant  volts  fuel  rpm  boost  outside             │
+ *  ├──────────────┬───────────────────┬──────────────────────────────────┤
+ *  │ media 5      │ vehicle 3      │ shortcuts 4                         │
+ *  ├──────────────┴───────────────────┴──────────────────────────────────┤
+ *  │  Home    Apps    Overlays    Bluetooth    Wi-Fi    Settings         │
+ *  └─────────────────────────────────────────────────────────────────────┘
  * ```
+ *
+ * Navigation sits along the bottom rather than in a right-edge rail. The rail was
+ * the better ergonomic argument in a right-hand-drive truck and it was not where the
+ * driver wanted the controls — v0.24 had them along the bottom. It costs the panes
+ * about 90dp of height and gives them back 96dp of width.
  *
  * ### What this replaced, and why
  *
@@ -125,15 +132,15 @@ fun CockpitHome(
     val body by vehicle.body
     val vitals by vehicle.vitals
 
-    Row(
+    Column(
         Modifier
             .fillMaxSize()
             .background(colors.background)
     ) {
         BoxWithConstraints(
             Modifier
+                .fillMaxWidth()
                 .weight(1f)
-                .fillMaxHeight()
         ) {
             val content = maxWidth
 
@@ -141,6 +148,7 @@ fun CockpitHome(
                 Modifier
                     .fillMaxSize()
                     .padding(DwmGrid.margin)
+                    .padding(bottom = DwmSpace.s)
             ) {
                 TopStrip(
                     turn = body.turnSignal,
@@ -191,7 +199,7 @@ fun CockpitHome(
                         onOpen = actions.launch,
                         onGrantAccess = actions.grantNotifications,
                         modifier = Modifier
-                            .width(DwmGrid.span(content, 4))
+                            .width(DwmGrid.span(content, 5))
                             .fillMaxHeight()
                     )
                     Spacer(Modifier.width(DwmGrid.gutter))
@@ -206,14 +214,19 @@ fun CockpitHome(
                         apps = favourites,
                         onLaunch = actions.launch,
                         modifier = Modifier
-                            .width(DwmGrid.span(content, 5))
+                            .width(DwmGrid.span(content, 4))
                             .fillMaxHeight()
                     )
                 }
             }
         }
 
-        NavRail(selected = Rail.HOME, overlaysOn = overlaysOn, actions = actions)
+        SystemBar(
+            selected = Bar.HOME,
+            overlaysOn = overlaysOn,
+            actions = actions,
+            onHome = {}
+        )
     }
 }
 

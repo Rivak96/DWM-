@@ -48,11 +48,13 @@ import com.dwm.cockpit.ui.theme.DwmType
  *
  * ### The recurring motif
  *
- * The section list is a **horizontal tab row with the accent bar underneath the
- * active tab** — the same bar that sits beside the active item on the nav rail,
- * rotated. That is deliberate: one moving accent bar, appearing once per screen in
- * one of two orientations, is what ties home and settings together as one machine.
- * The rail itself is here too, unchanged, with [Rail.SETTINGS] lit.
+ * The section list is a **horizontal tab row with a travelling bar underneath the
+ * active tab** — the same element the system bar puts above its active item. Same
+ * shape, same motion, and it is what ties the two screens together as one machine.
+ * It is drawn in the text colour rather than the accent: the system bar owns the one
+ * accent-coloured element on any screen, and two cyan bars would be two things both
+ * claiming to be the thing that matters.
+ * The system bar is here too, with [Bar.SETTINGS] lit.
  *
  * Groups are laid in **two columns of six**. A single column of eight left the
  * bottom two thirds of the page empty on the short sections, which is the original
@@ -149,15 +151,15 @@ fun SettingsScreen(
     val colors = Dwm.colors
     var section by rememberSaveable { mutableIntStateOf(startSection) }
 
-    Row(
+    Column(
         Modifier
             .fillMaxSize()
             .background(colors.background)
     ) {
         BoxWithConstraints(
             Modifier
+                .fillMaxWidth()
                 .weight(1f)
-                .fillMaxHeight()
         ) {
             val content = maxWidth
             Column(
@@ -201,8 +203,8 @@ fun SettingsScreen(
             }
         }
 
-        NavRail(
-            selected = Rail.SETTINGS,
+        SystemBar(
+            selected = Bar.SETTINGS,
             overlaysOn = overlaysOn,
             actions = home,
             onHome = actions.close
@@ -255,11 +257,14 @@ private fun SectionTabs(selected: Int, onSelect: (Int) -> Unit) {
                         .height(com.dwm.cockpit.ui.theme.DwmStroke.hairline)
                         .background(colors.hairline)
                 )
+                // Text-coloured, not accent. The system bar along the bottom
+                // carries the one accent element on this screen; a second cyan bar
+                // up here would be two things claiming to be the important one.
                 Spacer(
                     Modifier
                         .offset(x = barOffset)
                         .size(DwmSize.railBarLength, DwmSize.railBarWidth)
-                        .background(colors.accent)
+                        .background(colors.text)
                 )
             }
         }
