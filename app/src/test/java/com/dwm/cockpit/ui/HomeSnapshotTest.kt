@@ -135,6 +135,39 @@ class HomeSnapshotTest {
         )
     }
 
+    /**
+     * A wallpaper behind the cockpit.
+     *
+     * **Deliberately a synthetic mid-grey, not the bundled photo.** Two reasons.
+     * layoutlib cannot decode WebP, so `decodeResource` returns null here and a
+     * golden using the real image would silently show no wallpaper at all — which is
+     * exactly what the first version of this test did.
+     *
+     * More usefully, a flat mid-grey is a far harsher test than the shipped photo.
+     * The bundled image measures 0.010 mean luminance; this is roughly fifteen times
+     * brighter. If cards stay readable over this, they stay readable over anything a
+     * driver is likely to pick. What the golden proves is the compositing: the image
+     * draws, the dim applies, cards stay fully opaque, and the drawer pane lets it
+     * through.
+     */
+    @Test
+    fun `cockpit over a bright wallpaper`() = snap {
+        CockpitHome(
+            panes = previewPanesDefault,
+            splitFraction = 0.5f,
+            favourites = previewDeckApps,
+            allApps = previewFavourites,
+            overlaysOn = true,
+            actions = previewActions,
+            vehicle = previewVehicleNoSignal,
+            wallpaper = android.graphics.Bitmap
+                .createBitmap(64, 40, android.graphics.Bitmap.Config.ARGB_8888)
+                .apply { eraseColor(0xFF6E7683.toInt()) },
+            wallpaperDim = 0.30f,
+            drawnView = drawn
+        )
+    }
+
     private fun snap(night: Boolean = false, content: @Composable () -> Unit) {
         paparazzi.snapshot { DwmPreviewTheme(night = night) { content() } }
     }

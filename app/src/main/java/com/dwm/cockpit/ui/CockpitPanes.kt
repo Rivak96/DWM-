@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -218,10 +219,17 @@ private fun Pane(
     val colors = Dwm.colors
     val source = pane.current
 
+    // A pane holding the app drawer, or nothing, lets the wallpaper through: its
+    // content is icons and labels on a field, which is the one place on this screen
+    // a backdrop can be seen at all. Everything else keeps an opaque surface, because
+    // every contrast figure in this design was measured against a flat near-black
+    // field and a photograph behind a readout makes those numbers fiction.
+    val seeThrough = source == null || source.type == PanelType.DRAWER
+
     Column(
         modifier
             .clip(DwmShapes.medium)
-            .background(colors.surface)
+            .background(if (seeThrough) Color.Transparent else colors.surface)
             .border(DwmStroke.hairline, colors.hairline, DwmShapes.medium)
     ) {
         PaneHeader(pane = pane, onSwipe = onSwipe, onPick = onPick)
@@ -251,7 +259,7 @@ private fun Pane(
                 // thing on every launch.
                 source.type == PanelType.APP -> Box(Modifier.fillMaxSize())
 
-                source.type == PanelType.DRAWER -> PaneDrawer(apps, onLaunch, onAppMenu)
+                source.type == PanelType.DRAWER -> PaneDrawer(apps, onLaunch, onAppMenu, seeThrough)
 
                 else -> key(source.type, source.pkg, source.url, source.metric) {
                     val view = drawnView(source)
@@ -393,7 +401,8 @@ private fun EmptyPane(onPick: () -> Unit) {
 private fun PaneDrawer(
     apps: List<HomeApp>,
     onLaunch: (String) -> Unit,
-    onAppMenu: (String) -> Unit
+    onAppMenu: (String) -> Unit,
+    onWallpaper: Boolean = false
 ) {
     val colors = Dwm.colors
     if (apps.isEmpty()) {
@@ -415,7 +424,9 @@ private fun PaneDrawer(
         ) {
             apps.chunked(cols).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(DwmSpace.m)) {
-                    row.forEach { app -> DrawerTile(app, onLaunch, onAppMenu, Modifier.weight(1f)) }
+                    row.forEach { app ->
+                        DrawerTile(app, onLaunch, onAppMenu, onWallpaper, Modifier.weight(1f))
+                    }
                     repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
@@ -429,6 +440,7 @@ private fun DrawerTile(
     app: HomeApp,
     onLaunch: (String) -> Unit,
     onAppMenu: (String) -> Unit,
+    onWallpaper: Boolean,
     modifier: Modifier
 ) {
     val colors = Dwm.colors
@@ -458,7 +470,10 @@ private fun DrawerTile(
         DwmText(
             app.label,
             style = DwmType.caption,
-            color = colors.muted,
+            // Full contrast over a photograph. Muted clears only 3.2:1 against the
+            // wallpaper's brightest areas; the text colour clears 9.2:1, which is why
+            // the picture does not have to be dimmed into invisibility to be safe.
+            color = if (onWallpaper) colors.text else colors.muted,
             align = androidx.compose.ui.text.style.TextAlign.Center
         )
     }

@@ -63,7 +63,7 @@ class HomeActivity : DwmActivity() {
     private val splitState = mutableStateOf(0.5f)
     private val boostState = mutableStateOf<Float?>(null)
     private val wallpaperState = mutableStateOf<Bitmap?>(null)
-    private val wallpaperDimState = mutableStateOf(0.72f)
+    private val wallpaperDimState = mutableStateOf(0.30f)
 
     private val handler = Handler(Looper.getMainLooper())
     private var lastPanelsJson: String? = "_never"
@@ -410,9 +410,22 @@ class HomeActivity : DwmActivity() {
      */
     private fun loadWallpaper() {
         wallpaperDimState.value = Prefs.wallpaperDim(this)
+
+        val mode = Prefs.wallpaper(this)
         val uri = Prefs.wallpaperUri(this)
-        if (uri == null) {
+        if (mode == Prefs.WALL_NONE) {
             wallpaperState.value = null
+            return
+        }
+        if (mode != Prefs.WALL_CUSTOM || uri == null) {
+            // The bundled image. Already cropped to the panel and stored as a 95 KB
+            // WebP, so it decodes straight through with no sampling maths.
+            Thread {
+                val bmp = runCatching {
+                    BitmapFactory.decodeResource(resources, R.drawable.wallpaper_default)
+                }.getOrNull()
+                runOnUiThread { if (!isFinishing) wallpaperState.value = bmp }
+            }.start()
             return
         }
         Thread {

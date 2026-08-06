@@ -123,7 +123,7 @@ fun CockpitHome(
     boost: Float? = null,
     /** Optional wallpaper, already decoded by the activity. */
     wallpaper: android.graphics.Bitmap? = null,
-    wallpaperDim: Float = 0.72f,
+    wallpaperDim: Float = 0.30f,
     /** Open an app inside a pane rather than fullscreen. */
     onLaunchInPane: (pane: Int, pkg: String) -> Unit = { _, _ -> },
     onSwipe: (pane: Int, delta: Int) -> Unit = { _, _ -> },

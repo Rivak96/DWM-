@@ -124,7 +124,12 @@ class SettingsActivity : DwmActivity() {
             themeMode = Prefs.theme(this).coerceIn(0, 2),
             uiScale = Prefs.uiScale(this),
             fontScale = Prefs.fontScale(this),
-            wallpaper = Prefs.wallpaperUri(this)?.let { "Image set" } ?: "None",
+            wallpaper = Prefs.wallpaper(this),
+            wallpaperName = when (Prefs.wallpaper(this)) {
+                Prefs.WALL_NONE -> "Plain background"
+                Prefs.WALL_CUSTOM -> "Your image"
+                else -> "Ranger (bundled)"
+            },
             wallpaperDim = Prefs.wallpaperDim(this),
             mode = Prefs.mode(this),
             modeHint = modeHintState.value,
@@ -171,7 +176,7 @@ class SettingsActivity : DwmActivity() {
                 Toast.makeText(this, "No image picker on this deck", Toast.LENGTH_LONG).show()
             }
         },
-        clearWallpaper = { Prefs.setWallpaperUri(this, null); bump() },
+        setWallpaperMode = { Prefs.setWallpaper(this, it); bump() },
         setWallpaperDim = { Prefs.setWallpaperDim(this, it); bump() },
         setMode = { setMode(it) },
         setAutoLoad = { Prefs.setAutoLoad(this, it); bump() },
