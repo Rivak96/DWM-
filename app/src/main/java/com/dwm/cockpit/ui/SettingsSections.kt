@@ -83,8 +83,30 @@ fun displaySection(ui: SettingsUi, a: SettingsActions): List<@Composable () -> U
                 ) { a.setFontScale(TEXT_SCALES[it]) }
             }
         }
+    },
+    {
+        SettingsGroup("Wallpaper") {
+            SettingsRow("Image", ui.wallpaper) {
+                Row(horizontalArrangement = Arrangement.spacedBy(DwmSpace.s)) {
+                    SettingsButton("Pick", a.pickWallpaper)
+                    SettingsButton("Clear", a.clearWallpaper)
+                }
+            }
+            SettingsRow(
+                "Dim",
+                "Every contrast figure in this design was measured against a near-black " +
+                    "field. Less dimming means a brighter picture and less readable text."
+            ) {
+                SegmentedChoice(
+                    listOf("None", "Light", "Medium", "Heavy"),
+                    WALL_DIMS.indexOfFirst { it == ui.wallpaperDim }.let { if (it < 0) 3 else it }
+                ) { a.setWallpaperDim(WALL_DIMS[it]) }
+            }
+        }
     }
 )
+
+private val WALL_DIMS = listOf(0f, 0.35f, 0.55f, 0.72f)
 
 fun cockpitSection(ui: SettingsUi, a: SettingsActions): List<@Composable () -> Unit> = listOf(
     {

@@ -154,6 +154,19 @@ object Prefs {
     fun setAccent(c: Context, color: Int) = sp(c).edit().putInt("accent", color).apply()
 
     fun wallpaperUri(c: Context): String? = sp(c).getString("wall_uri", null)
+
+    /**
+     * How far the wallpaper is dimmed behind the cockpit, 0 = untouched, 1 = black.
+     *
+     * Defaults high on purpose. Every contrast figure in this design was measured
+     * against a near-black field; a photograph behind the cards is an unmeasured
+     * background, and a bright one turns muted text — which clears 4.5:1 on
+     * `#0A0C0F` — into something unreadable in daylight. The slider lets the driver
+     * trade that off knowingly rather than by accident.
+     */
+    fun wallpaperDim(c: Context) = sp(c).getFloat("wall_dim", 0.72f).coerceIn(0f, 1f)
+    fun setWallpaperDim(c: Context, v: Float) =
+        sp(c).edit().putFloat("wall_dim", v.coerceIn(0f, 1f)).apply()
     fun setWallpaperUri(c: Context, uri: String?) = sp(c).edit().putString("wall_uri", uri).apply()
 
     fun pillX(c: Context) = sp(c).getInt("pill_x", 24)

@@ -5,6 +5,7 @@ import android.view.View
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -92,7 +93,12 @@ fun CockpitPanes(
     modifier: Modifier = Modifier,
     /** For a pane showing the app drawer. */
     apps: List<HomeApp> = emptyList(),
-    onLaunch: (String) -> Unit = {},
+    /** Which pane launched, and what. The pane matters: tapping an app in a
+     *  pane's drawer opens it *in that pane*, not fullscreen. */
+    onLaunch: (pane: Int, pkg: String) -> Unit = { _, _ -> },
+    /** Long-press: fullscreen, floating window, or pin. The escape hatch from
+     *  "everything opens in a pane". */
+    onAppMenu: (String) -> Unit = {},
     onSwipe: (pane: Int, delta: Int) -> Unit = { _, _ -> },
     onSplitChange: (Float) -> Unit = {},
     onPick: (pane: Int) -> Unit = {},
@@ -124,7 +130,8 @@ fun CockpitPanes(
             Pane(
                 pane = pane,
                 apps = apps,
-                onLaunch = onLaunch,
+                onLaunch = { pkg -> onLaunch(i, pkg) },
+                onAppMenu = onAppMenu,
                 onSwipe = { d -> onSwipe(i, d) },
                 onPick = { onPick(i) },
                 drawnView = drawnView,
@@ -201,6 +208,7 @@ private fun Pane(
     pane: PaneState,
     apps: List<HomeApp>,
     onLaunch: (String) -> Unit,
+    onAppMenu: (String) -> Unit,
     onSwipe: (Int) -> Unit,
     onPick: () -> Unit,
     drawnView: (Panel) -> View?,
@@ -243,7 +251,7 @@ private fun Pane(
                 // thing on every launch.
                 source.type == PanelType.APP -> Box(Modifier.fillMaxSize())
 
-                source.type == PanelType.DRAWER -> PaneDrawer(apps, onLaunch)
+                source.type == PanelType.DRAWER -> PaneDrawer(apps, onLaunch, onAppMenu)
 
                 else -> key(source.type, source.pkg, source.url, source.metric) {
                     val view = drawnView(source)
@@ -382,7 +390,11 @@ private fun EmptyPane(onPick: () -> Unit) {
  * anything.
  */
 @Composable
-private fun PaneDrawer(apps: List<HomeApp>, onLaunch: (String) -> Unit) {
+private fun PaneDrawer(
+    apps: List<HomeApp>,
+    onLaunch: (String) -> Unit,
+    onAppMenu: (String) -> Unit
+) {
     val colors = Dwm.colors
     if (apps.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -403,7 +415,7 @@ private fun PaneDrawer(apps: List<HomeApp>, onLaunch: (String) -> Unit) {
         ) {
             apps.chunked(cols).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(DwmSpace.m)) {
-                    row.forEach { app -> DrawerTile(app, onLaunch, Modifier.weight(1f)) }
+                    row.forEach { app -> DrawerTile(app, onLaunch, onAppMenu, Modifier.weight(1f)) }
                     repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
@@ -412,15 +424,21 @@ private fun PaneDrawer(apps: List<HomeApp>, onLaunch: (String) -> Unit) {
 }
 
 @Composable
-private fun DrawerTile(app: HomeApp, onLaunch: (String) -> Unit, modifier: Modifier) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun DrawerTile(
+    app: HomeApp,
+    onLaunch: (String) -> Unit,
+    onAppMenu: (String) -> Unit,
+    modifier: Modifier
+) {
     val colors = Dwm.colors
     Column(
         modifier
             .clip(DwmShapes.small)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onLaunch(app.pkg) }
+            .combinedClickable(
+                onClick = { onLaunch(app.pkg) },
+                onLongClick = { onAppMenu(app.pkg) }
+            )
             .padding(vertical = DwmSpace.m),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

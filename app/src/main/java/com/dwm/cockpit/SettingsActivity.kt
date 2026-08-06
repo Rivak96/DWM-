@@ -124,6 +124,8 @@ class SettingsActivity : DwmActivity() {
             themeMode = Prefs.theme(this).coerceIn(0, 2),
             uiScale = Prefs.uiScale(this),
             fontScale = Prefs.fontScale(this),
+            wallpaper = Prefs.wallpaperUri(this)?.let { "Image set" } ?: "None",
+            wallpaperDim = Prefs.wallpaperDim(this),
             mode = Prefs.mode(this),
             modeHint = modeHintState.value,
             autoLoad = Prefs.autoLoad(this),
@@ -153,6 +155,24 @@ class SettingsActivity : DwmActivity() {
         setThemeMode = { applyThemePreset(it) },
         setUiScale = { setUiScale(it) },
         setFontScale = { setScale(it) },
+        pickWallpaper = {
+            // OPEN_DOCUMENT rather than GET_CONTENT: the result URI can be granted
+            // persistably, so the wallpaper survives a reboot. GET_CONTENT hands back
+            // a one-shot URI that is dead the next time the launcher starts.
+            runCatching {
+                startActivityForResult(
+                    Intent(Intent.ACTION_OPEN_DOCUMENT)
+                        .addCategory(Intent.CATEGORY_OPENABLE)
+                        .setType("image/*")
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                    REQ_WALL
+                )
+            }.onFailure {
+                Toast.makeText(this, "No image picker on this deck", Toast.LENGTH_LONG).show()
+            }
+        },
+        clearWallpaper = { Prefs.setWallpaperUri(this, null); bump() },
+        setWallpaperDim = { Prefs.setWallpaperDim(this, it); bump() },
         setMode = { setMode(it) },
         setAutoLoad = { Prefs.setAutoLoad(this, it); bump() },
         pickCarplay = { pickCarplay() },
@@ -867,6 +887,7 @@ class SettingsActivity : DwmActivity() {
                 }
                 Prefs.setWallpaperUri(this, uri.toString())
                 Prefs.setWallpaper(this, 3)
+                bump()
                 wallToast()
             }
             REQ_FAV -> {

@@ -3,6 +3,7 @@ package com.dwm.cockpit.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +44,7 @@ import com.dwm.cockpit.ui.theme.DwmType
 fun QuickToggles(
     apps: List<HomeApp>,
     onLaunch: (String) -> Unit,
+    onAppMenu: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = Dwm.colors
@@ -59,7 +61,7 @@ fun QuickToggles(
                 DwmText("No shortcuts", style = DwmType.label, color = colors.muted)
             }
             apps.take(MAX).forEach { app ->
-                Toggle(app, onLaunch)
+                Toggle(app, onLaunch, onAppMenu)
             }
         }
     }
@@ -68,8 +70,13 @@ fun QuickToggles(
 /** Six is what fits at a moving-hand size across five of twelve columns. */
 private const val MAX = 6
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun Toggle(app: HomeApp, onLaunch: (String) -> Unit) {
+private fun Toggle(
+    app: HomeApp,
+    onLaunch: (String) -> Unit,
+    onAppMenu: (String) -> Unit
+) {
     val colors = Dwm.colors
     Column(
         Modifier
@@ -77,10 +84,10 @@ private fun Toggle(app: HomeApp, onLaunch: (String) -> Unit) {
             .clip(DwmShapes.small)
             .background(colors.raised)
             .border(DwmStroke.hairline, colors.hairline, DwmShapes.small)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onLaunch(app.pkg) },
+            .combinedClickable(
+                onClick = { onLaunch(app.pkg) },
+                onLongClick = { onAppMenu(app.pkg) }
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {

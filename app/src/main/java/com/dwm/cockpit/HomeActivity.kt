@@ -62,6 +62,8 @@ class HomeActivity : DwmActivity() {
     private val panesState = mutableStateOf<List<PaneState>>(emptyList())
     private val splitState = mutableStateOf(0.5f)
     private val boostState = mutableStateOf<Float?>(null)
+    private val wallpaperState = mutableStateOf<Bitmap?>(null)
+    private val wallpaperDimState = mutableStateOf(0.72f)
 
     private val handler = Handler(Looper.getMainLooper())
     private var lastPanelsJson: String? = "_never"
@@ -103,7 +105,10 @@ class HomeActivity : DwmActivity() {
             settings = { startActivity(Intent(this, SettingsActivity::class.java)) },
             reload = { reloadCockpit() },
             pill = { startPill() },
-            launch = { pkg -> LaunchEngine.launchFullscreen(this, pkg) },
+            // Shortcuts open into the pane you last touched, not fullscreen. A
+            // split cockpit whose shortcuts cover the whole screen is not a split
+            // cockpit. Long-press an app tile for the fullscreen option.
+            launch = { pkg -> openInPane(activePane, pkg) },
             appMenu = { pkg -> appMenu(pkg) },
             grantNotifications = {
                 runCatching {
@@ -129,6 +134,9 @@ class HomeActivity : DwmActivity() {
                             overlaysOn = overlaysOnState.value,
                             actions = actions,
                             boost = boostState.value,
+                            wallpaper = wallpaperState.value,
+                            wallpaperDim = wallpaperDimState.value,
+                            onLaunchInPane = ::openInPane,
                             onSwipe = ::swipePane,
                             onSplitChange = ::setSplit,
                             onPickSource = ::pickPaneSource,
@@ -148,6 +156,7 @@ class HomeActivity : DwmActivity() {
         overlaysOnState.value = OverlayPanelsService.isRunning
         loadPanes()
         loadApps()
+        loadWallpaper()
         resumeVisibleWeb()
 
         ensurePermissions()
@@ -349,6 +358,81 @@ class HomeActivity : DwmActivity() {
         else -> null
     }
 
+    /**
+     * Open an app **inside a pane**, which is the whole point of the pane system and
+     * was not wired up.
+     *
+     * `HomeActions.launch` still pointed at `launchFullscreen` from the previous
+     * design, so every app opened fullscreen and the pane rect was never used. A pane
+     * only ever received a window if it had already been configured with an APP
+     * source, which nobody had done.
+     *
+     * Tapping an app now replaces that pane's current source with the app and launches
+     * its window into the pane's measured rect. The change is persisted, so the
+     * cockpit comes back the way it was left. Long-press still opens fullscreen — see
+     * [appMenu].
+     */
+    private fun openInPane(pane: Int, pkg: String) {
+        val panes = panesState.value.toMutableList()
+        val p = panes.getOrNull(pane) ?: return
+        activePane = pane
+
+        val label = Apps.label(this, pkg)
+        val app = Panel(PanelType.APP, 0f, 0f, 1f, 1f, pkg = pkg, label = label)
+
+        // Replace the source in place rather than appending, so swiping back and
+        // forth does not grow the list every time an app is opened.
+        val sources = p.sources.toMutableList()
+        val was = p.current
+        if (p.index in sources.indices) sources[p.index] = app else sources.add(app)
+
+        panes[pane] = PaneState(sources, p.index.coerceIn(0, sources.lastIndex))
+        panesState.value = panes
+        Prefs.savePanes(this, panes.map { it.sources })
+        Prefs.setPaneIndex(this, pane, panes[pane].index)
+
+        if (was?.isWindowedApp() == true && was.pkg != pkg) parkWindow(was)
+        launchPaneApps()
+    }
+
+    /** The pane a shortcut opens into: whichever one was touched last. */
+    private var activePane = 0
+
+    /**
+     * Decode the wallpaper once per resume, downsampled to the panel.
+     *
+     * `inSampleSize` matters here rather than being tidiness: a phone photo is
+     * commonly 4000px wide and decoding one at full size costs ~48 MB on a deck with
+     * around 600 MB free. Sampled to the panel it is nearer 9 MB.
+     *
+     * Failure is silent and leaves the background plain — a wallpaper whose URI
+     * permission did not survive a reboot must not stop the launcher drawing.
+     */
+    private fun loadWallpaper() {
+        wallpaperDimState.value = Prefs.wallpaperDim(this)
+        val uri = Prefs.wallpaperUri(this)
+        if (uri == null) {
+            wallpaperState.value = null
+            return
+        }
+        Thread {
+            val bmp = runCatching {
+                val target = LaunchEngine.displaySize(this)
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                contentResolver.openInputStream(Uri.parse(uri))?.use {
+                    BitmapFactory.decodeStream(it, null, bounds)
+                }
+                var sample = 1
+                while (bounds.outWidth / sample > target.x * 2) sample *= 2
+                val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+                contentResolver.openInputStream(Uri.parse(uri))?.use {
+                    BitmapFactory.decodeStream(it, null, opts)
+                }
+            }.getOrNull()
+            runOnUiThread { if (!isFinishing) wallpaperState.value = bmp }
+        }.start()
+    }
+
     private fun loadPanes() {
         val sources = Prefs.panes(this)
         splitState.value = Prefs.splitFraction(this)
@@ -363,6 +447,7 @@ class HomeActivity : DwmActivity() {
      * Wraps, and persists, so the cockpit comes back showing what it was showing.
      */
     private fun swipePane(pane: Int, delta: Int) {
+        activePane = pane
         val panes = panesState.value.toMutableList()
         val p = panes.getOrNull(pane) ?: return
         if (p.sources.size < 2) return
@@ -394,6 +479,7 @@ class HomeActivity : DwmActivity() {
     }
 
     private fun pickPaneSource(pane: Int) {
+        activePane = pane
         val p = panesState.value.getOrNull(pane) ?: return
         val names = p.sources.map { it.displayLabel() }.toTypedArray()
         Ui.dialog(this)

@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -120,6 +121,11 @@ fun CockpitHome(
     vehicle: VehicleUi = rememberVehicleState(LocalContext.current),
     media: Media.State = Media.State.Idle,
     boost: Float? = null,
+    /** Optional wallpaper, already decoded by the activity. */
+    wallpaper: android.graphics.Bitmap? = null,
+    wallpaperDim: Float = 0.72f,
+    /** Open an app inside a pane rather than fullscreen. */
+    onLaunchInPane: (pane: Int, pkg: String) -> Unit = { _, _ -> },
     onSwipe: (pane: Int, delta: Int) -> Unit = { _, _ -> },
     onSplitChange: (Float) -> Unit = {},
     onPickSource: (pane: Int) -> Unit = {},
@@ -132,10 +138,30 @@ fun CockpitHome(
     val body by vehicle.body
     val vitals by vehicle.vitals
 
+    Box(Modifier.fillMaxSize().background(colors.background)) {
+        // The wallpaper, if there is one, with a dim over it. Cards stay fully
+        // opaque on top: every contrast figure in this design was measured against a
+        // flat near-black field, and letting a photograph show through a card would
+        // make all of those numbers fiction. What it changes is the margins, the
+        // gutters and the space around the cards — which is a smaller share of this
+        // screen than a wallpaper usually gets.
+        if (wallpaper != null) {
+            androidx.compose.foundation.Image(
+                bitmap = wallpaper.asImageBitmap(),
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Spacer(
+                Modifier
+                    .fillMaxSize()
+                    .background(colors.background.copy(alpha = wallpaperDim))
+            )
+        }
+
     Column(
         Modifier
             .fillMaxSize()
-            .background(colors.background)
     ) {
         BoxWithConstraints(
             Modifier
@@ -164,7 +190,8 @@ fun CockpitHome(
                     panes = panes,
                     splitFraction = splitFraction,
                     apps = allApps,
-                    onLaunch = actions.launch,
+                    onLaunch = onLaunchInPane,
+                    onAppMenu = actions.appMenu,
                     onSwipe = onSwipe,
                     onSplitChange = onSplitChange,
                     onPick = onPickSource,
@@ -213,6 +240,7 @@ fun CockpitHome(
                     QuickToggles(
                         apps = favourites,
                         onLaunch = actions.launch,
+                        onAppMenu = actions.appMenu,
                         modifier = Modifier
                             .width(DwmGrid.span(content, 4))
                             .fillMaxHeight()
@@ -227,6 +255,7 @@ fun CockpitHome(
             actions = actions,
             onHome = {}
         )
+    }
     }
 }
 

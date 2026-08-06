@@ -126,6 +126,8 @@ val previewSettings = SettingsUi(
     themeMode = 0,
     uiScale = 1.0f,
     fontScale = 1.0f,
+    wallpaper = "None",
+    wallpaperDim = 0.72f,
     mode = 1,
     modeHint = "Solo + overlays — a fullscreen base app opens on start and every " +
         "gauge, camera and web panel floats on top of it.",
