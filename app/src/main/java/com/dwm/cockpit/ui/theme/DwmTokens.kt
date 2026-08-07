@@ -319,6 +319,17 @@ object DwmSize {
      */
     val tileGlyph: Dp = 48.dp
 
+    /**
+     * The glyph on the app stage. Its own token, not [tileGlyph] reused.
+     *
+     * The stage is roughly 1146x680dp — the largest single surface in DWM by a wide
+     * margin — and a mark drawn for a 176dp tile disappears in it. This is the same
+     * mistake [tile] documents from the other direction: there, one scaling rule
+     * produced two different designs; here, one fixed size did. A glyph is sized by the
+     * surface it identifies, and the stage is not a tile.
+     */
+    val stageGlyph: Dp = 112.dp
+
     /** Top status strip. */
     val topStrip: Dp = 88.dp
 

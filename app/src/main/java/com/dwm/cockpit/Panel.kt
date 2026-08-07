@@ -12,8 +12,8 @@ enum class PanelType {
 
 /**
  * One cell in the cockpit. Position is stored as screen fractions (0..1) so the
- * layout survives resolution changes. APP panels are launched as real freeform
- * windows; every other type is drawn by DWM inside its own screen.
+ * layout survives resolution changes. Every type here is drawn by DWM inside its own
+ * screen except APP, which is a real task and can only be opened fullscreen.
  */
 data class Panel(
     val type: PanelType,
@@ -27,26 +27,27 @@ data class Panel(
     val html: String? = null,    // HTML content
     val metric: String? = null,  // OBD metric key: rpm, coolant, speed, throttle, map, intake
     val camId: String? = null,   // CAMERA2 camera id (null = auto)
-    val fullscreen: Boolean = false, // APP panel opens fullscreen (base app, e.g. CarPlay)
     val rotation: Int = 0        // CAMERA preview rotation: 0/90/180/270
 ) {
     fun withBounds(l: Float, t: Float, r: Float, b: Float) = copy(l = l, t = t, r = r, b = b)
 
-    /** True if this panel is launched as a freeform app window (vs drawn by DWM).
-     *  CAMERA panels are ALWAYS drawn now (Camera2 overlay, with the app as a
-     *  tap-to-open fallback) so they persist size/position, never grab audio and
-     *  never sink behind the fullscreen app. */
-    fun isWindowedApp(): Boolean =
-        type == PanelType.APP && pkg != null && !fullscreen
-
-    /** True if this APP panel opens as the fullscreen base app. */
-    fun isFullscreenApp(): Boolean = type == PanelType.APP && pkg != null && fullscreen
+    /**
+     * True if this APP panel opens as the fullscreen base app — which is now the only
+     * thing an APP panel can be.
+     *
+     * There used to be a `fullscreen` flag here and an `isWindowedApp()` beside it, for
+     * panels launched into their own rect as freeform windows. That mode is gone (see
+     * [LaunchEngine]), so the flag had exactly one legal value and stopped earning its
+     * place. Old saved layouts that stored `fs: false` now open fullscreen, which is
+     * the only remaining behaviour; the key is simply ignored on read.
+     */
+    fun isFullscreenApp(): Boolean = type == PanelType.APP && pkg != null
 
     /** True if DWM draws this panel itself (gauges, web, camera-live, clock…). */
-    fun isDrawn(): Boolean = !isWindowedApp() && !isFullscreenApp() && type != PanelType.APP
+    fun isDrawn(): Boolean = type != PanelType.APP
 
     fun displayLabel(): String = when (type) {
-        PanelType.APP -> (label ?: pkg ?: "App") + if (fullscreen) " · FULL" else ""
+        PanelType.APP -> label ?: pkg ?: "App"
         PanelType.WEB -> "Web · ${label ?: url ?: ""}"
         PanelType.HTML -> "HTML · ${label ?: "custom"}"
         PanelType.IMAGE -> "Image"
@@ -67,7 +68,6 @@ data class Panel(
         html?.let { put("html", it) }
         metric?.let { put("metric", it) }
         camId?.let { put("camId", it) }
-        if (fullscreen) put("fs", true)
         if (rotation != 0) put("rot", rotation)
     }
 
@@ -84,7 +84,6 @@ data class Panel(
             html = o.optStringOrNull("html"),
             metric = o.optStringOrNull("metric"),
             camId = o.optStringOrNull("camId"),
-            fullscreen = o.optBoolean("fs", false),
             rotation = o.optInt("rot", 0)
         )
     }

@@ -218,12 +218,6 @@ object Prefs {
     fun overlayEdit(c: Context) = sp(c).getBoolean("overlay_edit", false)
     fun setOverlayEdit(c: Context, v: Boolean) = sp(c).edit().putBoolean("overlay_edit", v).apply()
 
-    /** Freeform caption-bar compensation in dp: the system draws a title bar
-     *  inside each freeform window, cropping app content (e.g. CarPlay's bottom
-     *  controls). We grow window bounds by this much to compensate. */
-    fun captionComp(c: Context) = sp(c).getInt("caption_comp", 32)
-    fun setCaptionComp(c: Context, dp: Int) = sp(c).edit().putInt("caption_comp", dp).apply()
-
     /** Cockpit mode: 0 = Dashboard (panels drawn on the home canvas) ·
      *  1 = Overlay (one fullscreen base app + panels floating on top). */
     fun mode(c: Context) = sp(c).getInt("mode", 0)

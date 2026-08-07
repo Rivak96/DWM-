@@ -39,14 +39,15 @@ class HomeSnapshotTest {
     )
 
     /**
-     * The very first boot: no app has ever been chosen, so the stage shows the grid.
+     * The very first boot: no app has ever been chosen, so the stage shows its empty
+     * card and offers to open the drawer.
      *
      * No CAN data either, which is the deck's real state until the engine is running.
      * This is the state that has to look finished, because it is the one a fresh
      * install lands in.
      */
     @Test
-    fun `cockpit empty stage, no CAN`() = snap {
+    fun `cockpit no app chosen, no CAN`() = snap {
         CockpitHome(
             stageApp = null,
             cameraPanel = previewCameraPanel,
@@ -61,10 +62,12 @@ class HomeSnapshotTest {
     /**
      * An app on the stage — the normal state, every morning after the first.
      *
-     * The stage renders blank because the window is a separate freeform task no
-     * renderer can see. What this proves is the chrome around it: that the right-hand
-     * column, the vehicle bar and the nav bar all sit *outside* the rect the window
-     * will be launched into, so none of them can be covered by it.
+     * This golden used to be almost worthless: the stage rendered as a black rectangle,
+     * because the app was a separate freeform task no renderer could see, and all it
+     * could prove was that the chrome sat outside the rect the window would land in.
+     * The stage is DWM-drawn now, so the whole home screen is in this PNG — including
+     * the two header controls and the OPEN FULLSCREEN button, which are the only way
+     * to open an app from here and therefore the thing most worth looking at.
      */
     @Test
     fun `cockpit with an app on the stage`() = snap {

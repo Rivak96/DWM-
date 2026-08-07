@@ -17,14 +17,13 @@ import com.dwm.cockpit.ui.theme.DwmSpace
  * This must stay in step with `DECK` in the snapshot tests — same geometry, two
  * syntaxes, and nothing enforces the agreement but this note.
  *
- * The stage renders empty here, because the app on it is a separate freeform task
- * that neither Studio nor Paparazzi can see. That is honest rather than a gap: what
- * the golden proves is the chrome and the geometry the window will land in, and only
- * the deck can prove the window lands in it.
+ * The stage used to render empty here, because the app on it was a separate freeform
+ * task that neither Studio nor Paparazzi could see. It draws its own card now, so
+ * these previews finally show the whole screen rather than the chrome around a hole.
  */
 private const val DECK = "spec:width=1600dp,height=1000dp,dpi=192"
 
-@Preview(name = "Cockpit · empty stage (the first boot)", device = DECK)
+@Preview(name = "Cockpit · no app chosen (the first boot)", device = DECK)
 @Composable
 private fun PreviewCockpitDefault() {
     DwmPreviewTheme {
@@ -39,7 +38,7 @@ private fun PreviewCockpitDefault() {
     }
 }
 
-@Preview(name = "Cockpit · an app on the stage", device = DECK)
+@Preview(name = "Cockpit · the home app on the stage", device = DECK)
 @Composable
 private fun PreviewCockpitApps() {
     DwmPreviewTheme {

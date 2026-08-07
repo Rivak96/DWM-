@@ -310,10 +310,10 @@ class LayoutEditorActivity : DwmActivity() {
             return
         }
         val items = when {
+            // No "open as a window" any more: freeform was removed for being
+            // unpositionable, so an app panel is a fullscreen base app or nothing.
             p.type == PanelType.APP -> arrayOf(
-                "Reconfigure",
-                if (p.fullscreen) "Open as window instead" else "Open FULLSCREEN (base app)",
-                "Clear slot", "Remove slot"
+                "Reconfigure", "Clear slot", "Remove slot"
             )
             p.type == PanelType.CAMERA -> arrayOf(
                 "Reconfigure", "Rotate 90° (now ${p.rotation}°)", "Clear slot", "Remove slot"
@@ -327,9 +327,8 @@ class LayoutEditorActivity : DwmActivity() {
                 when {
                     p.type == PanelType.APP -> when (which) {
                         0 -> reconfigure(slot)
-                        1 -> { slot.panel = p.copy(fullscreen = !p.fullscreen); styleSlot(slot) }
-                        2 -> { slot.panel = null; styleSlot(slot) }
-                        3 -> { inner.removeView(slot.view); slots.remove(slot) }
+                        1 -> { slot.panel = null; styleSlot(slot) }
+                        2 -> { inner.removeView(slot.view); slots.remove(slot) }
                     }
                     p.type == PanelType.CAMERA -> when (which) {
                         0 -> reconfigure(slot)

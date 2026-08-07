@@ -134,7 +134,6 @@ class SettingsActivity : DwmActivity() {
             autoLoad = Prefs.autoLoad(this),
             carplay = carplayState.value,
             favGrid = Prefs.showFavGrid(this),
-            captionComp = Prefs.captionComp(this),
             pillRunning = Prefs.overlaysOn(this),
             panelsRunning = OverlayPanelsService.isRunning,
             overlayEdit = Prefs.overlayEdit(this),
@@ -185,7 +184,6 @@ class SettingsActivity : DwmActivity() {
         // screen's bottom bar; that bar is now a five-item rail and configuration
         // belongs here.
         editLayout = { startActivity(Intent(this, LayoutEditorActivity::class.java)) },
-        setComp = { setComp(it) },
         grantOverlay = {
             runCatching {
                 startActivity(
@@ -201,7 +199,6 @@ class SettingsActivity : DwmActivity() {
         panelsOn = { OverlayPanelsService.start(this); bump() },
         panelsOff = { OverlayPanelsService.stop(this); bump() },
         setOverlayEdit = { Prefs.setOverlayEdit(this, it); restartOverlayPanels(); bump() },
-        raiseWindows = { LaunchEngine.launchLayout(this, Prefs.panels(this)) },
         setMuteOverlays = { Prefs.setMuteOverlays(this, it); restartOverlayPanels(); bump() },
         setVehicleStrip = {
             Prefs.setVehicleStrip(this, it)
@@ -605,11 +602,6 @@ class SettingsActivity : DwmActivity() {
     private fun applyThemePreset(idx: Int) {
         Prefs.setTheme(this, idx)
         recreate()
-    }
-
-    private fun setComp(dp: Int) {
-        Prefs.setCaptionComp(this, dp)
-        Toast.makeText(this, "Title-bar fix: ${if (dp == 0) "off" else "$dp dp"} — reload the cockpit to apply", Toast.LENGTH_SHORT).show()
     }
 
     private fun setMode(mode: Int) {

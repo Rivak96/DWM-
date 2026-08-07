@@ -135,7 +135,6 @@ val previewSettings = SettingsUi(
     autoLoad = true,
     carplay = "CarPlay app: not set",
     favGrid = true,
-    captionComp = 32,
     pillRunning = false,
     panelsRunning = true,
     overlayEdit = false,

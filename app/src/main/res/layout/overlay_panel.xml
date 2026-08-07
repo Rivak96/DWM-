@@ -81,8 +81,7 @@
             android:orientation="horizontal"
             android:paddingTop="8dp">
 
-            <Button android:id="@+id/btnRaise" style="@style/OverlayBtn" android:layout_marginStart="0dp" android:text="Raise windows" />
-            <Button android:id="@+id/btnOpenCockpit" style="@style/OverlayBtn" android:text="Cockpit" />
+            <Button android:id="@+id/btnOpenCockpit" style="@style/OverlayBtn" android:layout_marginStart="0dp" android:text="Cockpit" />
         </LinearLayout>
 
         <View

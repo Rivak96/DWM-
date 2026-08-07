@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.Rect
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -102,10 +101,6 @@ class HomeActivity : DwmActivity() {
             settings = { startActivity(Intent(this, SettingsActivity::class.java)) },
             reload = { reloadCockpit() },
             pill = { startPill() },
-            // Everything that opens an app puts it on the stage. Long-press an app
-            // tile for the fullscreen option.
-            launch = { pkg -> openOnStage(pkg) },
-            appMenu = { pkg -> appMenu(pkg) },
             grantNotifications = {
                 runCatching {
                     startActivity(
@@ -131,8 +126,14 @@ class HomeActivity : DwmActivity() {
                             boost = boostState.value,
                             wallpaper = wallpaperState.value,
                             wallpaperDim = wallpaperDimState.value,
-                            onLaunchOnStage = ::openOnStage,
-                            onStageBounds = ::onStageBounds,
+                            onOpenFullscreen = { pkg ->
+                                LaunchEngine.launchFullscreen(this@HomeActivity, pkg)
+                            },
+                            onPickApp = {
+                                startActivity(
+                                    Intent(this@HomeActivity, AppDrawerActivity::class.java)
+                                )
+                            },
                             drawnView = ::buildPanelView
                         )
                     }
@@ -254,40 +255,6 @@ class HomeActivity : DwmActivity() {
             .show()
     }
 
-    /** Long-press on any app tile. Pinning writes to the same favourites list the
-     *  pill and the app drawer use, so all three stay in step. */
-    private fun appMenu(pkg: String) {
-        val pinned = pkg in Apps.effectiveFavorites(this).take(Apps.FAV_SLOTS)
-        Ui.dialog(this)
-            .setTitle(Apps.label(this, pkg))
-            .setItems(
-                arrayOf(
-                    "Open fullscreen",
-                    "Open in window",
-                    if (pinned) "Remove from home" else "Add to home"
-                )
-            ) { _, w ->
-                when (w) {
-                    0 -> LaunchEngine.launchFullscreen(this, pkg)
-                    1 -> {
-                        val s = LaunchEngine.displaySize(this)
-                        LaunchEngine.launchWindow(
-                            this, pkg,
-                            android.graphics.Rect(s.x / 6, s.y / 6, s.x * 5 / 6, s.y * 5 / 6)
-                        )
-                    }
-                    2 -> {
-                        val cur = Apps.effectiveFavorites(this).toMutableList()
-                        if (pinned) cur.remove(pkg) else cur.add(0, pkg)
-                        while (cur.size > Apps.FAV_SLOTS) cur.removeAt(cur.size - 1)
-                        Prefs.saveFavorites(this, cur)
-                        loadApps()
-                    }
-                }
-            }
-            .show()
-    }
-
     // ---- data for Compose ------------------------------------------------
 
     /**
@@ -299,7 +266,8 @@ class HomeActivity : DwmActivity() {
      *
      * One list now, not two. The favourites band is gone from the home screen — it
      * was asked to be removed along with the now-playing strip — so the only consumer
-     * left is the grid the stage shows before an app has ever been chosen.
+     * left is the stage card, which looks the chosen package up in here to get its
+     * label and glyph.
      */
     private fun loadApps() {
         Thread {
@@ -314,55 +282,6 @@ class HomeActivity : DwmActivity() {
     }
 
     /* ------------------------------------------------------------------ stage */
-
-    /**
-     * Put an app on the stage.
-     *
-     * Persisted immediately, because the stage app *is* the cockpit's layout now —
-     * there is nothing else to save and nothing to restore it from if the process
-     * dies. [launchStageApp] does the window work once a rect is known.
-     *
-     * The outgoing app is deliberately **not** parked off-screen. The old pane system
-     * moved a departing window to `displaySize + 40`, a manoeuvre that was never
-     * verified on this ROM and would silently do nothing if the ROM clamps launch
-     * bounds. A new window at the same rect covers the old one, and Android reclaims
-     * background tasks under memory pressure, which on a 600 MB deck it will.
-     */
-    private fun openOnStage(pkg: String) {
-        if (stageAppState.value == pkg) return
-        stageAppState.value = pkg
-        Prefs.setStageApp(this, pkg)
-        launchStageApp()
-    }
-
-    /**
-     * The stage's rect in window coordinates, as last measured by Compose.
-     *
-     * Null until the first layout pass. [launchStageApp] is called from both here and
-     * `onStart`, whichever arrives second, because a window cannot be launched into a
-     * rect that has not been measured and an app cannot be restored before it is read.
-     */
-    private var stageRect: Rect? = null
-
-    private fun onStageBounds(r: Rect) {
-        if (r == stageRect) return
-        stageRect = r
-        launchStageApp()
-    }
-
-    /**
-     * Launch (or move) the stage app's window into the stage rect.
-     *
-     * `LaunchEngine.launchWindow` uses `NEW_TASK` without `MULTIPLE_TASK`, so calling
-     * this on an already-running app moves and resizes the existing task rather than
-     * spawning a second copy. That is what makes it safe to call on every bounds
-     * change — but bounds changes are deduped anyway, because a relaunch is visible.
-     */
-    private fun launchStageApp() {
-        val pkg = stageAppState.value ?: return
-        val rect = stageRect ?: return
-        LaunchEngine.launchWindow(this, pkg, rect)
-    }
 
     /**
      * Decode the wallpaper once per resume, downsampled to the panel.
@@ -415,20 +334,21 @@ class HomeActivity : DwmActivity() {
     /**
      * Read the stage app and the side camera's settings back from prefs.
      *
-     * Relaunches the window only when the stage app has actually *changed* — which
-     * covers the restore on the first `onStart` of the process and a pick made in the
-     * drawer, and nothing else.
+     * Nothing is launched here. This used to relaunch the stage window whenever the
+     * chosen app changed, guarded so that a window which came back fullscreen could
+     * not bounce you straight out of a launcher that swallows Back. Both the relaunch
+     * and the trap it guarded against left with freeform.
      *
-     * Doing it unconditionally is a trap, and an emulator without freeform showed it:
-     * if a window ever comes back fullscreen it covers the launcher, and returning to
-     * DWM would relaunch it and throw you straight back out. Back is swallowed here
-     * because this is a home launcher, so that loop has no exit. Freeform is confirmed
-     * working on the deck, but "the launcher is unreachable" is not a failure worth
-     * leaving one ROM change away.
+     * An app that has since been uninstalled is cleared rather than drawn, because a
+     * card that does nothing when tapped is worse than an empty stage. This is the
+     * only writer that ever passes null.
      */
     private fun loadStage() {
-        val was = stageAppState.value
-        val now = Prefs.stageApp(this)
+        var now = Prefs.stageApp(this)
+        if (now != null && packageManager.getLaunchIntentForPackage(now) == null) {
+            Prefs.setStageApp(this, null)
+            now = null
+        }
         stageAppState.value = now
         cameraPanelState.value = Panel(
             PanelType.CAMERA, 0f, 0f, 1f, 1f,
@@ -436,7 +356,6 @@ class HomeActivity : DwmActivity() {
             camId = Prefs.camId(this),
             rotation = Prefs.camRotation(this)
         )
-        if (now != null && now != was) launchStageApp()
     }
 
     // The wallpaper loader lived here. The SYNC-style home is flat dark by design,
@@ -487,7 +406,7 @@ class HomeActivity : DwmActivity() {
         var canvasPanels = 0
 
         for (p in panels) {
-            if (p.isWindowedApp() || p.isFullscreenApp()) continue
+            if (p.isFullscreenApp()) continue
             if (overlayMode && p.isDrawn()) continue
             runCatching {
                 val content = buildPanelView(p) ?: return@runCatching

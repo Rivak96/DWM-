@@ -8,7 +8,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
-import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -109,10 +108,6 @@ class OverlayService : Service() {
             else OverlayPanelsService.start(this)
             collapse()
         }
-        view.findViewById<Button>(R.id.btnRaise).setOnClickListener {
-            LaunchEngine.raiseWindows(this, Prefs.panels(this))
-            collapse()
-        }
         val btnMute = view.findViewById<Button>(R.id.btnMute)
         btnMute.text = if (Prefs.muteOverlays(this)) "Muted ✓" else "Mute"
         btnMute.setOnClickListener {
@@ -144,7 +139,8 @@ class OverlayService : Service() {
         relayout()
     }
 
-    /** Favourite apps as one-tap floating windows — glance without leaving CarPlay. */
+    /** Favourite apps, one tap each. These opened as floating freeform windows until
+     *  that mode was removed for being unpositionable; they open fullscreen now. */
     private fun buildFavRow() {
         val row = favRow ?: return
         row.removeAllViews()
@@ -156,8 +152,7 @@ class OverlayService : Service() {
             iv.layoutParams = LinearLayout.LayoutParams(size, size).apply { marginEnd = gap }
             iv.setImageDrawable(icon)
             iv.setOnClickListener {
-                val s = LaunchEngine.displaySize(this)
-                LaunchEngine.launchWindow(this, pkg, Rect(s.x / 5, s.y / 5, s.x * 4 / 5, s.y * 4 / 5))
+                LaunchEngine.launchFullscreen(this, pkg)
                 collapse()
             }
             row.addView(iv)

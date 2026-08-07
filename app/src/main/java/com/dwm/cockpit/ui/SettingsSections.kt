@@ -50,7 +50,6 @@ fun TwoColumns(groups: List<@Composable () -> Unit>, available: Dp) {
 /* The value each option maps to, kept beside the labels so the two cannot drift. */
 private val UI_SCALES = listOf(0.7f, 0.8f, 0.9f, 1.0f)
 private val TEXT_SCALES = listOf(0.85f, 1.0f, 1.15f)
-private val COMP_STEPS = listOf(0, 16, 32, 48)
 
 fun displaySection(ui: SettingsUi, a: SettingsActions): List<@Composable () -> Unit> = listOf(
     {
@@ -132,19 +131,6 @@ fun cockpitSection(ui: SettingsUi, a: SettingsActions): List<@Composable () -> U
         }
     },
     {
-        SettingsGroup("Window title-bar fix") {
-            SettingsRow(
-                "Compensation",
-                "Trims the title bar some apps draw inside a freeform window."
-            ) {
-                SegmentedChoice(
-                    listOf("Off", "Small", "Medium", "Large"),
-                    COMP_STEPS.indexOfFirst { it == ui.captionComp }.coerceAtLeast(0)
-                ) { a.setComp(COMP_STEPS[it]) }
-            }
-        }
-    },
-    {
         SettingsGroup("Layout") {
             SettingsRow(
                 "Cockpit layout",
@@ -183,13 +169,6 @@ fun overlaySection(ui: SettingsUi, a: SettingsActions): List<@Composable () -> U
             }
             SettingsRow("Mute web and video panels") {
                 SettingsSwitch(ui.muteOverlays, a.setMuteOverlays)
-            }
-        }
-    },
-    {
-        SettingsGroup("App windows") {
-            SettingsRow("Reload", "Reopens the saved layout and raises its windows.") {
-                SettingsButton("Raise now", a.raiseWindows)
             }
         }
     },

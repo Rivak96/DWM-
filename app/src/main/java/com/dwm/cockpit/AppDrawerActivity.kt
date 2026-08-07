@@ -3,7 +3,6 @@ package com.dwm.cockpit
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -21,7 +20,8 @@ import android.widget.Toast
 
 /**
  * Grid of installed apps with search. Doubles as an app picker (pick mode).
- * Tap = launch fullscreen. Long-press = window / dock / app info / uninstall.
+ * Tap = make it the home app and launch it fullscreen.
+ * Long-press = dock / app info / uninstall.
  */
 class AppDrawerActivity : DwmActivity() {
 
@@ -47,16 +47,12 @@ class AppDrawerActivity : DwmActivity() {
                 setResult(RESULT_OK, Intent().putExtra(EXTRA_PKG, entry.pkg))
                 finish()
             } else {
-                // Put it on the stage and get out of the way. HomeActivity.onStart
-                // reads this back and launches the window into the stage's rect —
-                // which it can only do once Compose has measured that rect, so the
-                // launch cannot happen from here.
-                //
-                // This is also why swapping apps goes through a fullscreen activity
-                // rather than a drawer drawn on the home screen: the outgoing app is
-                // a freeform window floating *above* HomeActivity, and nothing DWM
-                // draws can cover it. A real activity can.
+                // Open it, and remember it as the home app. Nothing downstream
+                // launches any more — HomeActivity.onStart only reads the pref back
+                // to draw the stage card — so the tap has to do the launching itself,
+                // which is also what anyone tapping an app in a drawer expects.
                 Prefs.setStageApp(this, entry.pkg)
+                LaunchEngine.launchFullscreen(this, entry.pkg)
                 finish()
             }
         }
@@ -85,13 +81,9 @@ class AppDrawerActivity : DwmActivity() {
         val dockItem = if (inDock) "Remove from dock" else "Add to dock"
         Ui.dialog(this)
             .setTitle(entry.label)
-            .setItems(arrayOf("Open in window", dockItem, "App info", "Uninstall")) { _, w ->
+            .setItems(arrayOf(dockItem, "App info", "Uninstall")) { _, w ->
                 when (w) {
                     0 -> {
-                        val s = LaunchEngine.displaySize(this)
-                        LaunchEngine.launchWindow(this, entry.pkg, Rect(s.x / 6, s.y / 6, s.x * 5 / 6, s.y * 5 / 6))
-                    }
-                    1 -> {
                         val cur = Apps.effectiveFavorites(this).toMutableList()
                         if (inDock) cur.remove(entry.pkg)
                         else if (entry.pkg !in cur) {
@@ -101,12 +93,12 @@ class AppDrawerActivity : DwmActivity() {
                         Prefs.saveFavorites(this, cur)
                         Toast.makeText(this, if (inDock) "Removed from dock" else "Added to dock", Toast.LENGTH_SHORT).show()
                     }
-                    2 -> runCatching {
+                    1 -> runCatching {
                         startActivity(
                             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${entry.pkg}"))
                         )
                     }
-                    3 -> runCatching {
+                    2 -> runCatching {
                         startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${entry.pkg}")))
                     }
                 }
