@@ -4,8 +4,6 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -435,7 +433,8 @@ class SettingsActivity : DwmActivity() {
                 "Copies the app's own APK to Downloads so it can be pulled apart off the " +
                     "deck — that's how we learn the real method names behind the CAN " +
                     "service's AIDL.\n\nNothing is installed, changed or sent anywhere; the " +
-                    "file is only read. com.tw.carinfoservice is the one that matters."
+                    "file is only read. com.tw.carinfoservice is the CAN service; a 360 " +
+                    "or panoramic app, if the deck has one, is the other one worth pulling."
             )
             .setPositiveButton("Choose app") { _, _ -> exportApkPicker() }
             .setNegativeButton("Cancel", null)
@@ -443,12 +442,16 @@ class SettingsActivity : DwmActivity() {
     }
 
     private fun exportApkPicker() {
-        val pkgs = listOf(
+        // The four that earned their place by hand, then anything else on the deck
+        // whose name matches a vendor hint — so the 360 app becomes exportable the
+        // moment it is identified, without another release.
+        val known = listOf(
             "com.tw.carinfoservice",
             "com.dofun.carassistant.car",
             "com.syt.tmps",
             "com.tw.carchoose"
         )
+        val pkgs = (known + VehicleProbe.hintedPackages(this)).distinct()
         val labels = pkgs.map { pkg ->
             val mb = runCatching {
                 val p = packageManager.getApplicationInfo(pkg, 0).publicSourceDir
@@ -790,24 +793,12 @@ class SettingsActivity : DwmActivity() {
             requestPermissions(arrayOf(android.Manifest.permission.CAMERA), REQ_CAM)
             return
         }
-        val mgr = getSystemService(CAMERA_SERVICE) as CameraManager
-        val ids = runCatching { mgr.cameraIdList }.getOrDefault(emptyArray())
+        val rows = VehicleProbe.cameraInputs(this)
         val sb = StringBuilder()
-        if (ids.isEmpty()) {
+        if (rows.isEmpty()) {
             sb.append("No Camera2 devices exposed.\n\nThe analog input isn't a camera device here — use a 'Camera app (AUX)' panel instead, which launches your AUX app into a window.")
         } else {
-            for (id in ids) {
-                val facing = runCatching {
-                    mgr.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING)
-                }.getOrNull()
-                val f = when (facing) {
-                    CameraCharacteristics.LENS_FACING_FRONT -> "FRONT"
-                    CameraCharacteristics.LENS_FACING_BACK -> "BACK"
-                    CameraCharacteristics.LENS_FACING_EXTERNAL -> "EXTERNAL"
-                    else -> "?"
-                }
-                sb.append("id $id · $f\n")
-            }
+            rows.forEach { sb.append(it).append('\n') }
             sb.append("\nTry a 'Live camera (Camera2)' panel with one of these ids to see if it's your front feed.")
         }
         Ui.dialog(this)

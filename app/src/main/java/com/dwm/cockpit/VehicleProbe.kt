@@ -232,8 +232,33 @@ object VehicleProbe {
         // Stems, so a vendor typo or an unexpected prefix can't dodge the match.
         "reverse", "revserse", "door", "brake", "voltage", "radar", "gear",
         "seat", "temp_mode", "ampvol", "amplifier", "trip", "fuel", "rpm",
-        "wheel", "unisound", "dofun", "carplay", "zlink"
+        "wheel", "unisound", "dofun", "carplay", "zlink",
+        // Surround view. A 12-pin 360 kit stitches four AHD cameras in a module on
+        // the mainboard and a pre-installed vendor app draws the result, so the app
+        // is already on the deck before the cameras are. These stems are what names
+        // it. "360" is broad on purpose — evidence() prints why a package matched,
+        // so a wrong hit reads as wrong instead of as a mystery.
+        "360", "avm", "panoram", "birdview", "surround", "svm", "aroundview", "ahd"
     )
+
+    /**
+     * Installed non-AOSP packages whose *name* carries a [VENDOR_HINTS] stem.
+     *
+     * Deliberately name-only, unlike [evidence], which also matches components and
+     * actions: this feeds a picker dialog, and building a manifest scan of every
+     * APK on the deck to populate a list of buttons would be absurd. A vendor app
+     * that hides behind an innocent package name won't show up here — it will still
+     * show up in the scan report, which is where the looking actually happens.
+     */
+    fun hintedPackages(c: Context): List<String> {
+        val pm = c.packageManager
+        val pkgs = runCatching { pm.getInstalledPackages(0) }.getOrDefault(emptyList())
+        return pkgs.map { it.packageName }
+            .filterNot { name -> AOSP_PREFIXES.any { name == it || name.startsWith("$it.") } }
+            .filter { name -> VENDOR_HINTS.any { name.contains(it, ignoreCase = true) } }
+            .sorted()
+            .take(24)
+    }
 
     /**
      * Every installed package, so the vendor stack can be eyeballed whole.
@@ -659,6 +684,61 @@ object VehicleProbe {
         sb.append("\n/dev listing: ")
         sb.append(if (listing.isNullOrEmpty()) "not listable (expected — SELinux)" else listing.joinToString(" "))
         return sb.toString().ifBlank { "No candidate serial nodes visible." }
+    }
+
+    /**
+     * Which v4l2 video devices we can see. This is the escape hatch for the 360
+     * camera: its feed reaches Android either as a Camera2 device, or through the
+     * vendor's own app, or — if the ROM is careless — as a readable `/dev/video*`
+     * node we could take directly. The first is ideal, the third is the fallback,
+     * and the second is a dead end for anything that has to float over a fullscreen
+     * app, because a freeform window can't outrank one.
+     *
+     * Stat only, exactly like [serialPorts]. A v4l2 open isn't destructive the way
+     * a UART read is, but the normal scan stays side-effect-free regardless.
+     */
+    fun videoNodes(): String {
+        val sb = StringBuilder()
+        for (i in 0..9) {
+            val n = "/dev/video$i"
+            val f = File(n)
+            val exists = runCatching { f.exists() }.getOrDefault(false)
+            val readable = runCatching { f.canRead() }.getOrDefault(false)
+            if (exists || readable) {
+                sb.append(n).append("  exists=").append(exists).append(" readable=").append(readable).append('\n')
+            }
+        }
+        val listing = runCatching { File("/dev").list()?.filter { it.startsWith("video") }?.sorted() }.getOrNull()
+        sb.append("\n/dev listing: ")
+        sb.append(if (listing.isNullOrEmpty()) "not listable (expected — SELinux)" else listing.joinToString(" "))
+        return sb.toString().ifBlank { "No video nodes visible." }
+    }
+
+    /**
+     * Every camera the deck exposes to Camera2, which is the one question that
+     * decides whether a feed can be drawn by DWM itself (and so float over
+     * everything) or only ever shown by whoever owns the hardware.
+     *
+     * Listing ids does NOT need the CAMERA permission — only opening a device
+     * does — so this runs unconditionally as part of a scan.
+     */
+    fun cameraInputs(c: Context): List<String> {
+        val mgr = c.getSystemService(Context.CAMERA_SERVICE) as? android.hardware.camera2.CameraManager
+            ?: return emptyList()
+        val ids = runCatching { mgr.cameraIdList }.getOrDefault(emptyArray())
+        return ids.map { id ->
+            val facing = runCatching {
+                mgr.getCameraCharacteristics(id)
+                    .get(android.hardware.camera2.CameraCharacteristics.LENS_FACING)
+            }.getOrNull()
+            val f = when (facing) {
+                android.hardware.camera2.CameraCharacteristics.LENS_FACING_FRONT -> "FRONT"
+                android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK -> "BACK"
+                android.hardware.camera2.CameraCharacteristics.LENS_FACING_EXTERNAL -> "EXTERNAL"
+                else -> "?"
+            }
+            "id $id · $f"
+        }
     }
 
     /** Try reading an exported provider straight out. */
@@ -1167,6 +1247,14 @@ object VehicleProbe {
         sb.append("\n\n=== 7. SERIAL PORTS (CAN arrives over a UART) ===\n")
         sb.append("(stat only — nothing is opened or read)\n\n")
         sb.append(serialPorts())
+
+        sb.append("\n\n=== 7b. CAMERA2 INPUTS ===\n")
+        sb.append("(decides whether a feed can be DWM-drawn, and so float over a fullscreen app)\n\n")
+        sb.append(cameraInputs(c).joinToString("\n").ifBlank { "No Camera2 devices exposed." })
+
+        sb.append("\n\n=== 7c. VIDEO NODES ===\n")
+        sb.append("(stat only — nothing is opened or read)\n\n")
+        sb.append(videoNodes())
 
         sb.append("\n\n=== 8. NON-AOSP PACKAGES, FULL COMPONENT DUMP ===\n\n")
         sb.append(nonAospDump(c))
