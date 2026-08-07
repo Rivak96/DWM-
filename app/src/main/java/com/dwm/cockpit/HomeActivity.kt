@@ -412,16 +412,31 @@ class HomeActivity : DwmActivity() {
         }.start()
     }
 
-    /** Read the stage app and the side camera's settings back from prefs. */
+    /**
+     * Read the stage app and the side camera's settings back from prefs.
+     *
+     * Relaunches the window only when the stage app has actually *changed* — which
+     * covers the restore on the first `onStart` of the process and a pick made in the
+     * drawer, and nothing else.
+     *
+     * Doing it unconditionally is a trap, and an emulator without freeform showed it:
+     * if a window ever comes back fullscreen it covers the launcher, and returning to
+     * DWM would relaunch it and throw you straight back out. Back is swallowed here
+     * because this is a home launcher, so that loop has no exit. Freeform is confirmed
+     * working on the deck, but "the launcher is unreachable" is not a failure worth
+     * leaving one ROM change away.
+     */
     private fun loadStage() {
-        stageAppState.value = Prefs.stageApp(this)
+        val was = stageAppState.value
+        val now = Prefs.stageApp(this)
+        stageAppState.value = now
         cameraPanelState.value = Panel(
             PanelType.CAMERA, 0f, 0f, 1f, 1f,
             label = "Camera",
             camId = Prefs.camId(this),
             rotation = Prefs.camRotation(this)
         )
-        launchStageApp()
+        if (now != null && now != was) launchStageApp()
     }
 
     // The wallpaper loader lived here. The SYNC-style home is flat dark by design,
