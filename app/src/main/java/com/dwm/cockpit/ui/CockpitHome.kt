@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -35,7 +36,7 @@ import com.dwm.cockpit.Panel
 import com.dwm.cockpit.R
 import com.dwm.cockpit.ui.theme.Dwm
 import com.dwm.cockpit.ui.theme.DwmGrid
-import com.dwm.cockpit.ui.theme.DwmIcons
+import com.dwm.cockpit.ui.theme.DwmShapes
 import com.dwm.cockpit.ui.theme.DwmSize
 import com.dwm.cockpit.ui.theme.DwmSpace
 import com.dwm.cockpit.ui.theme.DwmType
@@ -50,8 +51,8 @@ import java.util.Locale
  * ```
  *  ┌─────────────────────────────────────────────┬───────────────────────┐
  *  │                                             │  TPMS · doors · radar │
- *  │   THE STAGE — the one app, drawn as a card  │                       │
- *  │   with a fullscreen button                  ├───────────────────────┤
+ *  │   QUICK NAV — the app grid                  │                       │
+ *  │   tap to open fullscreen                    ├───────────────────────┤
  *  │                                             │  CAMERA  16:9         │
  *  ├─────────────────────────────────────────────┴───────────────────────┤
  *  │  speed  gear  coolant  volts  fuel  rpm  boost  outside             │
@@ -60,35 +61,38 @@ import java.util.Locale
  *  └─────────────────────────────────────────────────────────────────────┘
  * ```
  *
- * ### What this replaced, and why
+ * ### The app box, and the three things it has been
  *
- * Two panes, a media strip and a favourites band — tested on the deck and rejected as
- * "extremely buggy". The verdict was about the architecture, not the finish. Every
- * pane reposition relaunched a real Android task, swiping a pane off an app parked its
- * window off-screen using bounds this ROM was never proven to honour, and two live
- * apps plus a camera sat badly inside the ~600 MB this deck actually has free.
+ * Everything to the right of the box — the vehicle diagram, the camera, the readings
+ * and the nav bar — has been stable for several releases. The box itself has not, and
+ * its history is the whole design argument of this screen.
  *
- * So there is one app now, and the space it gave back is filled with things DWM draws
- * itself. Drawn content costs no window, cannot sink behind anything, and cannot be
- * relaunched out from under you.
+ * 1. **Two live panes.** Rejected on the deck as "extremely buggy". Every reposition
+ *    relaunched a real Android task, and two live apps plus a camera sat badly inside
+ *    the ~600 MB this deck actually has free.
+ * 2. **One live app**, launched as a freeform window sized to the box. Freeform is
+ *    Android's floating-window mode, so it came with a system caption bar, a window the
+ *    user could drag out of position and a z-order that let it sink behind the
+ *    launcher — none of them reachable from DWM.
+ * 3. **A card for one chosen app.** Solid, but static: a tile that opened something
+ *    rather than anything you could use.
+ *
+ * It is now the app grid, which is the honest version of what the last two were
+ * attempting — get into an app in one tap. See [AppGrid] for the stopgap this is, and
+ * the vendor service that might yet put a live app back in it.
  *
  * ### The rule that used to shape this layout, and no longer does
  *
- * Until now the stage held a *live* app — a separate freeform task floating above this
- * activity, which DWM could not draw over and never received touches from. That forced
- * everything DWM owns to live strictly *beside* the stage, and forced app-swapping
- * through the fullscreen `AppDrawerActivity`, because a drawer drawn here would have
- * been hidden behind the very window it was meant to replace.
+ * A live app was a separate task floating above this activity, which DWM could not draw
+ * over and never received touches from. That forced everything DWM owns to live strictly
+ * *beside* the box, and forced app-swapping through the fullscreen `AppDrawerActivity`.
  *
- * That window is gone (see [AppStage] for the three SystemUI behaviours that killed
- * it), so the constraint is gone with it. **DWM now owns every pixel of this screen.**
- * The right-hand column, the vehicle bar and the nav bar stay where they are because
- * that is a good cockpit, not because a foreign window forced them there — and a
- * Compose drawer, a sheet or an overlay panel drawn on top of the stage is now a
- * perfectly ordinary thing to add.
+ * **DWM now owns every pixel of this screen.** The right-hand column, the vehicle bar
+ * and the nav bar stay where they are because that is a good cockpit, not because a
+ * foreign window forced them there.
  *
  * Vertical budget at the deck's 1000dp: 88 nav + 104 vehicle bar + spacers leaves 784
- * for the top box, less the 32dp margin and the 48dp top strip → ~692dp of stage.
+ * for the top box, less the 32dp margin and the 48dp top strip → ~692dp for the grid.
  */
 
 /**
@@ -115,13 +119,13 @@ class HomeActions(
     val settings: () -> Unit = {},
     val reload: () -> Unit = {},
     val pill: () -> Unit = {},
+    /** Long-press on an app tile — pin/unpin, app info. */
+    val appMenu: (String) -> Unit = {},
     val grantNotifications: () -> Unit = {}
 )
 
 @Composable
 fun CockpitHome(
-    /** The app on the stage, or null before one has ever been chosen. */
-    stageApp: String?,
     /** The camera for the right-hand column. */
     cameraPanel: Panel,
     allApps: List<HomeApp>,
@@ -132,10 +136,8 @@ fun CockpitHome(
     /** Optional wallpaper, already decoded by the activity. */
     wallpaper: android.graphics.Bitmap? = null,
     wallpaperDim: Float = 0.30f,
-    /** Open the stage app the ordinary way — a plain fullscreen `startActivity`. */
+    /** Open an app the ordinary way — a plain fullscreen `startActivity`. */
     onOpenFullscreen: (pkg: String) -> Unit = {},
-    /** Choose which app the stage shows. Opens the drawer. */
-    onPickApp: () -> Unit = {},
     drawnView: (Panel) -> View? = { null }
 ) {
     val colors = Dwm.colors
@@ -143,17 +145,6 @@ fun CockpitHome(
     val drive by vehicle.drive
     val body by vehicle.body
     val vitals by vehicle.vitals
-
-    // Resolved here rather than in [AppStage] so the stage stays a dumb renderer and
-    // the goldens keep working: Paparazzi has no PackageManager, so anything that had
-    // to ask one for a label would render empty on the JVM. The fallback also covers
-    // the real first frame, before `loadApps` has come back off its thread.
-    val stage = remember(stageApp, allApps) {
-        stageApp?.let { pkg ->
-            allApps.firstOrNull { it.pkg == pkg }
-                ?: HomeApp(pkg, pkg.substringAfterLast('.'), DwmIcons.forApp(pkg, pkg))
-        }
-    }
 
     Box(Modifier.fillMaxSize().background(colors.background)) {
         // The wallpaper, if there is one, with a dim over it. Cards stay fully
@@ -208,14 +199,42 @@ fun CockpitHome(
                         .fillMaxWidth()
                         .weight(1f)
                 ) {
-                    AppStage(
-                        app = stage,
-                        onOpenFullscreen = { stage?.let { onOpenFullscreen(it.pkg) } },
-                        onPickApp = onPickApp,
+                    DwmCard(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                    )
+                    ) {
+                        Column(Modifier.fillMaxSize()) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CardLabel("Apps")
+                                Spacer(Modifier.weight(1f))
+                                DwmText(
+                                    "All apps",
+                                    style = DwmType.label,
+                                    color = colors.muted,
+                                    modifier = Modifier
+                                        .clip(DwmShapes.small)
+                                        .clickable(onClick = actions.apps)
+                                        .padding(
+                                            horizontal = DwmSpace.m,
+                                            vertical = DwmSpace.s
+                                        )
+                                )
+                            }
+
+                            Spacer(Modifier.height(DwmSpace.l))
+
+                            AppGrid(
+                                apps = allApps,
+                                onLaunch = onOpenFullscreen,
+                                onAppMenu = actions.appMenu,
+                                onWallpaper = false
+                            )
+                        }
+                    }
 
                     Spacer(Modifier.width(DwmGrid.gutter))
 

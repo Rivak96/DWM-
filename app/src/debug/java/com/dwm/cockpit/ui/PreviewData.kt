@@ -166,20 +166,10 @@ val previewSettings = SettingsUi(
         "custom HTML · OBD-II gauges · GPS speed · clock · images."
 )
 
-/* -------------------------------------------------------------------- stage */
+/* ------------------------------------------------------------------- camera */
 
 /** The side camera, with no id set — the deck auto-detects EXTERNAL then BACK. */
 val previewCameraPanel = Panel(PanelType.CAMERA, 0f, 0f, 1f, 1f, label = "Camera")
-
-/**
- * The app on the stage, for the golden that shows an occupied cockpit.
- *
- * The stage renders as a blank region either way, because the window is a separate
- * freeform task no renderer can see. What the golden proves is the chrome around it
- * and the rect the window will be launched into — only the deck can prove the window
- * actually lands there.
- */
-const val PREVIEW_STAGE_APP = "com.google.android.apps.maps"
 
 /** A door ajar, tyres reporting, reversing onto something. */
 val previewBodyActive = BodyState(

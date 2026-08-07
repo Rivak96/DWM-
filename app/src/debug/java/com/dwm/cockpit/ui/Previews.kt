@@ -17,18 +17,17 @@ import com.dwm.cockpit.ui.theme.DwmSpace
  * This must stay in step with `DECK` in the snapshot tests — same geometry, two
  * syntaxes, and nothing enforces the agreement but this note.
  *
- * The stage used to render empty here, because the app on it was a separate freeform
- * task that neither Studio nor Paparazzi could see. It draws its own card now, so
- * these previews finally show the whole screen rather than the chrome around a hole.
+ * The app box used to render empty here, because it held a separate freeform task that
+ * neither Studio nor Paparazzi could see. It is a DWM-drawn app grid now, so these
+ * previews finally show the whole screen rather than the chrome around a hole.
  */
 private const val DECK = "spec:width=1600dp,height=1000dp,dpi=192"
 
-@Preview(name = "Cockpit · no app chosen (the first boot)", device = DECK)
+@Preview(name = "Cockpit · no CAN (the first boot)", device = DECK)
 @Composable
 private fun PreviewCockpitDefault() {
     DwmPreviewTheme {
         CockpitHome(
-            stageApp = null,
             cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
@@ -38,12 +37,11 @@ private fun PreviewCockpitDefault() {
     }
 }
 
-@Preview(name = "Cockpit · the home app on the stage", device = DECK)
+@Preview(name = "Cockpit · with CAN data", device = DECK)
 @Composable
 private fun PreviewCockpitApps() {
     DwmPreviewTheme {
         CockpitHome(
-            stageApp = PREVIEW_STAGE_APP,
             cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
@@ -58,7 +56,6 @@ private fun PreviewCockpitApps() {
 private fun PreviewCockpitReversing() {
     DwmPreviewTheme {
         CockpitHome(
-            stageApp = PREVIEW_STAGE_APP,
             cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = false,
@@ -73,7 +70,6 @@ private fun PreviewCockpitReversing() {
 private fun PreviewCockpitNight() {
     DwmPreviewTheme(night = true) {
         CockpitHome(
-            stageApp = null,
             cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,

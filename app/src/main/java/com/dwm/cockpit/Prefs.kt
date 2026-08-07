@@ -36,9 +36,6 @@ object Prefs {
      * split fraction, plus a per-pane index. All of it existed to answer "which of
      * several things is each slot showing", a question with one slot no longer has.
      */
-    fun stageApp(c: Context): String? = sp(c).getString("stage_app", null)
-    fun setStageApp(c: Context, pkg: String?) =
-        sp(c).edit().putString("stage_app", pkg).apply()
 
     /**
      * Which Camera2 device the side camera opens, or null to auto-detect.

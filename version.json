@@ -1,7 +1,7 @@
 {
-    "versionCode":  49,
-    "versionName":  "0.30.0",
-    "tag":  "v0.30.0",
+    "versionCode":  50,
+    "versionName":  "0.31.0",
+    "tag":  "v0.31.0",
     "apk":  "app-release.apk",
-    "notes":  "The app on the home screen is no longer a floating window. It used to be launched as a freeform window sized to the stage, which is why it drew its own title bar, would not stay where it was put, sank behind the launcher and never lined up. Freeform is Android\u0027s floating-window mode and all three faults belong to the system, not to DWM, so the window is gone. The stage now draws a card for your chosen app - its glyph, its name, a fullscreen button at the top and a big OPEN FULLSCREEN button - and opening it launches the app normally, full screen. Press Home to come back. Tapping an app in the drawer opens it and remembers it as the home app. Open in window, Raise windows and the Window title-bar fix setting are all gone with the mechanism they served."
+    "notes":  "The app box on the home screen is a grid of your apps now. Tap one and it opens full screen; press Home to come back. Long-press a tile to pin it to favourites or open its app info. Everything else on the dashboard is unchanged - the vehicle diagram, the camera, the readings and the bottom bar all stay exactly where they were. This replaces the single app card, which only ever opened one app, and before that the live app window, which drew its own title bar and would not stay where it was put."
 }

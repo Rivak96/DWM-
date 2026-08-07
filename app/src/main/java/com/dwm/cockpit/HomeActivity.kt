@@ -55,7 +55,6 @@ class HomeActivity : DwmActivity() {
     private val overlaysOnState = mutableStateOf(false)
     private val showCanvasState = mutableStateOf(false)
     private val allAppsState = mutableStateOf<List<HomeApp>>(emptyList())
-    private val stageAppState = mutableStateOf<String?>(null)
     private val cameraPanelState = mutableStateOf(Panel(PanelType.CAMERA, 0f, 0f, 1f, 1f, label = "Camera"))
     private val boostState = mutableStateOf<Float?>(null)
     private val wallpaperState = mutableStateOf<Bitmap?>(null)
@@ -101,6 +100,7 @@ class HomeActivity : DwmActivity() {
             settings = { startActivity(Intent(this, SettingsActivity::class.java)) },
             reload = { reloadCockpit() },
             pill = { startPill() },
+            appMenu = { pkg -> appMenu(pkg) },
             grantNotifications = {
                 runCatching {
                     startActivity(
@@ -118,7 +118,6 @@ class HomeActivity : DwmActivity() {
                         AndroidView(factory = { panelHost }, modifier = Modifier.fillMaxSize())
                     } else {
                         CockpitHome(
-                            stageApp = stageAppState.value,
                             cameraPanel = cameraPanelState.value,
                             allApps = allAppsState.value,
                             overlaysOn = overlaysOnState.value,
@@ -128,11 +127,6 @@ class HomeActivity : DwmActivity() {
                             wallpaperDim = wallpaperDimState.value,
                             onOpenFullscreen = { pkg ->
                                 LaunchEngine.launchFullscreen(this@HomeActivity, pkg)
-                            },
-                            onPickApp = {
-                                startActivity(
-                                    Intent(this@HomeActivity, AppDrawerActivity::class.java)
-                                )
                             },
                             drawnView = ::buildPanelView
                         )
@@ -147,7 +141,7 @@ class HomeActivity : DwmActivity() {
         if (recreateIfScaleChanged()) return
 
         overlaysOnState.value = OverlayPanelsService.isRunning
-        loadStage()
+        loadCamera()
         loadApps()
         loadWallpaper()
         // Nothing on the home screen hosts a WebView any more — the stage is a
@@ -264,10 +258,8 @@ class HomeActivity : DwmActivity() {
      * made returning to home stutter on this deck. Results are posted back once, so
      * Compose sees a single state change rather than a drip.
      *
-     * One list now, not two. The favourites band is gone from the home screen — it
-     * was asked to be removed along with the now-playing strip — so the only consumer
-     * left is the stage card, which looks the chosen package up in here to get its
-     * label and glyph.
+     * One list now, not two. The favourites band is gone from the home screen, so the
+     * only consumer left is the app grid in the box.
      */
     private fun loadApps() {
         Thread {
@@ -281,7 +273,40 @@ class HomeActivity : DwmActivity() {
         }.start()
     }
 
-    /* ------------------------------------------------------------------ stage */
+    /** Long-press on an app tile. Pinning writes to the same favourites list the pill
+     *  and the app drawer use, so all three stay in step. */
+    private fun appMenu(pkg: String) {
+        val pinned = pkg in Apps.effectiveFavorites(this).take(Apps.FAV_SLOTS)
+        Ui.dialog(this)
+            .setTitle(Apps.label(this, pkg))
+            .setItems(
+                arrayOf(
+                    "Open",
+                    if (pinned) "Remove from favourites" else "Add to favourites",
+                    "App info"
+                )
+            ) { _, w ->
+                when (w) {
+                    0 -> LaunchEngine.launchFullscreen(this, pkg)
+                    1 -> {
+                        val cur = Apps.effectiveFavorites(this).toMutableList()
+                        if (pinned) cur.remove(pkg) else cur.add(0, pkg)
+                        while (cur.size > Apps.FAV_SLOTS) cur.removeAt(cur.size - 1)
+                        Prefs.saveFavorites(this, cur)
+                        loadApps()
+                    }
+                    2 -> runCatching {
+                        startActivity(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.parse("package:$pkg")
+                            )
+                        )
+                    }
+                }
+            }
+            .show()
+    }
 
     /**
      * Decode the wallpaper once per resume, downsampled to the panel.
@@ -332,24 +357,13 @@ class HomeActivity : DwmActivity() {
     }
 
     /**
-     * Read the stage app and the side camera's settings back from prefs.
+     * Read the side camera's settings back from prefs.
      *
-     * Nothing is launched here. This used to relaunch the stage window whenever the
-     * chosen app changed, guarded so that a window which came back fullscreen could
-     * not bounce you straight out of a launcher that swallows Back. Both the relaunch
-     * and the trap it guarded against left with freeform.
-     *
-     * An app that has since been uninstalled is cleared rather than drawn, because a
-     * card that does nothing when tapped is worse than an empty stage. This is the
-     * only writer that ever passes null.
+     * This used to restore a chosen "stage app" too, and at one point relaunch its
+     * window. The box is an app grid now — there is no single chosen app to remember —
+     * so all that is left here is the camera.
      */
-    private fun loadStage() {
-        var now = Prefs.stageApp(this)
-        if (now != null && packageManager.getLaunchIntentForPackage(now) == null) {
-            Prefs.setStageApp(this, null)
-            now = null
-        }
-        stageAppState.value = now
+    private fun loadCamera() {
         cameraPanelState.value = Panel(
             PanelType.CAMERA, 0f, 0f, 1f, 1f,
             label = "Camera",

@@ -19,9 +19,12 @@ import android.widget.TextView
 import android.widget.Toast
 
 /**
- * Grid of installed apps with search. Doubles as an app picker (pick mode).
- * Tap = make it the home app and launch it fullscreen.
- * Long-press = dock / app info / uninstall.
+ * Every installed app, with search. Doubles as an app picker (pick mode).
+ *
+ * The home screen's own grid shows the same apps and is the quick route; this is the
+ * full list, reached from the nav bar's Apps item.
+ *
+ * Tap = launch fullscreen. Long-press = dock / app info / uninstall.
  */
 class AppDrawerActivity : DwmActivity() {
 
@@ -47,11 +50,6 @@ class AppDrawerActivity : DwmActivity() {
                 setResult(RESULT_OK, Intent().putExtra(EXTRA_PKG, entry.pkg))
                 finish()
             } else {
-                // Open it, and remember it as the home app. Nothing downstream
-                // launches any more — HomeActivity.onStart only reads the pref back
-                // to draw the stage card — so the tap has to do the launching itself,
-                // which is also what anyone tapping an app in a drawer expects.
-                Prefs.setStageApp(this, entry.pkg)
                 LaunchEngine.launchFullscreen(this, entry.pkg)
                 finish()
             }

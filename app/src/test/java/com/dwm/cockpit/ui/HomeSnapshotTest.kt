@@ -39,17 +39,15 @@ class HomeSnapshotTest {
     )
 
     /**
-     * The very first boot: no app has ever been chosen, so the stage shows its empty
-     * card and offers to open the drawer.
+     * The state a fresh install lands in: the app grid, and no CAN data.
      *
-     * No CAN data either, which is the deck's real state until the engine is running.
-     * This is the state that has to look finished, because it is the one a fresh
-     * install lands in.
+     * No CAN is the deck's real state until the engine is running, and on this van it
+     * is most readings' permanent state — only voltage, headlight, speed, steering and
+     * turn signal ever answer. This is the golden that has to look finished.
      */
     @Test
-    fun `cockpit no app chosen, no CAN`() = snap {
+    fun `cockpit no CAN`() = snap {
         CockpitHome(
-            stageApp = null,
             cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
@@ -60,19 +58,17 @@ class HomeSnapshotTest {
     }
 
     /**
-     * An app on the stage — the normal state, every morning after the first.
+     * The same screen with the ignition on, so the readings that do work carry values.
      *
-     * This golden used to be almost worthless: the stage rendered as a black rectangle,
-     * because the app was a separate freeform task no renderer could see, and all it
+     * This golden used to be almost worthless: the app box rendered as a black
+     * rectangle, because it held a freeform task no renderer could see, and all it
      * could prove was that the chrome sat outside the rect the window would land in.
-     * The stage is DWM-drawn now, so the whole home screen is in this PNG — including
-     * the two header controls and the OPEN FULLSCREEN button, which are the only way
-     * to open an app from here and therefore the thing most worth looking at.
+     * The box is DWM-drawn now, so the whole home screen is in this PNG — the app grid
+     * included, which is the only way to open anything from here.
      */
     @Test
-    fun `cockpit with an app on the stage`() = snap {
+    fun `cockpit with CAN data`() = snap {
         CockpitHome(
-            stageApp = PREVIEW_STAGE_APP,
             cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
@@ -85,7 +81,6 @@ class HomeSnapshotTest {
     @Test
     fun `cockpit reversing`() = snap {
         CockpitHome(
-            stageApp = PREVIEW_STAGE_APP,
             cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = false,
@@ -98,7 +93,6 @@ class HomeSnapshotTest {
     @Test
     fun `cockpit at night`() = snap(night = true) {
         CockpitHome(
-            stageApp = null,
             cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
@@ -120,13 +114,11 @@ class HomeSnapshotTest {
      * The bundled image measures 0.010 mean luminance; this is roughly fifteen times
      * brighter. If cards stay readable over this, they stay readable over anything a
      * driver is likely to pick. What the golden proves is the compositing: the image
-     * draws, the dim applies, cards stay fully opaque, and the empty stage lets it
-     * through.
+     * draws, the dim applies, and cards stay fully opaque over it.
      */
     @Test
     fun `cockpit over a bright wallpaper`() = snap {
         CockpitHome(
-            stageApp = null,
             cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
