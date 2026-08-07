@@ -65,11 +65,16 @@ class DwmContrastTest {
     )
 
     /**
-     * Nothing may be pure white. White reflects in the windscreen at night, and the
-     * previous palette reached it about forty times as `Color.White.copy(alpha=…)`.
+     * Nothing in the night variant may be bright, and no foreground in either may be
+     * pure white. White reflects in the windscreen after dark, and the palette this
+     * replaced reached it about forty times as `Color.White.copy(alpha=…)`.
+     *
+     * Day surfaces are exempt and [DwmPalette.RAISED] is deliberately `#FFFFFF`: this
+     * is the daylight variant, where a dark panel in sun is a mirror. The rule is
+     * about night, and about text, which is what this now says.
      */
     @Test
-    fun `nothing is pure white`() {
+    fun `no foreground is pure white`() {
         listOf(
             "text" to DwmPalette.TEXT,
             "night text" to DwmPalette.N_TEXT,
@@ -77,29 +82,51 @@ class DwmContrastTest {
             "night muted" to DwmPalette.N_MUTED
         ).forEach { (name, c) ->
             assertTrue("$name is pure white", c != 0xFFFFFFFF.toInt())
+            assertTrue("$name is within one step of white", luminance(c) < 0.90)
+        }
+    }
+
+    /**
+     * Night stays dark everywhere. Not one surface may creep up.
+     *
+     * This used to be `night is dimmer than day` and compared foregrounds too, which
+     * only made sense while "day" was also a dark theme — day text was light, so
+     * asserting night text was darker still was meaningful. Day is a real light theme
+     * now and its text is near-black, so that comparison inverts and says nothing. The
+     * safety property it was actually protecting is this one: nothing on the night
+     * panel is bright enough to sit in the driver's peripheral vision.
+     */
+    @Test
+    fun `night surfaces stay dark`() {
+        listOf(
+            "background" to DwmPalette.N_BACKGROUND,
+            "surface" to DwmPalette.N_SURFACE,
+            "raised" to DwmPalette.N_RAISED
+        ).forEach { (name, c) ->
             assertTrue(
-                "$name is within one step of white",
-                luminance(c) < 0.90
+                "night $name (${hex(c)}) is too bright for night",
+                luminance(c) < 0.05
             )
         }
     }
 
-    /** Night must actually be darker than day, surface for surface. */
+    /**
+     * The two variants are genuinely different, which they were not.
+     *
+     * Day was `#0A0C0F` against a night of `#06080A` — two near-blacks four points
+     * apart — so choosing Day changed nothing anyone could see. This is the assertion
+     * that would have caught that.
+     */
     @Test
-    fun `night is dimmer than day`() {
-        listOf(
-            "background" to (DwmPalette.BACKGROUND to DwmPalette.N_BACKGROUND),
-            "surface" to (DwmPalette.SURFACE to DwmPalette.N_SURFACE),
-            "raised" to (DwmPalette.RAISED to DwmPalette.N_RAISED),
-            "text" to (DwmPalette.TEXT to DwmPalette.N_TEXT),
-            "accent" to (DwmPalette.ACCENT to DwmPalette.N_ACCENT)
-        ).forEach { (name, pair) ->
-            val (day, night) = pair
-            assertTrue(
-                "night $name (${hex(night)}) is not dimmer than day (${hex(day)})",
-                luminance(night) < luminance(day)
-            )
-        }
+    fun `day is light and night is dark`() {
+        assertTrue(
+            "day background ${hex(DwmPalette.BACKGROUND)} is not a light field",
+            luminance(DwmPalette.BACKGROUND) > 0.50
+        )
+        assertTrue(
+            "night background ${hex(DwmPalette.N_BACKGROUND)} is not a dark field",
+            luminance(DwmPalette.N_BACKGROUND) < 0.05
+        )
     }
 
     private fun check(

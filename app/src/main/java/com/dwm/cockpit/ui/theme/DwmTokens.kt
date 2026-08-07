@@ -28,15 +28,23 @@ import androidx.compose.ui.unit.dp
  * This is read through a windscreen, in Trinidad daylight, from about a metre, by
  * someone who should be looking at the road. So:
  *
- * - **Surfaces are near-black, not mid-grey.** The previous scheme put `#3B3E43`
- *   cards on a `#292B2E` field. That eighteen-point step measures fine and collapses
- *   into one flat wash on this deck's cheap IPS, which lifts blacks badly. Three
- *   levels now, each far enough apart to survive the panel.
+ * - **Day is light and night is dark, and they are genuinely different.** They were
+ *   not: day was `#0A0C0F` and night `#06080A`, two near-blacks four points apart, so
+ *   "Day" only ever meant a very slightly less dim dark. Daylight on a glossy IPS
+ *   wants a bright field — a dark screen in sun is a mirror showing you your own
+ *   dashboard — and the dark design moved to night where it belongs.
+ * - **Three levels, far enough apart to survive the panel.** The deck's cheap IPS
+ *   lifts blacks badly and washes out at the top, so neither variant may separate its
+ *   surfaces by tone alone at close range. Day steps up toward white
+ *   ([BACKGROUND] → [SURFACE] → [RAISED]); night steps up from black. Same logic,
+ *   opposite direction — raised is always the level furthest from the field.
  * - **Hairlines are pushed harder than looks right on a desk monitor.** [HAIRLINE]
- *   sits at ~1.7:1 against [SURFACE] where the usual divider is nearer 1.1:1. On a
+ *   sits at ~1.6:1 against [BACKGROUND] where the usual divider is nearer 1.1:1. On a
  *   glossy panel in sunlight the softer line simply is not there.
- * - **Nothing is pure white in either variant.** White reflects in the windscreen at
- *   night. [TEXT] tops out at `#E8EBF0` by day and `#C3C9D2` after dark.
+ * - **Nothing bright is pure white at night, and no foreground ever is.** White
+ *   reflects in the windscreen after dark. Day may use white *surfaces* because it is
+ *   daylight; night tops its text out at `#C3C9D2` and its brightest surface at
+ *   `#161A1F`.
  * - **One accent, on one element per screen.** [ACCENT] is the nav rail's travelling
  *   bar and nothing else. [OK]/[WARN]/[CRITICAL] are semantic and are never used for
  *   emphasis, decoration or navigation — an orange pixel means something is wrong
@@ -51,50 +59,76 @@ import androidx.compose.ui.unit.dp
 /**
  * The source values, as ARGB ints so both UI stacks can read them.
  *
- * Day is the brief's palette with two adjustments, both made because a number was
- * measured rather than eyeballed: [MUTED] went one step lighter so it still clears
- * 4.5:1 against [RAISED] (it was 4.46:1 on the darker value — fine on [SURFACE],
- * marginal on a raised card), and [HAIRLINE] went two steps lighter for the daylight
- * reason above.
+ * ### Day
  *
- * Night is not a second design. It is the same design with the luminance pulled down
- * and the accent desaturated, so that nothing on the panel is bright enough to sit in
- * the driver's peripheral vision or reflect in the glass. Text and accent are lifted
- * back just far enough to hold 4.5:1 — dimming past legibility is a safety problem,
- * not a style.
+ * A real light theme, which it was not before: the old "day" was `#0A0C0F` against a
+ * night of `#06080A`, so choosing Day changed almost nothing and the app had one
+ * appearance pretending to be two. Every value below was picked against
+ * `DwmContrastTest`'s thresholds rather than by eye, and the binding constraint is
+ * [RAISED] at pure white — a foreground that clears 7:1 there clears it everywhere,
+ * so the numbers are quoted against it.
+ *
+ * The support colours are all darkened well past their night counterparts, because a
+ * mid-tone that reads clearly on near-black is invisible on near-white. The ice blue
+ * in particular cannot survive the inversion: `#5FD3E8` manages 1.4:1 on white, so
+ * the day accent is the same hue taken down to a teal that holds 6.2:1.
+ *
+ * ### Night
+ *
+ * Unchanged, and still the design this app was built around. Luminance pulled down and
+ * the accent desaturated, so that nothing on the panel is bright enough to sit in the
+ * driver's peripheral vision or reflect in the glass. Text and accent are lifted back
+ * just far enough to hold 4.5:1 — dimming past legibility is a safety problem, not a
+ * style.
  */
 object DwmPalette {
 
     /* ---- day ---- */
-    const val BACKGROUND = 0xFF0A0C0F.toInt()
-    const val SURFACE    = 0xFF14171C.toInt()
-    const val RAISED     = 0xFF1C2027.toInt()
-    const val HAIRLINE   = 0xFF39414D.toInt()
-    const val TEXT       = 0xFFE8EBF0.toInt()
-    const val MUTED      = 0xFF808B9B.toInt()
-    /**
-     * Ice blue, not the phone-default blue it was (`#4C8FD8`).
-     *
-     * Two reasons. It reads Ford/Rivian rather than Android, which is the whole
-     * point of the exercise; and it holds up against a bright map or a daylight
-     * camera feed sitting right beside it, which the old blue did not — that matters
-     * now that most of the screen is live content rather than dark cards.
-     *
-     * 11.2 / 10.2 / 9.3 : 1 against background / surface / raised. Bright, but still
-     * below [TEXT] at 13.6:1, so the accent never out-shouts the type.
-     */
-    const val ACCENT     = 0xFF5FD3E8.toInt()
-    const val OK         = 0xFF4FA97C.toInt()
-    const val WARN       = 0xFFD9A03C.toInt()
+
+    /** The field. A light grey rather than white, so [SURFACE] cards can sit *on* it
+     *  and be seen doing so without a shadow — which this deck cannot draw. */
+    const val BACKGROUND = 0xFFE4E9EF.toInt()
+    const val SURFACE    = 0xFFF2F5F8.toInt()
+
+    /** Pure white, and the only pure white in the design. It is the top of the day
+     *  ramp the way `#161A1F` is the top of night's: the level furthest from the
+     *  field, for overlay panels and anything sitting on a card. */
+    const val RAISED     = 0xFFFFFFFF.toInt()
+
+    /** 1.61:1 on [BACKGROUND], 1.96:1 on [RAISED]. Deliberately heavier than a
+     *  divider normally gets — see the daylight note above. */
+    const val HAIRLINE   = 0xFFB0BAC7.toInt()
+
+    /** 18.3:1 on white. Near-black but not black: a true `#000000` on a bright panel
+     *  in sun produces the same haloing the near-black surfaces avoid at night. */
+    const val TEXT       = 0xFF12151A.toInt()
+    const val MUTED      = 0xFF55606E.toInt()
 
     /**
-     * Lifted from `#D9564C`. That value clears 5.0:1 on [BACKGROUND] and 5.3:1 on
-     * [SURFACE] — both fine — but only 4.15:1 on [RAISED], and a critical warning
-     * appears on a raised overlay panel more often than anywhere else. The one
-     * colour that has to survive a glance through a windscreen does not get to be
-     * the one colour that fails on the surface it most often sits on.
+     * The ice blue, inverted for a light field.
+     *
+     * Night keeps `#4FB8CE`; that value manages 1.4:1 on white and would be a pale
+     * smear on the nav rail by day. This is the same hue pulled down to hold 6.2:1 on
+     * [RAISED] and 5.1:1 on [BACKGROUND] — still recognisably the Ford/Rivian teal
+     * rather than the phone-default blue this replaced two releases ago, and still
+     * below [TEXT] at 18.3:1, so the accent never out-shouts the type.
      */
-    const val CRITICAL   = 0xFFE4635A.toInt()
+    const val ACCENT     = 0xFF0A6A7C.toInt()
+    const val OK         = 0xFF17683F.toInt()
+
+    /**
+     * Amber is the hardest colour to carry onto a light field: it is bright by nature,
+     * and the usual `#D9A03C` reads 2.0:1 on white. Taken down to a dark ochre it
+     * clears 5.9:1 and still says "amber" beside the green and the red.
+     */
+    const val WARN       = 0xFF8A5A00.toInt()
+
+    /**
+     * 6.5:1 on [RAISED], 5.4:1 on [BACKGROUND]. The night value was chosen because a
+     * critical warning appears on a raised overlay more often than anywhere else and
+     * must not be the one colour that fails there; the same rule picked this one.
+     */
+    const val CRITICAL   = 0xFFB3261E.toInt()
 
     /* ---- night ---- */
     const val N_BACKGROUND = 0xFF06080A.toInt()
@@ -115,8 +149,15 @@ object DwmPalette {
      */
     const val N_CRITICAL   = 0xFFD2665A.toInt()
 
-    /** Pressed-state wash. Alpha over whatever it sits on, so it needs no variant. */
-    const val PRESS = 0x1AFFFFFF.toInt()
+    /**
+     * Pressed-state wash — and it does need a variant now.
+     *
+     * It was one white-alpha value for both, on the reasoning that alpha over whatever
+     * it sits on needs no variant. That held only while both variants were dark. A
+     * white wash on a white card is invisible, so day darkens and night lightens.
+     */
+    const val PRESS   = 0x14000000.toInt()
+    const val N_PRESS = 0x1AFFFFFF.toInt()
 
     /** Behind a modal or a raised overlay. Never a blur — see [DwmElevation]. */
     const val SCRIM = 0xB3000000.toInt()
@@ -169,7 +210,7 @@ val DwmNightColors = DwmColors(
     ok = c(DwmPalette.N_OK),
     warn = c(DwmPalette.N_WARN),
     critical = c(DwmPalette.N_CRITICAL),
-    press = c(DwmPalette.PRESS),
+    press = c(DwmPalette.N_PRESS),
     scrim = c(DwmPalette.SCRIM),
     night = true
 )

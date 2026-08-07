@@ -12,17 +12,17 @@
          Views painted with these get remapped to the live day/night variant by
          Ui.skin(); the values here are the day variant so the layouts look right in
          Android Studio's editor preview too. -->
-    <color name="bg">#0A0C0F</color>
-    <color name="surface">#14171C</color>
-    <color name="raised">#1C2027</color>
-    <color name="hairline">#39414D</color>
-    <color name="accent">#4C8FD8</color>
-    <color name="textPrimary">#E8EBF0</color>
-    <color name="textDim">#808B9B</color>
+    <color name="bg">#E4E9EF</color>
+    <color name="surface">#F2F5F8</color>
+    <color name="raised">#FFFFFF</color>
+    <color name="hairline">#B0BAC7</color>
+    <color name="accent">#0A6A7C</color>
+    <color name="textPrimary">#12151A</color>
+    <color name="textDim">#55606E</color>
 
     <!-- Was #8E8E93, a colour in no palette, which is why Settings' section headers
          stayed mid-grey in every theme: Ui.skin() had no entry for it and so never
          touched them. Kept as an alias of textDim so the existing layouts need no
          edit before Settings is rebuilt. -->
-    <color name="accent2">#808B9B</color>
+    <color name="accent2">#55606E</color>
 </resources>

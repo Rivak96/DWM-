@@ -73,12 +73,16 @@ object Ui {
      * There were four presets here: Tesla, Midnight, Light and Cockpit. Three of
      * them were abandoned work and the fourth was the only one anyone used, but all
      * four had to keep compiling, so every screen was written against a palette that
-     * might be light or dark and consequently committed to neither. A Light preset
-     * also flatly contradicts a design premised on near-black surfaces with nothing
-     * pure white on them.
+     * might be light or dark and consequently committed to neither.
      *
      * One design now, in two variants, both defined in [DwmPalette]. The variant is
      * decided by [night], which is a fact about the world rather than a preference.
+     *
+     * **[Theme.light] is now real.** It was hardcoded `false` in both branches while
+     * both variants were dark, which quietly mattered in five places — the gauge
+     * track wash, two `ColorStateList`s, the background gradient direction, and most
+     * visibly [dialog], which was handing every alert a dark Material style. Day sets
+     * it true, and all five follow.
      *
      * The [Theme] shape is unchanged so the existing view screens keep compiling.
      * Two of its fields no longer mean what their names suggest and are kept only
@@ -105,7 +109,7 @@ object Ui {
         cardTop = DwmPalette.N_SURFACE,
         cardBottom = DwmPalette.N_SURFACE
     ) else Theme(
-        light = false,
+        light = true,
         bg = DwmPalette.BACKGROUND,
         surface = DwmPalette.SURFACE,
         surfacePressed = DwmPalette.RAISED,

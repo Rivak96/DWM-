@@ -1,7 +1,7 @@
 {
-    "versionCode":  50,
-    "versionName":  "0.31.0",
-    "tag":  "v0.31.0",
+    "versionCode":  51,
+    "versionName":  "0.32.0",
+    "tag":  "v0.32.0",
     "apk":  "app-release.apk",
-    "notes":  "The app box on the home screen is a grid of your apps now. Tap one and it opens full screen; press Home to come back. Long-press a tile to pin it to favourites or open its app info. Everything else on the dashboard is unchanged - the vehicle diagram, the camera, the readings and the bottom bar all stay exactly where they were. This replaces the single app card, which only ever opened one app, and before that the live app window, which drew its own title bar and would not stay where it was put."
+    "notes":  "Day mode is actually light now. It never was: day was #0A0C0F and night #06080A, two near-blacks four points apart, so picking Day changed nothing you could see. Day is now a real light theme - light grey field, white cards, near-black text, and the ice blue taken down to a teal that can be read on white. Night is untouched. Set it in Settings \u003e Display \u003e Theme; Auto still follows your headlights, falling back to the clock. Every colour was picked against the contrast thresholds rather than by eye, and the test that would have caught the old fake day mode is now in the build."
 }
