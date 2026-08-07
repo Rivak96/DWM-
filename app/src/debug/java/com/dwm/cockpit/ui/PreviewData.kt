@@ -167,56 +167,20 @@ val previewSettings = SettingsUi(
         "custom HTML · OBD-II gauges · GPS speed · clock · images."
 )
 
-/* -------------------------------------------------------------------- panes */
+/* -------------------------------------------------------------------- stage */
+
+/** The side camera, with no id set — the deck auto-detects EXTERNAL then BACK. */
+val previewCameraPanel = Panel(PanelType.CAMERA, 0f, 0f, 1f, 1f, label = "Camera")
 
 /**
- * The default cockpit: camera on the left, app drawer on the right.
+ * The app on the stage, for the golden that shows an occupied cockpit.
  *
- * Both are drawn by DWM, so this is what the screen looks like the first time it
- * opens — before an app has been picked, a permission granted or a CAN bus wired up.
- * It is the state that has to look finished, because it is the state the deck is in
- * every single morning.
+ * The stage renders as a blank region either way, because the window is a separate
+ * freeform task no renderer can see. What the golden proves is the chrome around it
+ * and the rect the window will be launched into — only the deck can prove the window
+ * actually lands there.
  */
-val previewPanesDefault: List<PaneState> = listOf(
-    PaneState(
-        listOf(
-            Panel(PanelType.CAMERA, 0f, 0f, 1f, 1f, label = "Camera"),
-            Panel(PanelType.DRAWER, 0f, 0f, 1f, 1f, label = "Apps")
-        ),
-        index = 0
-    ),
-    PaneState(
-        listOf(
-            Panel(PanelType.DRAWER, 0f, 0f, 1f, 1f, label = "Apps"),
-            Panel(PanelType.CLOCK, 0f, 0f, 1f, 1f, label = "Clock")
-        ),
-        index = 0
-    )
-)
-
-/**
- * Both panes holding a live app.
- *
- * Renders as two headers over empty bodies, because the windows are separate tasks
- * the renderer cannot see. That is the point of the golden: it proves the chrome and
- * the rects the windows will be launched into.
- */
-val previewPanesApps: List<PaneState> = listOf(
-    PaneState(
-        listOf(
-            Panel(PanelType.APP, 0f, 0f, 1f, 1f, pkg = "com.google.android.apps.maps", label = "Maps"),
-            Panel(PanelType.CAMERA, 0f, 0f, 1f, 1f, label = "Camera")
-        ),
-        index = 0
-    ),
-    PaneState(
-        listOf(
-            Panel(PanelType.APP, 0f, 0f, 1f, 1f, pkg = "com.spotify.music", label = "Spotify"),
-            Panel(PanelType.DRAWER, 0f, 0f, 1f, 1f, label = "Apps")
-        ),
-        index = 0
-    )
-)
+const val PREVIEW_STAGE_APP = "com.google.android.apps.maps"
 
 /** A door ajar, tyres reporting, reversing onto something. */
 val previewBodyActive = BodyState(
@@ -235,20 +199,20 @@ val previewBodyActive = BodyState(
 /* ------------------------------------------------------------ drawn stand-ins */
 
 /**
- * Stand-in Views for DWM-drawn pane sources, **for goldens only**.
+ * Stand-in Views for DWM-drawn panels, **for goldens only**.
  *
  * Off device there is no camera to open and no GPS to read, so `buildPanelView`
- * returns nothing and every drawn pane renders as a label. That makes the primary
- * golden — the one meant to show what the deck looks like every morning — a picture
- * of two empty boxes, which is exactly the failure this rebuild exists to fix.
+ * returns nothing and the camera box renders as an `Unavailable` label. That would
+ * make the primary golden — the one meant to show what the deck looks like every
+ * morning — a picture of an empty box, which is the failure this design exists to fix.
  *
  * These draw an unmistakably synthetic placeholder: a flat fill and the source name.
  * It is not pretending to be a camera feed. It exists so the golden shows the *shape*
- * of the screen with its panes occupied, and the deck shows what is actually in them.
+ * of an occupied box, and the deck shows what is actually in it.
  */
 fun previewDrawnView(context: android.content.Context, p: Panel): android.view.View? =
     when (p.type) {
-        PanelType.APP, PanelType.DRAWER -> null
+        PanelType.APP -> null
         else -> android.widget.TextView(context).apply {
             text = p.displayLabel().uppercase()
             textSize = 13f

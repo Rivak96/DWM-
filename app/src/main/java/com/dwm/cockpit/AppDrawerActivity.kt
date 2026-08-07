@@ -47,7 +47,17 @@ class AppDrawerActivity : DwmActivity() {
                 setResult(RESULT_OK, Intent().putExtra(EXTRA_PKG, entry.pkg))
                 finish()
             } else {
-                LaunchEngine.launchFullscreen(this, entry.pkg)
+                // Put it on the stage and get out of the way. HomeActivity.onStart
+                // reads this back and launches the window into the stage's rect —
+                // which it can only do once Compose has measured that rect, so the
+                // launch cannot happen from here.
+                //
+                // This is also why swapping apps goes through a fullscreen activity
+                // rather than a drawer drawn on the home screen: the outgoing app is
+                // a freeform window floating *above* HomeActivity, and nothing DWM
+                // draws can cover it. A real activity can.
+                Prefs.setStageApp(this, entry.pkg)
+                finish()
             }
         }
         grid.setOnItemLongClickListener { _, _, pos, _ ->

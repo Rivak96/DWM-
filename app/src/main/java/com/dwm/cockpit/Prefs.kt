@@ -22,81 +22,39 @@ object Prefs {
         sp(c).edit().putString("panels", a.toString()).apply()
     }
 
-    /* ------------------------------------------------------------------ panes */
+    /* ------------------------------------------------------------------ stage */
 
     /**
-     * The cockpit panes.
+     * The one app on the stage.
      *
-     * A pane is a slot on the home screen holding an ordered list of sources, and a
-     * swipe cycles them. Sources are [Panel]s with their bounds ignored — the pane's
-     * geometry supplies those at render time — which is deliberate reuse: the layout
-     * editor, `LaunchEngine` and the drawn-panel renderer all already speak [Panel],
-     * so a pane source needs no second model and no conversion.
+     * Null means no app has ever been chosen, and only then — the stage draws the app
+     * grid in that state, which is safe precisely because there is no window in the way
+     * yet. Once this is set it stays set, so the deck comes back on a cold boot showing
+     * whatever was last on screen rather than a chooser.
      *
-     * Stored as an array of arrays. Empty means "not configured yet", and
-     * [defaultPanes] supplies something useful on first run rather than two empty
-     * boxes.
+     * This replaced the panes store: an array-of-arrays of sources per pane, plus a
+     * split fraction, plus a per-pane index. All of it existed to answer "which of
+     * several things is each slot showing", a question with one slot no longer has.
      */
-    fun panes(c: Context): List<List<Panel>> {
-        val s = sp(c).getString("panes", null) ?: return defaultPanes(c)
-        return runCatching {
-            val outer = JSONArray(s)
-            (0 until outer.length()).map { i ->
-                val inner = outer.getJSONArray(i)
-                (0 until inner.length()).map { j -> Panel.fromJson(inner.getJSONObject(j)) }
-            }
-        }.getOrDefault(defaultPanes(c))
-    }
-
-    fun savePanes(c: Context, panes: List<List<Panel>>) {
-        val outer = JSONArray()
-        panes.forEach { pane ->
-            val inner = JSONArray()
-            pane.forEach { inner.put(it.toJson()) }
-            outer.put(inner)
-        }
-        sp(c).edit().putString("panes", outer.toString()).apply()
-    }
+    fun stageApp(c: Context): String? = sp(c).getString("stage_app", null)
+    fun setStageApp(c: Context, pkg: String?) =
+        sp(c).edit().putString("stage_app", pkg).apply()
 
     /**
-     * First run: the camera on the left, the app drawer on the right.
+     * Which Camera2 device the side camera opens, or null to auto-detect.
      *
-     * Both are drawn by DWM, so the cockpit is full of live content the first time it
-     * opens without needing an app to be picked, a permission to be granted or a CAN
-     * bus to be talking. The previous default was an empty screen that asked the user
-     * to go and configure something, which is why it looked unfinished.
+     * Auto-detect prefers EXTERNAL (a wired analog input reports as external on this
+     * deck), then BACK, then the first id. That is right often enough that this is
+     * only worth setting when a second feed appears — which is what the 360 kit will
+     * do. Settings → Vehicle → Cameras lists the ids.
      */
-    private fun defaultPanes(c: Context): List<List<Panel>> = listOf(
-        listOf(
-            Panel(PanelType.CAMERA, 0f, 0f, 1f, 1f, label = "Camera"),
-            Panel(PanelType.DRAWER, 0f, 0f, 1f, 1f, label = "Apps")
-        ),
-        listOf(
-            Panel(PanelType.DRAWER, 0f, 0f, 1f, 1f, label = "Apps"),
-            Panel(PanelType.CLOCK, 0f, 0f, 1f, 1f, label = "Clock")
-        )
-    )
+    fun camId(c: Context): String? = sp(c).getString("cam_id", null)
+    fun setCamId(c: Context, v: String?) = sp(c).edit().putString("cam_id", v).apply()
 
-    /** How many panes the cockpit is split into. */
-    fun paneCount(c: Context) = sp(c).getInt("pane_count", 2).coerceIn(1, 3)
-    fun setPaneCount(c: Context, v: Int) =
-        sp(c).edit().putInt("pane_count", v.coerceIn(1, 3)).apply()
-
-    /**
-     * Where the divider sits, as a fraction of the pane region's width.
-     *
-     * Clamped well away from the edges: a pane narrower than a quarter of the screen
-     * cannot show anything useful, and a freeform window that small is not worth
-     * launching an app into.
-     */
-    fun splitFraction(c: Context) = sp(c).getFloat("split_frac", 0.5f).coerceIn(0.25f, 0.75f)
-    fun setSplitFraction(c: Context, v: Float) =
-        sp(c).edit().putFloat("split_frac", v.coerceIn(0.25f, 0.75f)).apply()
-
-    /** Which source each pane is currently showing. Survives a restart. */
-    fun paneIndex(c: Context, pane: Int) = sp(c).getInt("pane_idx_$pane", 0)
-    fun setPaneIndex(c: Context, pane: Int, v: Int) =
-        sp(c).edit().putInt("pane_idx_$pane", v).apply()
+    /** Preview rotation, 0/90/180/270. Analog inputs often arrive on their side. */
+    fun camRotation(c: Context) = sp(c).getInt("cam_rot", 0)
+    fun setCamRotation(c: Context, v: Int) =
+        sp(c).edit().putInt("cam_rot", ((v % 360) + 360) % 360).apply()
 
     /** Old versions stored app-only "tiles"; convert them to APP panels once. */
     private fun migrateOldTiles(c: Context): List<Panel> {
@@ -274,11 +232,6 @@ object Prefs {
     /** Show the big favourites grid on the home canvas. */
     fun showFavGrid(c: Context) = sp(c).getBoolean("fav_grid", true)
     fun setShowFavGrid(c: Context, v: Boolean) = sp(c).edit().putBoolean("fav_grid", v).apply()
-
-    /** Re-raise app windows above the fullscreen base app every few seconds
-     *  (freeform windows sink when the fullscreen app is tapped). */
-    fun pinWindows(c: Context) = sp(c).getBoolean("pin_windows", false)
-    fun setPinWindows(c: Context, v: Boolean) = sp(c).edit().putBoolean("pin_windows", v).apply()
 
     /**
      * GitHub "owner/repo" hosting version.json + release APKs (auto-update).

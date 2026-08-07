@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.dwm.cockpit.Media
 import com.dwm.cockpit.ui.theme.Dwm
 import com.dwm.cockpit.ui.theme.DwmSpace
 
@@ -18,21 +17,20 @@ import com.dwm.cockpit.ui.theme.DwmSpace
  * This must stay in step with `DECK` in the snapshot tests — same geometry, two
  * syntaxes, and nothing enforces the agreement but this note.
  *
- * A pane holding a live app renders empty here, because the app is a separate
- * freeform task that neither Studio nor Paparazzi can see. That is honest rather
- * than a gap: what the golden proves is the chrome and the geometry the window will
- * land in, and only the deck can prove the window lands in it.
+ * The stage renders empty here, because the app on it is a separate freeform task
+ * that neither Studio nor Paparazzi can see. That is honest rather than a gap: what
+ * the golden proves is the chrome and the geometry the window will land in, and only
+ * the deck can prove the window lands in it.
  */
 private const val DECK = "spec:width=1600dp,height=1000dp,dpi=192"
 
-@Preview(name = "Cockpit · camera + drawer (the default)", device = DECK)
+@Preview(name = "Cockpit · empty stage (the first boot)", device = DECK)
 @Composable
 private fun PreviewCockpitDefault() {
     DwmPreviewTheme {
         CockpitHome(
-            panes = previewPanesDefault,
-            splitFraction = 0.5f,
-            favourites = previewDeckApps,
+            stageApp = null,
+            cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
             actions = previewActions,
@@ -41,14 +39,13 @@ private fun PreviewCockpitDefault() {
     }
 }
 
-@Preview(name = "Cockpit · live map + camera", device = DECK)
+@Preview(name = "Cockpit · an app on the stage", device = DECK)
 @Composable
 private fun PreviewCockpitApps() {
     DwmPreviewTheme {
         CockpitHome(
-            panes = previewPanesApps,
-            splitFraction = 0.58f,
-            favourites = previewDeckApps,
+            stageApp = PREVIEW_STAGE_APP,
+            cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
             actions = previewActions,
@@ -62,9 +59,8 @@ private fun PreviewCockpitApps() {
 private fun PreviewCockpitReversing() {
     DwmPreviewTheme {
         CockpitHome(
-            panes = previewPanesDefault,
-            splitFraction = 0.5f,
-            favourites = previewDeckApps,
+            stageApp = PREVIEW_STAGE_APP,
+            cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = false,
             actions = previewActions,
@@ -78,9 +74,8 @@ private fun PreviewCockpitReversing() {
 private fun PreviewCockpitNight() {
     DwmPreviewTheme(night = true) {
         CockpitHome(
-            panes = previewPanesDefault,
-            splitFraction = 0.5f,
-            favourites = previewDeckApps,
+            stageApp = null,
+            cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
             actions = previewActions,
@@ -103,20 +98,8 @@ private fun PreviewVehicleActive() = Fragment {
     VehicleDiagram(previewBodyActive, Modifier.fillMaxSize())
 }
 
-@Preview(name = "Media · playing", widthDp = 520, heightDp = 220)
-@Composable
-private fun PreviewMediaPlaying() = Fragment {
-    MediaStrip(
-        Media.State.Playing(
-            pkg = "com.spotify.music",
-            title = "Everything In Its Right Place",
-            artist = "Radiohead",
-            art = null,
-            playing = true
-        ),
-        {}, {}, Modifier.fillMaxSize()
-    )
-}
+// The media-strip preview went with the strip itself. Now-playing was removed from
+// the home screen along with the favourites band.
 
 @Composable
 private fun Fragment(content: @Composable () -> Unit) {

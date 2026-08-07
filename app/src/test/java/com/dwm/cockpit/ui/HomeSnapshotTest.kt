@@ -7,7 +7,6 @@ import com.android.resources.ScreenOrientation
 import com.android.resources.ScreenRatio
 import com.android.resources.ScreenSize
 import androidx.compose.runtime.Composable
-import com.dwm.cockpit.Media
 import com.dwm.cockpit.Panel
 import org.junit.Rule
 import org.junit.Test
@@ -39,14 +38,18 @@ class HomeSnapshotTest {
         useDeviceResolution = true
     )
 
-    /** The default cockpit: camera left, app drawer right, no CAN data. This is
-     *  exactly what the deck shows the first morning, and it has to look finished. */
+    /**
+     * The very first boot: no app has ever been chosen, so the stage shows the grid.
+     *
+     * No CAN data either, which is the deck's real state until the engine is running.
+     * This is the state that has to look finished, because it is the one a fresh
+     * install lands in.
+     */
     @Test
-    fun `cockpit default - camera and drawer, no CAN`() = snap {
+    fun `cockpit empty stage, no CAN`() = snap {
         CockpitHome(
-            panes = previewPanesDefault,
-            splitFraction = 0.5f,
-            favourites = previewDeckApps,
+            stageApp = null,
+            cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
             actions = previewActions,
@@ -55,14 +58,19 @@ class HomeSnapshotTest {
         )
     }
 
-    /** Both panes holding a live app. The bodies render empty because the windows
-     *  are separate tasks; the golden proves the chrome and the rects. */
+    /**
+     * An app on the stage — the normal state, every morning after the first.
+     *
+     * The stage renders blank because the window is a separate freeform task no
+     * renderer can see. What this proves is the chrome around it: that the right-hand
+     * column, the vehicle bar and the nav bar all sit *outside* the rect the window
+     * will be launched into, so none of them can be covered by it.
+     */
     @Test
-    fun `cockpit with two live app windows`() = snap {
+    fun `cockpit with an app on the stage`() = snap {
         CockpitHome(
-            panes = previewPanesApps,
-            splitFraction = 0.58f,
-            favourites = previewDeckApps,
+            stageApp = PREVIEW_STAGE_APP,
+            cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
             actions = previewActions,
@@ -74,9 +82,8 @@ class HomeSnapshotTest {
     @Test
     fun `cockpit reversing`() = snap {
         CockpitHome(
-            panes = previewPanesDefault,
-            splitFraction = 0.5f,
-            favourites = previewDeckApps,
+            stageApp = PREVIEW_STAGE_APP,
+            cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = false,
             actions = previewActions,
@@ -86,51 +93,14 @@ class HomeSnapshotTest {
     }
 
     @Test
-    fun `cockpit with music playing`() = snap {
-        CockpitHome(
-            panes = previewPanesDefault,
-            splitFraction = 0.5f,
-            favourites = previewDeckApps,
-            allApps = previewFavourites,
-            overlaysOn = false,
-            actions = previewActions,
-            vehicle = previewVehicleIdle,
-            media = Media.State.Playing(
-                pkg = "com.spotify.music",
-                title = "Everything In Its Right Place",
-                artist = "Radiohead",
-                art = null,
-                playing = true
-            ),
-            drawnView = drawn
-        )
-    }
-
-    @Test
     fun `cockpit at night`() = snap(night = true) {
         CockpitHome(
-            panes = previewPanesDefault,
-            splitFraction = 0.5f,
-            favourites = previewDeckApps,
+            stageApp = null,
+            cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
             actions = previewActions,
             vehicle = previewVehicleNoSignal,
-            drawnView = drawn
-        )
-    }
-
-    /** One pane, full width — the other supported layout. */
-    @Test
-    fun `cockpit single pane`() = snap {
-        CockpitHome(
-            panes = listOf(previewPanesDefault[0]),
-            splitFraction = 1f,
-            favourites = previewDeckApps,
-            allApps = previewFavourites,
-            overlaysOn = true,
-            actions = previewActions,
-            vehicle = previewVehicleIdle,
             drawnView = drawn
         )
     }
@@ -147,15 +117,14 @@ class HomeSnapshotTest {
      * The bundled image measures 0.010 mean luminance; this is roughly fifteen times
      * brighter. If cards stay readable over this, they stay readable over anything a
      * driver is likely to pick. What the golden proves is the compositing: the image
-     * draws, the dim applies, cards stay fully opaque, and the drawer pane lets it
+     * draws, the dim applies, cards stay fully opaque, and the empty stage lets it
      * through.
      */
     @Test
     fun `cockpit over a bright wallpaper`() = snap {
         CockpitHome(
-            panes = previewPanesDefault,
-            splitFraction = 0.5f,
-            favourites = previewDeckApps,
+            stageApp = null,
+            cameraPanel = previewCameraPanel,
             allApps = previewFavourites,
             overlaysOn = true,
             actions = previewActions,

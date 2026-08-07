@@ -80,29 +80,45 @@ fun VehicleDiagram(body: BodyState, modifier: Modifier = Modifier) {
 
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 // The drawing is laid out in fractions of a *portrait* region, so it
-                // gets one: a centred box no wider than 0.62 of its height. Letting
-                // it fill a landscape card made the fractions produce a vehicle
-                // wider than it was long.
+                // gets one: a centred box no wider than [VEHICLE_ASPECT] of its
+                // height. Letting it fill a landscape card made the fractions produce
+                // a vehicle wider than it was long.
                 val region = minOf(maxWidth, maxHeight * VEHICLE_ASPECT)
 
-                Canvas(
+                // ...and no *taller* than that region implies either. The card is now
+                // a tall one in the right-hand column rather than a short one along
+                // the bottom, and a canvas that simply filled the height pushed the
+                // tyre figures — which anchor to this box's corners — about 125dp
+                // clear of the vehicle they belong to. Bounding the box to the
+                // drawing's own proportions keeps them beside their wheels at any
+                // card height, which is the whole point of putting them at corners.
+                val band = minOf(maxHeight, region / VEHICLE_ASPECT)
+
+                Box(
                     Modifier
-                        .width(region)
-                        .fillMaxHeight()
+                        .fillMaxWidth()
+                        .height(band)
                         .align(Alignment.Center)
                 ) {
-                    drawBody(colors, hairline, radius)
-                    drawDoors(colors, hairline, body)
-                    if (liveRadar) {
-                        drawRadar(colors, pip, body.radar)
-                        if (body.reverse) drawGuides(colors.accent, hairline, steer)
+                    Canvas(
+                        Modifier
+                            .width(region)
+                            .fillMaxHeight()
+                            .align(Alignment.Center)
+                    ) {
+                        drawBody(colors, hairline, radius)
+                        drawDoors(colors, hairline, body)
+                        if (liveRadar) {
+                            drawRadar(colors, pip, body.radar)
+                            if (body.reverse) drawGuides(colors.accent, hairline, steer)
+                        }
                     }
-                }
 
-                // Tyre figures sit across the whole card, outboard of the vehicle,
-                // rather than inside the narrow drawing region — which is both where
-                // there is room for them and where a driver expects to read them.
-                TyreReadouts(body, Modifier.fillMaxSize())
+                    // Tyre figures sit across the whole card, outboard of the vehicle,
+                    // rather than inside the narrow drawing region — which is both
+                    // where there is room for them and where a driver expects them.
+                    TyreReadouts(body, Modifier.fillMaxSize())
+                }
             }
 
             Spacer(Modifier.height(DwmSpace.s))

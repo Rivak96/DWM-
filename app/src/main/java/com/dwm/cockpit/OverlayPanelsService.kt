@@ -237,9 +237,8 @@ class OverlayPanelsService : Service() {
             p.url?.let { u -> runCatching { setImageURI(Uri.parse(u)) } }
         }
         PanelType.NOTIF -> p.pkg?.let { NotifPanel(this, it) }
-        // DRAWER is a cockpit-pane source drawn by Compose on the home screen; it has
-        // no meaning as a floating overlay panel, so it is not built here.
-        PanelType.APP, PanelType.DRAWER -> null
+        // An APP is a real freeform window, not something this service can draw.
+        PanelType.APP -> null
     }
 
     private fun gauge(metric: String?): GaugeView {

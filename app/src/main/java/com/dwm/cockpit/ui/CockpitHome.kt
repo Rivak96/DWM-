@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,7 +32,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import com.dwm.cockpit.Media
 import com.dwm.cockpit.Panel
 import com.dwm.cockpit.R
 import com.dwm.cockpit.ui.theme.Dwm
@@ -48,37 +48,41 @@ import java.util.Locale
  * The cockpit.
  *
  * ```
- *  ┌──────────────────────────────┬──────────────────────────────────────┐
- *  │  ‹ swipe ›                   ║  ‹ swipe ›                           │
- *  │   PANE 1 — live content      ║   PANE 2 — live content              │
- *  ├──────────────────────────────┴──────────────────────────────────────┤
+ *  ┌─────────────────────────────────────────────┬───────────────────────┐
+ *  │                                             │  TPMS · doors · radar │
+ *  │   THE STAGE — one freeform app window,      │                       │
+ *  │   or the app grid before one is chosen      ├───────────────────────┤
+ *  │                                             │  CAMERA  16:9         │
+ *  ├─────────────────────────────────────────────┴───────────────────────┤
  *  │  speed  gear  coolant  volts  fuel  rpm  boost  outside             │
- *  ├──────────────┬───────────────────┬──────────────────────────────────┤
- *  │ media 5      │ vehicle 3      │ shortcuts 4                         │
- *  ├──────────────┴───────────────────┴──────────────────────────────────┤
+ *  ├─────────────────────────────────────────────────────────────────────┤
  *  │  Home    Apps    Overlays    Bluetooth    Wi-Fi    Settings         │
  *  └─────────────────────────────────────────────────────────────────────┘
  * ```
  *
- * Navigation sits along the bottom rather than in a right-edge rail. The rail was
- * the better ergonomic argument in a right-hand-drive truck and it was not where the
- * driver wanted the controls — v0.24 had them along the bottom. It costs the panes
- * about 90dp of height and gives them back 96dp of width.
- *
  * ### What this replaced, and why
  *
- * The previous version was a page of buttons: a large card reading "CarPlay", an
- * empty proximity box, four em dashes and "Nothing playing". Every element was
- * *about* content rather than being content, and a screen of correctly-typeset
- * nothing reads as unfinished no matter how good the type is.
+ * Two panes, a media strip and a favourites band — tested on the deck and rejected as
+ * "extremely buggy". The verdict was about the architecture, not the finish. Every
+ * pane reposition relaunched a real Android task, swiping a pane off an app parked its
+ * window off-screen using bounds this ROM was never proven to honour, and two live
+ * apps plus a camera sat badly inside the ~600 MB this deck actually has free.
  *
- * The top two thirds are now live — a camera feed, the app drawer, a gauge, a web
- * dashboard, or a real third-party app window — and the bottom third is dense
- * instrumentation rather than four half-empty cards. The em-dash no-signal treatment
- * is still exactly right as a *component*; it was wrong as most of a screen.
+ * So there is one app now, and the space it gave back is filled with things DWM draws
+ * itself. Drawn content costs no window, cannot sink behind anything, and cannot be
+ * relaunched out from under you.
  *
- * `DWM's own drawn panels render underneath the freeform app windows, which is what
- * lets a camera pane sit beside an app pane with no interaction between them.`
+ * ### The one rule that shapes this layout
+ *
+ * A live app is a separate freeform task floating *above* this activity. DWM cannot
+ * draw over it and never receives its touches. Everything DWM owns therefore lives
+ * *beside* the stage, never on top of it — the right-hand column, the vehicle bar and
+ * the nav bar are all outside the window's rect by construction. It is also why
+ * swapping apps goes through the fullscreen `AppDrawerActivity`: a Compose drawer
+ * drawn here would be hidden behind the very window it is meant to replace.
+ *
+ * Vertical budget at the deck's 1000dp: 88 nav + 104 vehicle bar + spacers leaves 784
+ * for the top box, less the 32dp margin and the 48dp top strip → ~692dp of stage.
  */
 
 /**
@@ -112,24 +116,21 @@ class HomeActions(
 
 @Composable
 fun CockpitHome(
-    panes: List<PaneState>,
-    splitFraction: Float,
-    favourites: List<HomeApp>,
+    /** The app on the stage, or null before one has ever been chosen. */
+    stageApp: String?,
+    /** The camera for the right-hand column. */
+    cameraPanel: Panel,
     allApps: List<HomeApp>,
     overlaysOn: Boolean,
     actions: HomeActions,
     vehicle: VehicleUi = rememberVehicleState(LocalContext.current),
-    media: Media.State = Media.State.Idle,
     boost: Float? = null,
     /** Optional wallpaper, already decoded by the activity. */
     wallpaper: android.graphics.Bitmap? = null,
     wallpaperDim: Float = 0.30f,
-    /** Open an app inside a pane rather than fullscreen. */
-    onLaunchInPane: (pane: Int, pkg: String) -> Unit = { _, _ -> },
-    onSwipe: (pane: Int, delta: Int) -> Unit = { _, _ -> },
-    onSplitChange: (Float) -> Unit = {},
-    onPickSource: (pane: Int) -> Unit = {},
-    onPaneBounds: (List<Rect>) -> Unit = {},
+    /** Put an app on the stage, in a window sized to the stage's rect. */
+    onLaunchOnStage: (pkg: String) -> Unit = {},
+    onStageBounds: (Rect) -> Unit = {},
     drawnView: (Panel) -> View? = { null }
 ) {
     val colors = Dwm.colors
@@ -173,8 +174,8 @@ fun CockpitHome(
             Column(
                 Modifier
                     .fillMaxSize()
-                    .padding(DwmGrid.margin)
-                    .padding(bottom = DwmSpace.s)
+                    .padding(horizontal = DwmGrid.margin)
+                    .padding(top = DwmGrid.margin, bottom = DwmGrid.gutter)
             ) {
                 TopStrip(
                     turn = body.turnSignal,
@@ -186,68 +187,74 @@ fun CockpitHome(
 
                 Spacer(Modifier.height(DwmSpace.m))
 
-                CockpitPanes(
-                    panes = panes,
-                    splitFraction = splitFraction,
-                    apps = allApps,
-                    onLaunch = onLaunchInPane,
-                    onAppMenu = actions.appMenu,
-                    onSwipe = onSwipe,
-                    onSplitChange = onSplitChange,
-                    onPick = onPickSource,
-                    onPaneBounds = onPaneBounds,
-                    drawnView = drawnView,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                )
-
-                Spacer(Modifier.height(DwmGrid.gutter))
-
-                VehicleBar(
-                    drive = drive,
-                    vitals = vitals,
-                    ambient = head.ambient,
-                    boost = boost,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(DwmSize.vehicleBar)
-                )
-
-                Spacer(Modifier.height(DwmGrid.gutter))
-
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .height(DwmSize.bottomRow)
+                        .weight(1f)
                 ) {
-                    MediaStrip(
-                        state = media,
-                        onOpen = actions.launch,
-                        onGrantAccess = actions.grantNotifications,
+                    AppStage(
+                        occupied = stageApp != null,
+                        apps = allApps,
+                        onLaunch = onLaunchOnStage,
+                        onAppMenu = actions.appMenu,
+                        onBounds = onStageBounds,
+                        onWallpaper = wallpaper != null,
                         modifier = Modifier
-                            .width(DwmGrid.span(content, 5))
+                            .weight(1f)
                             .fillMaxHeight()
                     )
+
                     Spacer(Modifier.width(DwmGrid.gutter))
-                    VehicleDiagram(
-                        body = body,
-                        modifier = Modifier
+
+                    // Three columns of twelve — the width the vehicle diagram used to
+                    // get along the bottom, now turned on its side. The diagram wants a
+                    // portrait region and was being given 159dp of drawing width in a
+                    // landscape card; here it gets roughly twice that.
+                    Column(
+                        Modifier
                             .width(DwmGrid.span(content, 3))
                             .fillMaxHeight()
-                    )
-                    Spacer(Modifier.width(DwmGrid.gutter))
-                    QuickToggles(
-                        apps = favourites,
-                        onLaunch = actions.launch,
-                        onAppMenu = actions.appMenu,
-                        modifier = Modifier
-                            .width(DwmGrid.span(content, 4))
-                            .fillMaxHeight()
-                    )
+                    ) {
+                        VehicleDiagram(
+                            body = body,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        )
+
+                        Spacer(Modifier.height(DwmGrid.gutter))
+
+                        // Sized by aspect, not by height. The camera absorbs its own
+                        // shape and the diagram takes whatever is left, so adding the
+                        // 360 feed later is one more box and no re-layout.
+                        CameraBox(
+                            panel = cameraPanel,
+                            label = "Camera",
+                            drawnView = drawnView,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f)
+                        )
+                    }
                 }
             }
         }
+
+        // Outside the margin-padded column so it sits directly on the nav bar, which
+        // is where the controls were asked for. It keeps its horizontal margin so it
+        // still reads as a card; the nav bar below stays full-bleed.
+        VehicleBar(
+            drive = drive,
+            vitals = vitals,
+            ambient = head.ambient,
+            boost = boost,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = DwmGrid.margin)
+                .height(DwmSize.vehicleBar)
+        )
+
+        Spacer(Modifier.height(DwmSpace.m))
 
         SystemBar(
             selected = Bar.HOME,
