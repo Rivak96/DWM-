@@ -829,12 +829,399 @@ Both channels are per-unit and undocumented → discover empirically, don't gues
   layout"; flipping it restarts OverlayPanelsService since grips are inflate-time.
 - versionCode 25 / 0.14.0. Build + lint clean.
 
-### Next — gated on probe output, deliberately NOT built yet
-The polished vehicle panel (`PanelType.VEHICLE`: car/seats graphic, AC temps, fan
-speed, headlight/door state) is worthless until we know what the deck actually
-exposes and in what units. Build it only after the user pastes back a Compare diff.
-Editor wiring would follow the existing pattern in `LayoutEditorActivity` (the
-`setItems` type picker at ~line 123 → `assign(target, newFree, Panel(...))`), and
-the drawn panel would follow `GaugeView`'s `configure()/setValue()` shape.
-If the probe finds nothing: fall back to the ELM327 OBD path already in `Obd.kt`
-(user said they'd get a dongle) — that gives engine data but NOT HVAC/lights.
+### Next — gated on probe output  ✅ RESOLVED, see §27–§30
+Written when the vehicle panel was still hypothetical. It was built, and the AC part
+of it never could be: there is no AC method among the CAN service's 64, so climate
+lives in a different vendor app entirely. The ELM327 fallback was never needed —
+the deck's own CAN service turned out to be bindable. `Obd.kt` remains, unused.
+
+---
+
+> **§27 onward were reconstructed on 2026-08-08 from commit messages**, after this
+> file was left at v0.14.0 while development ran on to v0.32.0. The commits are the
+> primary record and are considerably more detailed; `git log v0.14.0..HEAD` is the
+> place to go for the full argument behind any of it.
+
+## 27. STATUS — Milestone 19 (2026-07-27→28): finding the channel — v0.14.1 → v0.16.0
+
+Three releases spent closing in on where this deck actually publishes CAN state.
+Each one replaced a guess with a measurement.
+
+- **v0.14.1 — deeper scan.** The v0.14.0 scan came back with every easy path shut:
+  nothing changed in the settings store, no key names matched, no CAN broadcasts
+  fired. It did name the vendor — `com.dofun.carsetting` — which exposed a blind
+  spot: the scan only listed packages whose *own name* contained a hint, so every
+  other `com.dofun.*` package was invisible, and the CAN handler is usually a
+  sibling under the same prefix. Added a full component dump per vendor prefix,
+  serial-port visibility (`stat` only — never opened; CAN reaches Android over a
+  UART and reads are destructive, so bytes we take are bytes the deck's own CAN
+  service never gets), and a complete installed-package list as the safety net.
+- **v0.15.0 — query providers, stop guessing prefixes.** The scan named the real
+  platform: **`com.tw.*` (Topway)**, with `com.tw.carinfoservice` the likely CAN
+  consumer. §5 had missed it because the prefix list said `com.ts` and
+  "carinfoservice" matches no name hint either. Guessing prefixes is the wrong shape
+  of solution, so it was inverted: dump every package that isn't stock AOSP/Google.
+  `exportedProviders()` finds exported providers with no read permission and
+  actually queries them — even a rejection is informative, since "Unknown URI" means
+  alive-and-wants-a-path, which is a different answer from a permission denial.
+- **v0.16.0 — read the vendor manifests.** The sniffer had shipped ~50 hand-written
+  candidate action names and caught nothing, twice. Those names were never guessable
+  — but they *are* readable: every installed APK sits world-readable at
+  `applicationInfo.publicSourceDir`, with its receivers' intent filters in the binary
+  `AndroidManifest.xml`. So a minimal **AXML reader** was written (string pool +
+  element tree, enough to attribute `<action android:name>` to its enclosing
+  component) and the sniffer now listens on every action this deck's own apps
+  declare. `AxmlTest` covers it against our own release APK, because hand-computed
+  chunk offsets fail silently rather than throwing and this ships to a deck that
+  can't be attached to a debugger.
+
+## 28. STATUS — Milestone 20 (2026-07-29→30): first real signal, then the bind — v0.17.0 → v0.18.1
+
+- **v0.17.0 — reverse gear, confirmed.** Scan 3 caught the first vendor broadcast any
+  scan had ever seen land: `com.unisound.intent.action.DO_MUTE` / `DO_UNMUTE` carry
+  live `reverse` and `call` extras. That is the deck ducking its own audio and naming
+  the reason — reverse is readable with no permission and no AIDL. New `Vehicle`
+  object holds live state, started from `HomeActivity` on the **application** context,
+  since the launcher process outlives every activity and the signal is only useful if
+  we were already listening when the gear engaged. The scan also stopped relying on a
+  before/after diff alone — a `ContentObserver` records writes as they happen, because
+  reverse had engaged *and* released inside the v0.16 window with both snapshots
+  matching.
+- **v0.18.0 — bind the AIDL, and get the APK off the deck.** Scan 3 answered the
+  blocking question: the permission guarding `com.tw.carinfoservice` is protection
+  level `normal`, and `CarService` is exported **unguarded** anyway. `AidlProbe` binds
+  it at scan start and reads at scan finish (bind is async, `buildReport` runs inline).
+  It deliberately **does not walk transaction codes** — an AIDL stub reads arguments
+  off the parcel, and a parcel we never filled yields 0/null rather than throwing, so
+  an unknown code is as likely to be `setSomething(0)` on a live vehicle bus as it is
+  a getter. Only facts a binder owes by contract are taken: descriptor, liveness, and
+  whatever `dump()` volunteers — drained on a second thread, since a dump larger than
+  the pipe buffer would deadlock against our own blocking call. **Settings → Export
+  CAN app** copies a vendor APK to Downloads with no adb and no cable, which matters
+  for correctness rather than convenience: AIDL assigns transaction codes
+  positionally, so only the byte-exact APK off *this* deck can be trusted.
+  Also removed the v0.17 settings-store reverse watcher — **do not put it back**.
+  `system/revserse_status` reads 1 while the car is in DRIVE; it is a reverse-*camera*
+  flag, not the gear, and the live watcher recorded zero writes across a scan in which
+  reverse was engaged and released.
+- **v0.18.1 — the picker that was never drawn.** Reported off the deck: "Export CAN app
+  just have a prompt and nowhere to choose a app." A framework `AlertDialog` shows
+  either a message or a list, never both — `AlertController.setupContent` only swaps
+  the ListView in on the `mMessage == null` branch, so `setMessage()` + `setItems()`
+  silently discards the items. The export was unreachable from the moment it shipped.
+  Both dialogs now lead with the explanation and end in a button that opens the list.
+  Every other `setItems()` dialog in the app is title-only, which is why they work.
+
+## 29. STATUS — Milestone 21 (2026-07-30): real CAN data — v0.19.0
+
+The APK export made the decompile unnecessary: `com.tw.carinfoservice` packages its
+interface **source** at `com/tw/carinfoservice/CarServiceAidl.aidl` and
+`CarServiceCallBack.aidl` — 64 methods and 66 callbacks, commented in Chinese, naming
+every signal. Both are committed under `app/src/main/aidl` exactly as extracted and the
+build generates the stubs.
+
+That is a correctness argument, not convenience. AIDL numbers transactions by
+declaration order, so a hand-written client must get 64 codes right and would break
+silently on a ROM that inserted a method. Generated-from-source cannot disagree. The
+mapping was confirmed three independent ways before any of it was trusted: the `.aidl`
+declaration order, the service's own compiled proxy recovered via jadx (gear=8,
+reverse=24, radar=59 all matched, including the unmistakable 16-int `onRadar`), and the
+generated constants — 66 declared callbacks == 66 in the shipped binary.
+
+`CarInfo` binds, registers a callback and holds live state. Two facts read out of the
+service's `onTransact`, both documented in the source and both still binding:
+
+- **`getCarReverse()` is a dead stub on this ROM** — its case writes a literal `-1` and
+  never touches the CAN layer. Reverse is only available pushed.
+- **`extendedInterface(Bundle)` is not a getter.** It unpacks `data0`/`data1` and hands
+  them to the CAN *writer* — it sends bytes to the vehicle bus. Never called from DWM.
+  This is precisely the hazard v0.18's probe refused to walk blind.
+
+Vendor APKs stay out of the repo (`extracted apps/` gitignored); the `.aidl` definitions
+are committed, the binaries are not.
+
+## 30. STATUS — Milestone 22 (2026-07-30): the dashboard, and what this van actually sends — v0.20.0 → v0.21.1
+
+The arc that taught this project its most load-bearing design rule.
+
+- **v0.20.0 — the dashboard shows the car.** Three cards (a cockpit hero, a favourites
+  grid, a status card of dock duplicates) were deleted and replaced with three zones fed
+  from `CarInfo`: DRIVE (speed, PRNDS strip, rpm, handbrake, lights), VEHICLE (one
+  Compose `Canvas` carrying nine signals — doors, belts, indicators, per-wheel TPMS and
+  all 16 radar sensors placed where they physically sit), VITALS (coolant, fuel,
+  battery, steering). Every reading drawn whether or not the car had ever sent it,
+  showing "—" until it arrived: deliberate, because which signals this van carries was
+  unknown and a screen of dashes is the map that tells you. A 250 ms ticker samples
+  volatile fields into immutable snapshots rather than piping binder callbacks into
+  recomposition; `radar` is carried as `List<Int>` and never `IntArray`, or identity
+  equality would repaint everything four times a second. Also `VehicleStripService`, a
+  passive gear/speed/indicator strip over CarPlay — `FLAG_NOT_TOUCHABLE` is
+  load-bearing, since an invisible bar that eats taps meant for CarPlay is the sort of
+  bug that gets blamed on the head unit.
+- **v0.20.1 — poll the getters.** First real run: CAN dot green, battery 12.7 V,
+  headlights lit, every other tile a dash. The bind and the callback were fine — v0.20.0
+  only ever *listened*, and this deck volunteers almost nothing, while the same readings
+  sat behind 64 getters nothing was calling. Now polled once a second on a
+  HandlerThread (binder calls block), merged with pushes, whichever produces a real
+  value winning. `-1` is treated as absence throughout because that is what the vendor
+  documents it to mean; the cost is that a genuine −1 °C ambient reads as unknown.
+- **v0.20.2 — dump every getter.** Second "nothing works", with one decisive detail: two
+  red blocks at the rear when reversing. That is live radar, so bind → poll → dashboard
+  works end to end and the problem is *which signals exist*. Rather than act on the
+  hypothesis, this shipped the measurement: `dumpGetters()` calls all 64 read-only
+  methods once and prints each raw return tagged `[name]` or `[idx N]`.
+- **v0.21.0 — build for the six readings this van actually sends.** The dump answered it
+  with no ambiguity: **all 45 profile-indexed getters return −1** — gear, rpm, coolant,
+  fuel, TPMS, doors, belts, ambient, oil, throttle, mileage, maintenance. No code change
+  can conjure them. Six are real, every one name-resolved: voltage, headlight, speed,
+  `getTrack` (steering, 240 = centre), turn signal, and radar while reversing — plus
+  reverse from the audio-duck broadcast. So the dashboard was rebuilt for those. Door
+  outlines, boot, belt marks and TPMS corners were deleted: **drawing them was drawing a
+  promise the van cannot keep.** Cosmetic deletions only — the AIDL layer is untouched
+  and a different profile in the head unit's car-select app would bring the tiles
+  straight back.
+- **v0.21.1 — make the working parts look like they work.** The second photo read as
+  "nothing works" and was mostly a *design* failure. All sixteen radar segments were
+  rendering — which only happens when sixteen live values arrive — correctly reporting
+  nothing-detected in an empty yard. But dim grey pills with no label are
+  indistinguishable from a dead feature. They now say ALL CLEAR / STOP / CLOSE / NO
+  SENSOR DATA, those three states having previously been impossible to tell apart.
+  Speed and the steering dial size themselves off the card via `BoxWithConstraints`
+  instead of fixed dp, and steering became an arc dial with a needle, because a flat
+  5 dp bar at rest looks identical to a flat 5 dp bar that is broken.
+
+**Turning the wheel while parked is still the fastest confirmation the CAN link is
+alive** — steering is the only live reading on this van that moves with the engine off.
+
+## 31. STATUS — Milestone 23 (2026-07-30 → 08-01): finding a design — v0.22.0 → v0.23.1
+
+- **v0.22.0 — rebuild against the Ford SYNC reference.** User supplied a target screen.
+  The CAN dashboard stopped being the main event — six readings never justified a full
+  screen. Left column: speed, a Ranger drawn in Canvas, parking arcs. Right: a
+  `HorizontalPager` of one-app-per-page. What the reference shows and this deliberately
+  did *not* copy: tyre pressures, engine temperature, PRND, outside temperature, the
+  climate bar — every one −1 on this van or absent from the interface. `GlassCard` and
+  the blurred wallpaper were dropped for flat panels (one less full-screen blur on a
+  low-RAM Unisoc). Media reads the real `MediaSession` through the notification listener
+  DWM already ships. A Sketchfab glTF Ranger was offered and **declined**: live 3D means
+  Filament or GLES on the weakest hardware here, plus an unverifiable licence in a
+  public repo.
+- **v0.22.1 — use the real render.** The hand-drawn Canvas truck was ugly; the risk had
+  been flagged in the plan and shipped anyway, which was recorded as the part worth
+  fixing in *how this goes*, not just in the code.
+- **v0.22.2 — stop the app pages looking like placeholders.** A swipe page was one icon
+  centred in an empty grey card. Each page now takes its identity from the app: the
+  icon's dominant colour sampled once and bled across as a radial wash, skipping
+  near-white and near-black pixels (most icons carry a lot of both, and averaging them
+  drags every app toward the same lifeless grey). App lists moved to a background
+  thread — rasterising and colour-sampling every installed icon on the UI thread made
+  returning home stutter.
+- **v0.23.0 — give it a design system, and drop the truck.** The launcher looked cheap
+  and repainting would not have fixed why: there was no system to be consistent with —
+  ~200 inline literals, three status colours redeclared in four files, and
+  `Color.White.copy(alpha=)` written out about forty times, which is also why Light
+  theme produced white-on-white. `ui/theme/` now holds one palette, one type scale, one
+  spacing scale, one set of springs. Three things were measurably wrong: cards sat 18
+  RGB points off the background (collapses to flat grey on this panel — now separated
+  three ways at once, tonal step *and* gradient *and* hairline); labels were written at
+  8 sp and then multiplied by `Scale.kt`'s 0.8 global density, rendering near 6.4 sp on
+  a 13" screen; and one animation existed in 8,600 lines. The swipe pager was deleted —
+  one app per page photographs well and is hostile while driving, since reaching the
+  fifth favourite meant five swipes and five glances off the road. The Ranger render was
+  deleted too: a rectangular crop of a photograph with road surface and a visible seam,
+  upscaled from a 206 px source. Two attempts is enough. Reverse hands the left column
+  to `ParkingDisplay` instead.
+- **v0.23.1 — make the updater able to find its own updates.** v0.23.0 shipped correctly
+  and the deck could not see it. Release live, `version.json` live and BOM-free, APK
+  attached, repo public — and none of it mattered, because `Prefs.updateRepo` defaulted
+  to an **empty string** and `Updater.check` bails on a blank repo before making a
+  request. It now defaults to `Rivak96/DWM-`; the hint had also read "owner/DWM" while
+  **the repository is actually named `DWM-` with a trailing hyphen**, so the obvious
+  thing to type 404s. `autoUpdate` now defaults on, and a failed check names the repo it
+  tried.
+
+## 32. STATUS — Milestone 24 (2026-08-01 → 08-05): render it on a laptop — v0.24.0 / v0.25.0
+
+**The single most important workflow change in the project.**
+
+- **v0.24.0 — Paparazzi.** Every judgement about this UI had been made from a photograph
+  taken after a build and a sideload. That was the actual problem. Paparazzi renders the
+  composables to PNG on the JVM via LayoutLib, no device involved. The first render
+  reproduced the reported photo exactly, which meant the rest of the release was found
+  by *looking* rather than guessing: the favourites grid was written assuming twelve
+  apps while this head unit exposes three, so `Row(weight(1f))` turned three icons into
+  three full-height slabs with a dead fourth slot; sizing on width alone then broke the
+  twelve-app case; the media card held a third of the screen to say nothing was playing;
+  the CarPlay tile was small text against an acre of empty blue; track titles stopped
+  mid-word. Also `MediaPanel` now skips its poll under `LocalInspectionMode` — off-device
+  there is no notification listener, so the poll answered NoAccess and painted over the
+  state the preview passed in, and the "now playing" snapshot was rendering the
+  permissions prompt convincingly enough to nearly be believed.
+- **v0.25.0 — one designer, one sitting.** The largest cause was invisible from the
+  code: **`Prefs.uiScale` defaulted to 0.8** and `Scale.wrap` multiplies display density
+  by it, so the canvas was ~2000×1250 dp rather than 1600×1000 and every token arrived
+  20 % smaller than written. Four releases had been spent enlarging text inside a system
+  that was shrinking it. Now **1.0**. `DwmTokens.kt` became the single source —
+  `DwmPalette` holds ARGB ints both UI stacks adapt from, so a palette change cannot
+  reach Compose and miss the XML screens. Four theme presets collapsed to one design in
+  Day and Night variants, chosen by `CarInfo.headlight` with a clock fallback.
+  `DwmContrastTest` now gates the palette on every build and immediately moved four
+  values that looked fine by eye. No foreign icon is drawn anywhere — 25 vectors
+  generated from one spec. Every reading got a designed no-signal state: an em dash in
+  the mono face at full size and tabular width, so nothing moves when CAN starts
+  talking. Paparazzi was corrected to render the real panel — **1920×1200 at 192 dpi
+  with `useDeviceResolution = true`**, without which every golden was silently
+  downscaled to a 1000 px edge.
+
+## 33. STATUS — Milestone 25 (2026-08-05): Compose everywhere, and the pane cockpit — v0.26.0 / v0.27.0
+
+- **Settings rebuilt in Compose.** It was the last screen that could not match, because
+  it could not *share* anything: a second implementation of the rail, the grid, the type
+  scale and the card, restyled at runtime by `Ui.skin()` walking the view tree remapping
+  colours it recognised. A section header at `#8E8E93` — a colour in no palette — was
+  never remapped and stayed mid-grey through every theme the app ever had. That is the
+  failure mode the approach produces, so `activity_settings.xml` was deleted. All the
+  logic is unchanged; only the wiring moved. `Prefs` stays the single source of truth,
+  with a revision counter driving recomposition rather than seventeen `mutableStateOf`
+  mirrors. Six controls now cover all sixty settings. The cockpit layout editor moved
+  here.
+- **Home rebuilt as a live cockpit (panes).** The previous home was a page of buttons —
+  every element *about* content rather than being content. The top two thirds became
+  panes: a pane is a slot, not an app, holding an ordered list of sources cycled by a
+  swipe on its header. Sources reuse `PanelType` so the editor, `Prefs.panels` and
+  `launchLayout` keep working. The distinction that drove the design: DWM-drawn sources
+  render inside the activity and swap for free, while a live app is a separate task
+  floating above it that DWM cannot draw over and never receives touches from — which is
+  exactly why a pane has a header strip rather than being edge to edge, since a swipe
+  started over a map would be eaten by the map. `WebPanelHost` landed here: exactly one
+  WebView runs at a time, the rest held at `onPause` + `pauseTimers`. The repo
+  previously had **no WebView lifecycle at all**. Accent moved to ice blue `#5FD3E8`.
+- **Navigation moved to a bottom bar; the nav rail deleted.** The rail was the better
+  ergonomic argument — RHD truck, right edge is the near edge — and it was not where the
+  driver wanted the controls. **Where a control lives is the driver's call, not a
+  geometry argument.** `SystemBar` replaces `NavRail` on both screens so home and
+  Settings cannot diverge.
+- **Open apps inside a pane, and add a wallpaper.** Tapping an app opened it fullscreen:
+  `HomeActions.launch` still pointed at `launchFullscreen` from the previous design, so
+  the pane rect was never used and the split cockpit could not actually be used to open
+  anything — which made the whole pane system look decorative. Wallpaper picking existed
+  in prefs since an earlier version but nothing ever dispatched the picker. Cards stay
+  **fully opaque** deliberately: every contrast figure in this design was measured
+  against a flat near-black field, and letting a photograph show through would make all
+  of those numbers fiction. Decoding is downsampled to the panel — a 4000 px phone photo
+  costs ~48 MB and the deck reports roughly **600 MB free of 1.8 GB**, measured on
+  device for the first time. `OPEN_DOCUMENT` rather than `GET_CONTENT`, so the URI
+  permission survives a reboot.
+- **Ranger wallpaper bundled as the default** (1920×1200 WebP, 95 KB). The dim default of
+  0.72 was wrong and the render showed it immediately: the photo is already nearly black,
+  so dimming that hard produced black. Now 0.30. The wallpaper golden had also been a
+  lie — layoutlib cannot decode WebP, so `decodeResource` returned null and the snapshot
+  was pixel-identical to the plain one.
+
+## 34. STATUS — Milestone 26 (2026-08-06→07): one app, one stage — v0.28.0 / v0.29.0
+
+- **Vehicle scan hunts the 360 camera.** A 12-pin 360 kit needs a stitching module and a
+  vendor app to draw the result, so if this deck supports one the app is installed
+  *before* the cameras are. `VENDOR_HINTS` gained eight surround-view stems;
+  `videoNodes()` stats `/dev/video*` (stat only, never opened); `cameraInputs()` lifts
+  the Camera2 enumeration into the saved report, since that list is the one fact
+  deciding whether a feed can be DWM-drawn and float over a fullscreen app, or whether
+  the vendor app is the ceiling. Running it before the hardware arrives gives a baseline
+  to diff against.
+- **The pane cockpit was deleted.** Tested on the deck and rejected as extremely buggy —
+  a fair verdict on the architecture, not the finish. A live app is a real freeform task,
+  and `launchWindow` with `NEW_TASK` alone *moves* an existing task rather than
+  duplicating it, so every divider drag, source swipe and split change relaunched a
+  running app. Swiping a pane off an app parked its window off-screen using bounds this
+  ROM was never proven to honour. And with ~600 MB free while a freeform app costs
+  100–200, two apps plus a camera never really fit. So: one app, on a stage that reports
+  its rect and never moves, with the freed space going to things DWM draws itself —
+  which cost no window, cannot sink behind anything, and cannot be relaunched out from
+  under you. Camera boxes take an **aspect ratio rather than a height**, because a box
+  that does not match the feed either letterboxes or crops away the sides, and on a
+  reversing camera the sides are where the bollard is. Now-playing and the favourites
+  band went by request, taking `MediaStrip`, `Media.kt` and `QuickToggles` with them;
+  the drawer grid was worth keeping and became `ui/AppGrid.kt`.
+- **Only relaunch the stage app when it changes.** Running on an emulator without
+  freeform showed the failure: if a window ever comes back fullscreen it covers the
+  launcher, and `loadStage()` relaunched on every `onStart`, so returning to DWM threw
+  you straight back into the app — and Back is swallowed because this is a home
+  launcher, so the loop has no exit. A launcher that cannot be reached is not a failure
+  worth leaving one ROM change away.
+
+## 35. STATUS — Milestone 27 (2026-08-07): freeform deleted for good — v0.30.0 / v0.31.0
+
+- **v0.30.0 — delete the freeform stage; the home screen app is a card.** The stage
+  hosted the chosen app live via `ActivityOptions.launchBounds` plus a reflectively set
+  freeform windowing mode. On the deck that produced three faults and **all three belong
+  to SystemUI**: a caption bar with drag and close handles drawn inside the bounds, a
+  window the user could drag out of position, and a z-order that let it sink behind the
+  launcher. The rect was never right either — the caption bar was hidden by inflating
+  bounds by a guessed 32 dp, which overhung the vehicle bar when the guess ran long and
+  cropped the app when it ran short. **Freeform is Android's floating-window mode, so
+  "stop it floating" and "keep the live window" were the same request pulling opposite
+  ways. The window lost.** Every other door into the same mechanism was shut with it —
+  Open in window, Raise windows, the editor's windowed-panel toggle, the Window
+  title-bar fix setting — so the bugs cannot return through one. `Panel.fullscreen` and
+  `isWindowedApp()` went too. A side benefit: the whole home screen is DWM-drawn now, so
+  the goldens finally show it; the stage used to render as a black rectangle no renderer
+  could see into.
+- **v0.31.0 — the app box is a grid.** The box has now been three things: two live panes
+  (rejected as extremely buggy), one live freeform app (three SystemUI faults), and a
+  card for one chosen app (solid, but static — a tile that opened something rather than
+  anything you could use). So it is the app grid, the honest version of what the last
+  two were attempting: into an app in one tap. `AppGrid`/`AppTile` came back from
+  `46773ee` rather than being rewritten. **Explicitly a stopgap** — the stock launcher
+  `com.dofun.variety` hosts a live app in this slot through
+  `cn.cardoor.desktop.window.DesktopWindowService`, which the deck's own scan reports as
+  exported and unguarded. If that turns out to be bindable from DWM, a live app comes
+  back here and the grid moves.
+
+## 36. STATUS — Milestone 28 (2026-08-07): a real day theme — v0.32.0
+
+Day mode never was one. Day was `#0A0C0F` and night `#06080A` — two near-blacks four
+points apart — so the app had one appearance pretending to be two, and choosing Day
+changed nothing anyone could see. A dark screen in sun is also a mirror showing you your
+own dashboard, which is the opposite of what a daylight variant is for.
+
+Day is now a light grey field, near-white cards, pure white raised, near-black text.
+Night is untouched and is still the design this app was built around. Every value was
+picked against `DwmContrastTest` rather than by eye; the binding constraint is RAISED at
+pure white, where a foreground clearing 7:1 clears it everywhere. The support colours all
+moved a long way, because a mid-tone that reads on near-black is invisible on near-white
+— the ice blue manages 1.4:1 on white, so day uses the same hue at `#0A6A7C` holding
+6.2:1.
+
+Two things the old palette had hidden, both found only by making the variants differ:
+
+- `PRESS` was one white-alpha wash for both, on the reasoning that alpha over whatever it
+  sits on needs no variant. True only while both were dark. Day darkens now, night
+  lightens.
+- **`Ui.Theme.light` was hardcoded `false` in *both* branches.** It drives five things,
+  including which Material style dialogs get — so every alert in the app was dark-styled
+  regardless of theme.
+
+`DwmTheme` now picks `lightColorScheme` vs `darkColorScheme` rather than always dark,
+because M3 derives elevation overlays from which builder was used and would otherwise
+apply dark-mode tinting to white surfaces. The old test `night is dimmer than day`
+compared foregrounds, which only meant something while day was also dark; it was replaced
+with the property it was really protecting — night surfaces stay dark — plus the
+assertion that would have caught the fake day mode in the first place.
+
+---
+
+## 37. Where things stand (2026-08-08)
+
+**Shipped:** v0.32.0 / versionCode 51. Home and Settings in Compose on `ui/theme/`
+tokens; app grid, vehicle diagram, camera and readings row all DWM-drawn; overlay
+panels and the floating pill unchanged from the View layer; CAN via the vendor's AIDL;
+in-app OTA from `Rivak96/DWM-`.
+
+**Known open:**
+- The app box is a stopgap grid. `cn.cardoor.desktop.window.DesktopWindowService` in
+  `com.dofun.variety` is exported and unguarded — if it is bindable, a live app returns.
+- 360 camera: scan tooling is in place, hardware not yet fitted. Baseline before, diff
+  after.
+- Only six CAN signals exist on this van's profile. A different profile in the head
+  unit's car-select app would bring the deleted tiles back with no code change.
+- `Obd.kt` (ELM327) is still present and unused.
