@@ -166,8 +166,11 @@ an ELM327 dongle (`Obd.kt` — written, never verified, no dongle yet).
 
 ## The big open lead — the stock launcher
 
-The vendor launcher **hosts a live, interactive app on its home screen with no bugs**. The
-user has seen it work; reference photos are `ex 1.png` / `ex 2.png` in the repo root.
+The vendor launcher **hosts a live, interactive app on its home screen with no bugs** — a
+live camera feed and Waze side by side, over a widget dock carrying speed, media and TPMS.
+Reference frames sit in the working copy as `ex 1.png` / `ex 2.png` but are **gitignored and
+will not be in a clone**: they are frames from a third party's demo video, and one has a
+saved home address on the Waze panel. Ask the owner for them if you need to look.
 
 It is **`com.dofun.variety`** (DoFun/CarDoor "Variety Theme"; the user calls it "Themes") and
 it does **not** use AOSP freeform. From the deck's own scan:

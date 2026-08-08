@@ -21,6 +21,12 @@ IMG_*.jpg
 IMG_*.jpeg
 IMG_*.png
 
+# Reference frames of the stock launcher hosting a live app (the com.dofun.variety
+# lead in CLAUDE.md). Kept locally, never published: they are frames from someone
+# else's demo video, and "ex 1.png" has a saved home address on the Waze panel.
+# Same call as the declined Sketchfab model — unverifiable licence in a public repo.
+ex *.png
+
 # A whole second copy of this project, extracted from "DWM context.zip" during the
 # 2026-08-08 machine move. Its one unique file, "context DWM.md", is merged into
 # CLAUDE.md. Never track it: it carries a duplicate release keystore, and the nested
