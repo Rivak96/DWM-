@@ -21,6 +21,12 @@ IMG_*.jpg
 IMG_*.jpeg
 IMG_*.png
 
+# A whole second copy of this project, extracted from "DWM context.zip" during the
+# 2026-08-08 machine move. Its one unique file, "context DWM.md", is merged into
+# CLAUDE.md. Never track it: it carries a duplicate release keystore, and the nested
+# local.properties would slip past the root-anchored /local.properties rule above.
+/DWM context/
+
 # Vendor APKs pulled off the deck for decompiling. *.apk already covers them;
 # named explicitly so nothing else in here (dumps, notes) gets published either.
 # The vendor's .aidl files ARE committed, under app/src/main/aidl — those are the
