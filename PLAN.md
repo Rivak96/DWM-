@@ -975,7 +975,12 @@ The arc that taught this project its most load-bearing design rule.
   fuel, TPMS, doors, belts, ambient, oil, throttle, mileage, maintenance. No code change
   can conjure them. Six are real, every one name-resolved: voltage, headlight, speed,
   `getTrack` (steering, 240 = centre), turn signal, and radar while reversing — plus
-  reverse from the audio-duck broadcast. So the dashboard was rebuilt for those. Door
+  reverse from the audio-duck broadcast.
+  *(Later precision: only **five** of those are readable as getters. `getRadar` polls −1
+  in `DWM CAN getters.txt`; the 16 sensors arrive **pushed** via the `onRadar` callback
+  during reverse. The commit's "six" conflated the poll and push paths. Both facts are
+  true and the parking display is genuinely live — see `CLAUDE.md`.)*
+  So the dashboard was rebuilt for those. Door
   outlines, boot, belt marks and TPMS corners were deleted: **drawing them was drawing a
   promise the van cannot keep.** Cosmetic deletions only — the AIDL layer is untouched
   and a different profile in the head unit's car-select app would bring the tiles
@@ -1220,8 +1225,18 @@ in-app OTA from `Rivak96/DWM-`.
 **Known open:**
 - The app box is a stopgap grid. `cn.cardoor.desktop.window.DesktopWindowService` in
   `com.dofun.variety` is exported and unguarded — if it is bindable, a live app returns.
+  This is the biggest open lead in the project; `CLAUDE.md` carries the full evidence.
+- **CarPlay resolution is wrong** (`com.zjinnova.zlink`), reported and never diagnosed.
+  Unknown whether it predates v0.30.0 or is a regression from it.
 - 360 camera: scan tooling is in place, hardware not yet fitted. Baseline before, diff
   after.
-- Only six CAN signals exist on this van's profile. A different profile in the head
-  unit's car-select app would bring the deleted tiles back with no code change.
+- Five CAN getters carry values on this van's profile (radar arrives pushed, separately).
+  A different profile in the head unit's car-select app would bring the deleted tiles
+  back with no code change.
 - `Obd.kt` (ELM327) is still present and unused.
+- Three overlay services and the dormant legacy panel system are still shipped. The user
+  has been asked whether to delete them and has not decided — do not delete unasked.
+
+**Development constraint lifted:** adb can now reach the deck from the dev machine, so
+`logcat`, `install -r` and `dumpsys` are available. The *shipped* app must still be
+zero-setup — §7's locked decision governs what ships, not how it is developed.
