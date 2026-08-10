@@ -1,7 +1,7 @@
 {
-    "versionCode":  52,
-    "versionName":  "0.33.0",
-    "tag":  "v0.33.0",
+    "versionCode":  53,
+    "versionName":  "0.34.0",
+    "tag":  "v0.34.0",
     "apk":  "app-release.apk",
-    "notes":  "Fixes the two camera feeds fighting each other. Camera2 lets only one app hold a camera at a time, so when the dashboard feed and the overlay feed were pointed at the same camera the second one took it and the first went black - and because losing a camera was handled silently, neither looked like it was working. Now the dashboard wins while it is in front, and the overlay card says \u0027Live on the dashboard\u0027 instead of going black. Open an app fullscreen and the overlay takes the feed straight back. If the two are set to different cameras they both keep running. You can now choose which camera the dashboard uses in Settings \u003e Vehicle \u003e Dashboard camera - that was never settable before, so the two feeds could not be put on different cameras even when the deck had more than one."
+    "notes":  "Dashboard camera can be rotated. Settings \u003e Vehicle \u003e Cameras \u003e Rotation, then try Picture fit = Fit if it is still cropped."
 }

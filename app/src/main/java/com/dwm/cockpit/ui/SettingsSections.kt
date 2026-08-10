@@ -205,6 +205,17 @@ fun vehicleSection(ui: SettingsUi, a: SettingsActions): List<@Composable () -> U
             SettingsRow("Picture fit", "Fill crops to the panel. Stretch distorts.") {
                 SegmentedChoice(listOf("Fill", "Fit", "Stretch"), ui.camFit, onSelect = a.setCamFit)
             }
+            // Four options make this the narrowest text column in the group, so the
+            // hint has to be shorter than the others or it ellipsises — the golden
+            // caught exactly that.
+            SettingsRow(
+                "Rotation",
+                "Turns the dashboard feed. Overlay panels keep their own."
+            ) {
+                SegmentedChoice(
+                    listOf("0°", "90°", "180°", "270°"), ui.camRotation, onSelect = a.setCamRotation
+                )
+            }
             SettingsRow("Day / night") {
                 SegmentedChoice(
                     listOf("Auto", "Day", "Night"), ui.camDayNight, onSelect = a.setCamDayNight

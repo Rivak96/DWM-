@@ -143,6 +143,7 @@ val previewSettings = SettingsUi(
     demoData = false,
     obd = "OBD dongle: not set",
     camFit = 0,
+    camRotation = 0,
     camDayNight = 0,
     camTrim = "0",
     camPick = "Auto",

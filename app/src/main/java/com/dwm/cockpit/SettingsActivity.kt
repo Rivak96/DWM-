@@ -144,6 +144,7 @@ class SettingsActivity : DwmActivity() {
             demoData = Prefs.demoData(this),
             obd = obdState.value,
             camFit = Prefs.camFit(this),
+            camRotation = (Prefs.camRotation(this) / 90).coerceIn(0, 3),
             camDayNight = Prefs.camDayNight(this),
             camTrim = camTrimState.value,
             camPick = camLabelState.value,
@@ -212,6 +213,7 @@ class SettingsActivity : DwmActivity() {
         pickObd = { pickObd() },
         scanCameras = { scanCameras() },
         setCamFit = { setCamFit(it) },
+        setCamRotation = { setCamRotation(it) },
         setCamDayNight = { setCamDayNight(it) },
         nudgeCamTrim = { nudgeCamTrim(it) },
         canScan = { canScanTapped() },
@@ -299,6 +301,33 @@ class SettingsActivity : DwmActivity() {
             },
             Toast.LENGTH_SHORT
         ).show()
+        restartCameraPanels()
+    }
+
+    /**
+     * Rotate the dashboard camera feed. [quarters] is 0..3, stored as degrees.
+     *
+     * This setter had **zero callers** until now, so `Prefs.camRotation` was permanently
+     * 0 and the dashboard's feed could not be turned at all — while an overlay camera
+     * panel has had a rotate button since v0.10.2. That went unnoticed for as long as it
+     * did because the two panels used to fight over the device (see [CameraHost]) and the
+     * dashboard's was usually the one that lost and went black. Once v0.33.0 made the
+     * dashboard win, it started showing a feed nothing could straighten.
+     *
+     * Deliberately separate from the overlay's rotation, which lives on the `Panel` and
+     * is edited per panel: the two views are different shapes in different places, and
+     * folding them into one value would un-tune whichever was already correct.
+     *
+     * No explicit reload needed — `HomeActivity.loadCamera()` runs in `onResume` and
+     * rebuilds the panel, and `CameraBox`'s `key(camId, rotation)` tears the old
+     * `CameraPanel` down. [restartCameraPanels] is still called so an overlay panel
+     * pointed at the same device re-reads its tuning at the same moment.
+     */
+    private fun setCamRotation(quarters: Int) {
+        val deg = ((quarters % 4) + 4) % 4 * 90
+        Prefs.setCamRotation(this, deg)
+        bump()
+        Toast.makeText(this, "Dashboard camera: $deg°", Toast.LENGTH_SHORT).show()
         restartCameraPanels()
     }
 

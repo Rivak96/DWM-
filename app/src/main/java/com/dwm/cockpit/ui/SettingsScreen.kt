@@ -85,6 +85,8 @@ class SettingsUi(
     val demoData: Boolean,
     val obd: String,
     val camFit: Int,
+    /** Quarter turns, 0..3 — `Prefs.camRotation / 90`. */
+    val camRotation: Int,
     val camDayNight: Int,
     val camTrim: String,
     val camPick: String,
@@ -122,6 +124,8 @@ class SettingsActions(
     val pickObd: () -> Unit = {},
     val scanCameras: () -> Unit = {},
     val setCamFit: (Int) -> Unit = {},
+    /** Quarter turns, 0..3. */
+    val setCamRotation: (Int) -> Unit = {},
     val setCamDayNight: (Int) -> Unit = {},
     val nudgeCamTrim: (Int) -> Unit = {},
     val canScan: () -> Unit = {},
