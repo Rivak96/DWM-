@@ -722,24 +722,8 @@ object VehicleProbe {
      * Listing ids does NOT need the CAMERA permission — only opening a device
      * does — so this runs unconditionally as part of a scan.
      */
-    fun cameraInputs(c: Context): List<String> {
-        val mgr = c.getSystemService(Context.CAMERA_SERVICE) as? android.hardware.camera2.CameraManager
-            ?: return emptyList()
-        val ids = runCatching { mgr.cameraIdList }.getOrDefault(emptyArray())
-        return ids.map { id ->
-            val facing = runCatching {
-                mgr.getCameraCharacteristics(id)
-                    .get(android.hardware.camera2.CameraCharacteristics.LENS_FACING)
-            }.getOrNull()
-            val f = when (facing) {
-                android.hardware.camera2.CameraCharacteristics.LENS_FACING_FRONT -> "FRONT"
-                android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK -> "BACK"
-                android.hardware.camera2.CameraCharacteristics.LENS_FACING_EXTERNAL -> "EXTERNAL"
-                else -> "?"
-            }
-            "id $id · $f"
-        }
-    }
+    fun cameraInputs(c: Context): List<String> =
+        CameraIds.list(c).map { (id, facing) -> "id $id · $facing" }
 
     /** Try reading an exported provider straight out. */
     fun probeProvider(c: Context, authority: String): String {

@@ -50,8 +50,10 @@ class CameraPanel(
     context: Context,
     private val camIdPref: String?,
     private val fallbackPkg: String?,
-    rotationDeg: Int = 0
-) : FrameLayout(context) {
+    rotationDeg: Int = 0,
+    /** Which consumer this is, for [CameraHost]'s priority rule. */
+    private val owner: CameraHost.Owner = CameraHost.Owner.OVERLAY
+) : FrameLayout(context), CameraHost.Client {
 
     private val texture = TextureView(context)
     private val status = TextView(context)
@@ -64,6 +66,14 @@ class CameraPanel(
     private var bgThread: HandlerThread? = null
     private var bgHandler: Handler? = null
     private val ui = Handler(Looper.getMainLooper())
+
+    /**
+     * True while [CameraHost] has this panel stood down.
+     *
+     * Distinct from "not open": a suppressed panel must not re-open on the next surface
+     * event, which is the whole reason this is a flag rather than just a closed device.
+     */
+    private var suppressed = false
 
     private var rotation = ((rotationDeg % 360) + 360) % 360
     /** Buffer size actually delivered by the camera; 0 until the camera opens. */
@@ -113,17 +123,50 @@ class CameraPanel(
         }
     }
 
+    /**
+     * Registration happens here and **never in the constructor**.
+     *
+     * `CameraBox` calls `drawnView(panel)` from inside a composable body, and
+     * `CockpitHome` recomposes on every vehicle-state tick, so a fresh `CameraPanel` is
+     * built constantly while only the first is ever attached. Registering at construction
+     * would hand [CameraHost] a growing pile of panels that never draw and never detach.
+     */
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         startLightSensor()
         refreshTuning()
         ui.postDelayed(retune, 30_000)
+        CameraHost.register(this, CameraIds.resolve(context, camIdPref), owner)
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         ui.removeCallbacks(retune)
         stopLightSensor()
+        CameraHost.forget(this)
+    }
+
+    // ---- CameraHost.Client -------------------------------------------------
+
+    /**
+     * Stand down for whoever is showing this camera already.
+     *
+     * The card keeps its place, its size and its grips, and says where the feed went —
+     * a panel that simply went black would read as the very fault this fixes.
+     */
+    override fun yieldCamera() {
+        ui.post {
+            suppressed = true
+            closeCamera()
+            status.text = "Live on the dashboard"
+        }
+    }
+
+    override fun reclaimCamera() {
+        ui.post {
+            suppressed = false
+            if (device == null && texture.isAvailable) openCamera()
+        }
     }
 
     /** Rotate the live preview by 0/90/180/270°. Applied via a texture matrix so
@@ -288,25 +331,22 @@ class CameraPanel(
         context.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
     private fun openCamera() {
+        // Stood down by CameraHost. Without this the next surface event would re-open
+        // the device and take it straight back off whoever we just yielded it to.
+        if (suppressed) return
         if (!hasPerm()) { status.text = "Grant camera permission"; return }
         val mgr = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        val ids = runCatching { mgr.cameraIdList }.getOrDefault(emptyArray())
-        if (ids.isEmpty()) {
+
+        // Resolved by CameraIds, not here, so that CameraHost could compare this panel
+        // against the others *before* anything opened. See that file for why the two
+        // stored preferences can look different and still mean one device.
+        val id = CameraIds.resolve(context, camIdPref)
+        if (id == null) {
             status.text = if (fallbackPkg != null)
                 "Camera not exposed to apps\nTap to open camera app"
             else
                 "No camera input exposed"
             return
-        }
-        // Prefer the configured id; else auto-pick: a wired analog input usually
-        // reports as EXTERNAL, then a BACK cam, else the first device.
-        val id = camIdPref?.takeIf { it in ids } ?: run {
-            fun facing(cid: String) = runCatching {
-                mgr.getCameraCharacteristics(cid).get(CameraCharacteristics.LENS_FACING)
-            }.getOrNull()
-            ids.firstOrNull { facing(it) == CameraCharacteristics.LENS_FACING_EXTERNAL }
-                ?: ids.firstOrNull { facing(it) == CameraCharacteristics.LENS_FACING_BACK }
-                ?: ids.first()
         }
         status.text = "Opening camera $id…"
         startBg()
@@ -315,14 +355,35 @@ class CameraPanel(
                 override fun onOpened(cam: CameraDevice) {
                     device = cam; post { status.text = "" }; startPreview(cam)
                 }
-                override fun onDisconnected(cam: CameraDevice) { cam.close(); device = null }
+
+                /**
+                 * Something else took the device.
+                 *
+                 * This used to be `cam.close(); device = null` and nothing more: no
+                 * status, no log, no retry. A panel that lost its camera went black and
+                 * stayed black, which is most of why this bug presented as "neither
+                 * one works" rather than "one wins". Tell the host — it may be able to
+                 * hand the device straight back — and say so on the card either way.
+                 */
+                override fun onDisconnected(cam: CameraDevice) {
+                    cam.close(); device = null
+                    post { status.text = "Camera taken by another app" }
+                    CameraHost.lost(this@CameraPanel)
+                }
+
                 override fun onError(cam: CameraDevice, err: Int) {
-                    cam.close(); device = null; post { status.text = "Camera error $err (tap to open app)" }
+                    cam.close(); device = null
+                    post { status.text = "Camera error $err (tap to open app)" }
+                    CameraHost.lost(this@CameraPanel)
                 }
             }, bgHandler)
         } catch (e: SecurityException) {
+            // startBg() has already run at this point, and only closeCamera() stops it,
+            // so an open that throws used to leak the dwm-cam HandlerThread every time.
+            stopBg()
             status.text = "No camera permission"
         } catch (e: Exception) {
+            stopBg()
             status.text = "Open failed: ${e.message}"
         }
     }
@@ -390,7 +451,10 @@ class CameraPanel(
         stopBg()
     }
 
+    /** Stops any existing thread first: after a disconnect the device is null while the
+     *  thread is still alive, and a reclaim would otherwise strand it. */
     private fun startBg() {
+        stopBg()
         bgThread = HandlerThread("dwm-cam").also { it.start() }
         bgHandler = Handler(bgThread!!.looper)
     }

@@ -195,7 +195,13 @@ fun vehicleSection(ui: SettingsUi, a: SettingsActions): List<@Composable () -> U
     },
     {
         SettingsGroup("Cameras") {
-            SettingsRow("Inputs") { SettingsButton("Scan", a.scanCameras) }
+            SettingsRow(
+                "Dashboard camera",
+                ui.camPick + " — an overlay camera panel stands down while the dashboard " +
+                    "shows the same camera. Give them different ids to run both at once."
+            ) {
+                SettingsButton("Choose", a.scanCameras)
+            }
             SettingsRow("Picture fit", "Fill crops to the panel. Stretch distorts.") {
                 SegmentedChoice(listOf("Fill", "Fit", "Stretch"), ui.camFit, onSelect = a.setCamFit)
             }

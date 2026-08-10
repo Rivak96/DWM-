@@ -222,7 +222,10 @@ class OverlayPanelsService : Service() {
         }
         PanelType.SPEED -> gauge("gps_speed").also { speedGauges.add(it) }
         PanelType.OBD -> gauge(p.metric).also { obdGauges.add((p.metric ?: "") to it) }
-        PanelType.CAMERA -> CameraPanel(this, p.camId, p.pkg, p.rotation) // Camera2, app = fallback
+        // Camera2, app = fallback. Owner.OVERLAY — stands down for the dashboard when both
+        // resolve to the same device, keeps running when they do not.
+        PanelType.CAMERA ->
+            CameraPanel(this, p.camId, p.pkg, p.rotation, CameraHost.Owner.OVERLAY)
         PanelType.WEB, PanelType.HTML -> {
             val wv = WebView(this)
             Ui.configureWeb(wv, Prefs.muteOverlays(this))

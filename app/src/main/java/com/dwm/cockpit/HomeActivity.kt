@@ -144,10 +144,13 @@ class HomeActivity : DwmActivity() {
         loadCamera()
         loadApps()
         loadWallpaper()
-        // Nothing on the home screen hosts a WebView any more — the stage is a
-        // freeform window and the side boxes are a diagram and a camera — so the one
-        // shared WebView belongs to the overlay service alone while home is up.
+        // Nothing on the home screen hosts a WebView any more — the box is an app grid
+        // and the side boxes are a diagram and a camera — so the one shared WebView
+        // belongs to the overlay service alone while home is up.
         WebPanelHost.pauseAll()
+        // The dashboard is in front, so its camera outranks an overlay pointed at the
+        // same device. An overlay on a different camera is left alone.
+        CameraHost.setHomeVisible(true)
 
         ensurePermissions()
         refreshPanelsIfChanged()
@@ -176,6 +179,10 @@ class HomeActivity : DwmActivity() {
         // its timers, its JavaScript and any video going while the launcher was in
         // the background, on a deck that cannot afford it.
         WebPanelHost.pauseAll()
+        // Hand the camera back. onStop does not detach this activity's views, so
+        // without this the backgrounded dashboard would sit on the device and starve
+        // the overlay that is now the only thing on screen.
+        CameraHost.setHomeVisible(false)
     }
 
     // ---- actions ---------------------------------------------------------
@@ -456,7 +463,9 @@ class HomeActivity : DwmActivity() {
         PanelType.CLOCK -> buildClockCard()
         PanelType.SPEED -> gaugeFor("gps_speed").also { speedGauges.add(it) }
         PanelType.OBD -> gaugeFor(p.metric).also { obdGauges.add((p.metric ?: "") to it) }
-        PanelType.CAMERA -> CameraPanel(this, p.camId, p.pkg, p.rotation)
+        // Owner.HOME — both this activity's drawn canvas and the dashboard's CameraBox
+        // come through here, and both lose the camera to nobody while home is in front.
+        PanelType.CAMERA -> CameraPanel(this, p.camId, p.pkg, p.rotation, CameraHost.Owner.HOME)
         PanelType.NOTIF -> p.pkg?.let { NotifPanel(this, it) }
         // An APP is a freeform window floating above this activity, not a View this
         // activity can build.

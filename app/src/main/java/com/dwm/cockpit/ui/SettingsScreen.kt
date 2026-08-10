@@ -87,6 +87,7 @@ class SettingsUi(
     val camFit: Int,
     val camDayNight: Int,
     val camTrim: String,
+    val camPick: String,
     val canStatus: String,
     val canScanLabel: String,
     val updateStatus: String,

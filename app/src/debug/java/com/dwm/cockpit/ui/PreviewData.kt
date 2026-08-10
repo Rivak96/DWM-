@@ -145,6 +145,7 @@ val previewSettings = SettingsUi(
     camFit = 0,
     camDayNight = 0,
     camTrim = "0",
+    camPick = "Auto",
     canStatus = "Bound to the vehicle service. No signals have arrived yet.",
     canScanLabel = "Scan vehicle",
     updateStatus = "Installed: v0.25.0\nRepo: Rivak96/DWM-",

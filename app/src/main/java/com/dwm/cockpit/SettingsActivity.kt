@@ -49,6 +49,7 @@ class SettingsActivity : DwmActivity() {
 
     /* Text the activity computes and the screen displays. */
     private val camTrimState = mutableStateOf("")
+    private val camLabelState = mutableStateOf("")
     private val canStatusState = mutableStateOf("")
     private val modeHintState = mutableStateOf("")
     private val updateStatusState = mutableStateOf("")
@@ -81,6 +82,7 @@ class SettingsActivity : DwmActivity() {
         refreshUpdateStatus()
         refreshModeHint()
         refreshCamTrimLabel()
+        refreshCamLabel()
         showDiagnostics()
         showAbout()
 
@@ -144,6 +146,7 @@ class SettingsActivity : DwmActivity() {
             camFit = Prefs.camFit(this),
             camDayNight = Prefs.camDayNight(this),
             camTrim = camTrimState.value,
+            camPick = camLabelState.value,
             canStatus = canStatusState.value,
             canScanLabel = canScanLabelState.value,
             updateStatus = updateStatusState.value,
@@ -780,24 +783,65 @@ class SettingsActivity : DwmActivity() {
             .show()
     }
 
+    /**
+     * Pick which camera the dashboard shows.
+     *
+     * This was a read-only message dialog with an OK button, and `Prefs.setCamId` had no
+     * callers anywhere — so the dashboard was permanently stuck on the auto-pick while
+     * the overlay's id was editable in the layout editor. That made "put the two feeds on
+     * different cameras" impossible to express, which is exactly what [CameraHost] needs
+     * to be told in order to let both run at once.
+     */
     private fun scanCameras() {
         if (!granted(android.Manifest.permission.CAMERA)) {
             requestPermissions(arrayOf(android.Manifest.permission.CAMERA), REQ_CAM)
             return
         }
-        val rows = VehicleProbe.cameraInputs(this)
-        val sb = StringBuilder()
-        if (rows.isEmpty()) {
-            sb.append("No Camera2 devices exposed.\n\nThe analog input isn't a camera device here — use a 'Camera app (AUX)' panel instead, which launches your AUX app into a window.")
-        } else {
-            rows.forEach { sb.append(it).append('\n') }
-            sb.append("\nTry a 'Live camera (Camera2)' panel with one of these ids to see if it's your front feed.")
+        val cams = CameraIds.list(this)
+        if (cams.isEmpty()) {
+            Ui.dialog(this)
+                .setTitle("Camera2 inputs")
+                .setMessage(
+                    "No Camera2 devices exposed.\n\nThe analog input isn't a camera " +
+                        "device here — use a 'Camera app (AUX)' panel instead, which " +
+                        "launches your AUX app into a window."
+                )
+                .setPositiveButton("OK", null)
+                .show()
+            return
         }
+
+        val current = Prefs.camId(this)
+        // Auto first, so the default stays one tap away and reads as a real choice.
+        val ids = listOf<String?>(null) + cams.map { it.first }
+        val labels = (listOf("Auto (external, then rear)") +
+            cams.map { (id, facing) -> "id $id · $facing" })
+            .mapIndexed { i, s -> if (ids[i] == current) "$s   ✓" else s }
+            .toTypedArray()
+
         Ui.dialog(this)
-            .setTitle("Camera2 inputs")
-            .setMessage(sb.toString())
-            .setPositiveButton("OK", null)
+            .setTitle("Dashboard camera")
+            .setItems(labels) { _, which ->
+                Prefs.setCamId(this, ids[which])
+                refreshCamLabel()
+                // Camera panels read their id when they attach, so bounce the overlays
+                // and reload the cockpit rather than waiting for the next cold start.
+                restartCameraPanels()
+                Toast.makeText(this, "Dashboard camera: ${labels[which].removeSuffix("   ✓")}", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun refreshCamLabel() {
+        camLabelState.value = camLabel()
+    }
+
+    /** The value only — the row it sits under is already titled "Dashboard camera". */
+    private fun camLabel(): String {
+        val id = Prefs.camId(this) ?: return "Auto"
+        val facing = CameraIds.list(this).firstOrNull { it.first == id }?.second
+        return if (facing != null) "id $id · $facing" else "id $id (not present)"
     }
 
     private fun granted(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED

@@ -1,7 +1,7 @@
 {
-    "versionCode":  51,
-    "versionName":  "0.32.0",
-    "tag":  "v0.32.0",
+    "versionCode":  52,
+    "versionName":  "0.33.0",
+    "tag":  "v0.33.0",
     "apk":  "app-release.apk",
-    "notes":  "Day mode is actually light now. It never was: day was #0A0C0F and night #06080A, two near-blacks four points apart, so picking Day changed nothing you could see. Day is now a real light theme - light grey field, white cards, near-black text, and the ice blue taken down to a teal that can be read on white. Night is untouched. Set it in Settings \u003e Display \u003e Theme; Auto still follows your headlights, falling back to the clock. Every colour was picked against the contrast thresholds rather than by eye, and the test that would have caught the old fake day mode is now in the build."
+    "notes":  "Fixes the two camera feeds fighting each other. Camera2 lets only one app hold a camera at a time, so when the dashboard feed and the overlay feed were pointed at the same camera the second one took it and the first went black - and because losing a camera was handled silently, neither looked like it was working. Now the dashboard wins while it is in front, and the overlay card says \u0027Live on the dashboard\u0027 instead of going black. Open an app fullscreen and the overlay takes the feed straight back. If the two are set to different cameras they both keep running. You can now choose which camera the dashboard uses in Settings \u003e Vehicle \u003e Dashboard camera - that was never settable before, so the two feeds could not be put on different cameras even when the deck had more than one."
 }
