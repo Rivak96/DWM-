@@ -1251,7 +1251,9 @@ object VehicleProbe {
 
     /** Blank out anything that looks like an identifier or credential — this file
      *  leaves the device. */
-    private fun redact(key: String, value: String?): String {
+    /** One redaction list for the whole app — [Diagnostics] shares it rather than
+     *  growing a second one that would have to be kept in step. */
+    internal fun redact(key: String, value: String?): String {
         if (value == null) return "(absent)"
         val k = key.lowercase()
         if (SENSITIVE.any { k.contains(it) }) return "<redacted ${value.length} chars>"
@@ -1289,6 +1291,17 @@ object VehicleProbe {
             SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + ".txt"
         return saveToDownloads(c, name, "text/plain") { it.write(text.toByteArray()) }
     }
+
+    /** [Diagnostics] on disk. Written *before* any upload is attempted, so a dead hotspot
+     *  costs the trip to the van rather than the evidence. */
+    fun saveDump(c: Context, text: String): Pair<Uri, String>? {
+        val name = dumpName()
+        return saveToDownloads(c, name, "text/plain") { it.write(text.toByteArray()) }
+    }
+
+    /** Shared with the gist, so the file on the deck and the file on GitHub have one name. */
+    fun dumpName(): String =
+        "dwm-dump-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + ".txt"
 
     /**
      * Copy a vendor APK out to Downloads so it can be decompiled off the deck.

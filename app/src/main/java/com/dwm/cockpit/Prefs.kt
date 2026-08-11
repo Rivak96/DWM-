@@ -8,6 +8,26 @@ object Prefs {
     private const val NAME = "dwm"
     private fun sp(c: Context) = c.getSharedPreferences(NAME, Context.MODE_PRIVATE)
 
+    /** Everything stored, for [Diagnostics]. Redacted at the point of use, never here —
+     *  the store itself must stay the plain truth. */
+    fun all(c: Context): Map<String, *> = sp(c).all
+
+    /* ----------------------------------------------------------------- github */
+
+    /**
+     * OAuth token for posting diagnostics as a gist, and the account it belongs to.
+     *
+     * A real credential, and it lives in the same store [Diagnostics] dumps — which is safe
+     * only because `VehicleProbe.SENSITIVE` already matches "token", so the key that posts
+     * the dump is redacted out of the dump. If this key is ever renamed, it must keep the
+     * word `token` in it.
+     */
+    fun githubToken(c: Context): String? = sp(c).getString("github_token", null)
+    fun githubLogin(c: Context): String? = sp(c).getString("github_login", null)
+
+    fun setGithub(c: Context, token: String?, login: String?) =
+        sp(c).edit().putString("github_token", token).putString("github_login", login).apply()
+
     fun panels(c: Context): List<Panel> {
         val s = sp(c).getString("panels", null) ?: return migrateOldTiles(c)
         return runCatching {

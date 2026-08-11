@@ -169,6 +169,27 @@ object StageHost {
     val stagePkg: String? get() = pkg
 
     /**
+     * Every field, for a diagnostics dump. Pure, so it is testable and cannot itself fail.
+     *
+     * This object's state is private on purpose and is also the single most useful thing to
+     * know when the box is wrong: "the placeholder is showing" has at least five causes
+     * (never configured, evicted, home not visible, no bounds yet, launch already committed
+     * and lost) and they are indistinguishable on the glass. Two releases went on guessing
+     * between them. See [Diagnostics].
+     */
+    fun snapshot(): String = buildString {
+        append("stage pkg    : ").append(pkg ?: "(none — the box is the app grid)").append('\n')
+        append("title        : ").append(title.ifBlank { "(blank)" }).append('\n')
+        append("box bounds   : ").append(bounds?.toShortString() ?: "(never reported)").append('\n')
+        append("home visible : ").append(homeVisible).append('\n')
+        append("evicted      : ").append(evicted).append('\n')
+        append("launched pkg : ").append(launchedPkg ?: "(a launch is owed)").append('\n')
+        append("launched for : ").append(launchedFor?.toShortString() ?: "(nothing yet)").append('\n')
+        append("mask up      : ").append(maskUp).append('\n')
+        append("chrome       : ").append(if (chrome == null) "not attached" else "attached").append('\n')
+    }
+
+    /**
      * The launch this state implies, or null for "nothing to do".
      *
      * Returning a value **commits** to it, so a caller that asks twice does not launch

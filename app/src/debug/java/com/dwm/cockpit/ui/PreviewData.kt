@@ -166,6 +166,7 @@ val previewSettings = SettingsUi(
         Vehicle: gear unknown, 0 km/h
         CAN: bound, 0 updates, 41 signals absent
     """.trimIndent(),
+    githubAccount = "Signed in as Rivak96",
     about = "DWM Cockpit v0.25.0 — your driving window manager.\n" +
         "Panels: apps in freeform windows · AUX camera · web dashboards · " +
         "custom HTML · OBD-II gauges · GPS speed · clock · images."

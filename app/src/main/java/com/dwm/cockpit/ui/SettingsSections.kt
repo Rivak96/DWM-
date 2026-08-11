@@ -321,6 +321,26 @@ fun aboutSection(ui: SettingsUi, a: SettingsActions): List<@Composable () -> Uni
         }
     },
     {
+        // Every bug in this project used to be diagnosed from a photograph of the panel
+        // and a chain of reasoning about the code. Twice running that produced a
+        // confident wrong answer and cost a release. This sends the facts instead.
+        SettingsGroup("Send diagnostics") {
+            SettingsRow(
+                "Send a dump",
+                "Logs, stage state and settings. Saved to Downloads first, then uploaded."
+            ) {
+                SettingsButton("Send", a.sendDump, emphasis = true)
+            }
+            SettingsRow("GitHub", ui.githubAccount) {
+                if (ui.githubAccount.startsWith("Signed in")) {
+                    SettingsButton("Sign out", a.githubSignOut)
+                } else {
+                    SettingsButton("Sign in", a.githubSignIn)
+                }
+            }
+        }
+    },
+    {
         // The best information on this screen. It used to render as 11sp monospace on
         // a barely-visible wash and read as leftover debug output; it is an
         // instrument panel now.

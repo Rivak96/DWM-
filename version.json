@@ -1,7 +1,7 @@
 {
-    "versionCode":  58,
-    "versionName":  "0.39.0",
-    "tag":  "v0.39.0",
+    "versionCode":  59,
+    "versionName":  "0.40.0",
+    "tag":  "v0.40.0",
     "apk":  "app-release.apk",
-    "notes":  "The live app opens in the box again. The startup autoload was evicting it 700ms after every cold start, and the launch was pinned to the box\u0027s rect before the screen had settled."
+    "notes":  "Settings \u003e About \u003e Send a dump, and long-press the CAN dot on the home screen. Collects logs, stage state and settings, saves to Downloads, then uploads it so nothing has to be moved by hand."
 }

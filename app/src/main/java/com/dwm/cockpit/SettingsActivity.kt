@@ -158,6 +158,9 @@ class SettingsActivity : DwmActivity() {
             updateStatus = updateStatusState.value,
             autoUpdate = Prefs.autoUpdate(this),
             diagnostics = diagnosticsState.value,
+            githubAccount = Prefs.githubLogin(this)
+                ?.let { "Signed in as $it" }
+                ?: "Not signed in — dumps go to an anonymous paste",
             about = aboutState.value
         )
     }
@@ -257,8 +260,45 @@ class SettingsActivity : DwmActivity() {
         checkUpdate = { checkForUpdate() },
         editRepo = { editUpdateRepo() },
         setAutoUpdate = { Prefs.setAutoUpdate(this, it); bump() },
+        sendDump = { DumpFlow.send(this) },
+        githubSignIn = { githubSignIn() },
+        githubSignOut = { GitHub.signOut(this); bump() },
         close = { finish() }
     )
+
+    /* ------------------------------------------------------------ diagnostics */
+
+    private fun githubSignIn() {
+        val dlg = Ui.dialog(this)
+            .setTitle("Signing in to GitHub")
+            .setMessage("Starting…")
+            .setCancelable(true)
+            .create()
+        dlg.show()
+        GitHub.signIn(
+            this,
+            onCode = { code ->
+                dlg.setMessage(
+                    "On your phone, open\n\n${code.verificationUri}\n\n" +
+                        "and enter this code:\n\n        ${code.userCode}\n\n" +
+                        "Waiting… this dialog closes itself when you're done."
+                )
+            },
+            onDone = { result ->
+                runCatching { dlg.dismiss() }
+                bump()
+                result
+                    .onSuccess { Toast.makeText(this, "Signed in as $it", Toast.LENGTH_LONG).show() }
+                    .onFailure {
+                        Ui.dialog(this)
+                            .setTitle("Sign-in failed")
+                            .setMessage(it.message ?: "Unknown error")
+                            .setPositiveButton("OK", null)
+                            .show()
+                    }
+            }
+        )
+    }
 
     /** The rail is shared with home, so its destinations are too. */
     private fun homeActions() = HomeActions(

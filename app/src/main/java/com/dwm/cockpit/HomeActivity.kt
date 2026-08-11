@@ -126,6 +126,7 @@ class HomeActivity : DwmActivity() {
             reload = { reloadCockpit() },
             pill = { startPill() },
             appMenu = { pkg -> appMenu(pkg) },
+            sendDump = { DumpFlow.send(this) },
             grantNotifications = {
                 openOverStage(
                     Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")

@@ -47,10 +47,18 @@ what ships.
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat assembleDebug
-.\gradlew.bat testDebugUnitTest      # unit + Paparazzi golden verification
+.\gradlew.bat testDebugUnitTest      # unit tests only — see the warning below
+.\gradlew.bat verifyPaparazziDebug   # unit tests AND the goldens. This is the real one.
 .\gradlew.bat recordPaparazziDebug   # re-record goldens — the main tool, see below
 .\gradlew.bat lintDebug
 ```
+
+**`testDebugUnitTest` does not check the goldens**, despite running every snapshot test and
+printing a Paparazzi report link. It renders them and compares nothing. Only
+`verifyPaparazziDebug` compares, and it does work — proven by corrupting a golden and
+watching it fail that one test by name. This file claimed otherwise for several releases,
+and three commit messages went out saying "goldens verify" on the strength of a green
+`testDebugUnitTest`. **Use `verifyPaparazziDebug` before shipping a visual change.**
 
 **`JAVA_HOME` must be set in the shell** even though `gradle.properties` pins
 `org.gradle.java.home`. Those solve different problems: the pin chooses the JDK Gradle

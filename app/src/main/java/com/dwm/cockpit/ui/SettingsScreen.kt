@@ -101,6 +101,8 @@ class SettingsUi(
     val updateStatus: String,
     val autoUpdate: Boolean,
     val diagnostics: String,
+    /** The signed-in GitHub account, or why diagnostics cannot be sent without one. */
+    val githubAccount: String,
     val about: String
 )
 
@@ -151,6 +153,10 @@ class SettingsActions(
     val checkUpdate: () -> Unit = {},
     val editRepo: () -> Unit = {},
     val setAutoUpdate: (Boolean) -> Unit = {},
+    /** Collect everything DWM knows about itself and send it. See `Diagnostics`. */
+    val sendDump: () -> Unit = {},
+    val githubSignIn: () -> Unit = {},
+    val githubSignOut: () -> Unit = {},
     val close: () -> Unit = {}
 )
 
