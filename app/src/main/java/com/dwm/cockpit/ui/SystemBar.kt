@@ -10,27 +10,37 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import com.dwm.cockpit.R
 import com.dwm.cockpit.ui.theme.Dwm
+import com.dwm.cockpit.ui.theme.DwmGrid
 import com.dwm.cockpit.ui.theme.DwmMotion
 import com.dwm.cockpit.ui.theme.DwmSize
 import com.dwm.cockpit.ui.theme.DwmSpace
 import com.dwm.cockpit.ui.theme.DwmStroke
 import com.dwm.cockpit.ui.theme.DwmType
+import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * The system bar — DWM's navigation, along the bottom, on every screen.
@@ -56,6 +66,17 @@ import com.dwm.cockpit.ui.theme.DwmType
  *
  * Items are large and unlabelled except for the active one. The bar it replaces had
  * eight items with 10sp labels on a 1600dp panel, which is the opposite failure.
+ *
+ * ### The two ends
+ *
+ * Six items across 1600dp left a large dead margin at each end, and the home screen was
+ * simultaneously spending a 48dp full-width strip plus its spacer — about 60dp of a
+ * 1000dp panel — on a clock, a date and a CAN dot. Those ends are now [DwmSize.barEdgeSlot]
+ * slots: the clock on the left, on every screen, and a [status] slot on the right that
+ * home fills with the vehicle's indicators and Settings leaves empty.
+ *
+ * Both ends exist even when only one is used, because that is what keeps the six items
+ * centred on the panel rather than shunted right by the width of the clock.
  */
 object Bar {
     const val HOME = 0
@@ -72,7 +93,12 @@ fun SystemBar(
     overlaysOn: Boolean,
     actions: HomeActions,
     onHome: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * Screen-level status, right-aligned in the trailing slot. Home puts the turn signal,
+     * reverse and the CAN dot here; Settings has no vehicle state and leaves it empty.
+     */
+    status: @Composable RowScope.() -> Unit = {}
 ) {
     val colors = Dwm.colors
 
@@ -90,9 +116,12 @@ fun SystemBar(
             .fillMaxWidth()
             .height(DwmSize.systemBar)
     ) {
-        val each = maxWidth / items.size
+        val edge = DwmSize.barEdgeSlot
+        val each = (maxWidth - edge * 2) / items.size
         val barOffset by animateDpAsState(
-            targetValue = each * selected + (each - DwmSize.railBarLength) / 2,
+            // Past the leading slot, then across the items. Miss the `edge` term and the
+            // accent sits one slot to the left of the item it is meant to be under.
+            targetValue = edge + each * selected + (each - DwmSize.railBarLength) / 2,
             animationSpec = DwmMotion.baseDp,
             label = "systemBar"
         )
@@ -120,11 +149,53 @@ fun SystemBar(
             }
 
             Row(Modifier.fillMaxWidth().fillMaxHeight()) {
+                BarClock(
+                    Modifier
+                        .width(edge)
+                        .fillMaxHeight()
+                        .padding(start = DwmGrid.margin)
+                )
                 items.forEachIndexed { i, item ->
                     BarButton(item, active = i == selected, modifier = Modifier.width(each))
                 }
+                Row(
+                    Modifier
+                        .width(edge)
+                        .fillMaxHeight()
+                        .padding(end = DwmGrid.margin),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = status
+                )
             }
         }
+    }
+}
+
+/**
+ * The clock, in the bar's leading slot.
+ *
+ * Deliberately quiet — mono, tabular, muted — because the signature of this screen is the
+ * travelling accent, not the time. It reads the same on every screen, which is the point
+ * of it living in the shared bar rather than in the home screen's own header.
+ */
+@Composable
+private fun BarClock(modifier: Modifier) {
+    val colors = Dwm.colors
+    var now by remember { mutableStateOf(Date()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Date()
+            delay(1000)
+        }
+    }
+    val time = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val date = remember { SimpleDateFormat("EEE d MMM", Locale.getDefault()) }
+
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        DwmText(time.format(now), style = DwmType.clock, color = colors.muted)
+        Spacer(Modifier.width(DwmSpace.m))
+        DwmText(date.format(now), style = DwmType.caption, color = colors.muted)
     }
 }
 

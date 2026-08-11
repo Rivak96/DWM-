@@ -21,11 +21,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,10 +43,6 @@ import com.dwm.cockpit.ui.theme.DwmShapes
 import com.dwm.cockpit.ui.theme.DwmSize
 import com.dwm.cockpit.ui.theme.DwmSpace
 import com.dwm.cockpit.ui.theme.DwmType
-import kotlinx.coroutines.delay
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -58,13 +51,13 @@ import kotlin.math.roundToInt
  * ```
  *  ┌─────────────────────────────────────────────┬───────────────────────┐
  *  │                                             │  TPMS · doors · radar │
- *  │   QUICK NAV — the app grid                  │                       │
- *  │   tap to open fullscreen                    ├───────────────────────┤
+ *  │   THE BOX — the app grid, or one live app   │                       │
+ *  │                                             ├───────────────────────┤
  *  │                                             │  CAMERA  16:9         │
  *  ├─────────────────────────────────────────────┴───────────────────────┤
  *  │  speed  gear  coolant  volts  fuel  rpm  boost  outside             │
  *  ├─────────────────────────────────────────────────────────────────────┤
- *  │  Home    Apps    Overlays    Bluetooth    Wi-Fi    Settings         │
+ *  │ 07:04  Home  Apps  Overlays  Bluetooth  Wi-Fi  Settings    ▸ R ● CAN │
  *  └─────────────────────────────────────────────────────────────────────┘
  * ```
  *
@@ -98,8 +91,16 @@ import kotlin.math.roundToInt
  * and the nav bar stay where they are because that is a good cockpit, not because a
  * foreign window forced them there.
  *
- * Vertical budget at the deck's 1000dp: 88 nav + 104 vehicle bar + spacers leaves 784
- * for the top box, less the 32dp margin and the 48dp top strip → ~692dp for the grid.
+ * ### The clock strip, and why it is gone
+ *
+ * There was a 48dp full-width strip above the cards carrying a clock, a date and the CAN
+ * dot, plus a 12dp spacer under it. Sixty of a thousand dp, spent on three small things
+ * that needed none of the width — while the same bar along the bottom had a wide dead
+ * margin at each end, because six items do not fill 1600dp. They swapped places. See
+ * [SystemBar].
+ *
+ * Vertical budget at the deck's 1000dp: 88 nav + 12 + 104 vehicle bar + a 32dp top margin
+ * and a 24dp bottom gutter leaves **~735dp** for the boxes, up from 675.
  */
 
 /**
@@ -202,16 +203,6 @@ fun CockpitHome(
                     .padding(horizontal = DwmGrid.margin)
                     .padding(top = DwmGrid.margin, bottom = DwmGrid.gutter)
             ) {
-                TopStrip(
-                    turn = body.turnSignal,
-                    reverse = body.reverse,
-                    canLevel = head.canLevel,
-                    demo = head.demo,
-                    onCan = actions.settings
-                )
-
-                Spacer(Modifier.height(DwmSpace.m))
-
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -331,82 +322,46 @@ fun CockpitHome(
 
         Spacer(Modifier.height(DwmSpace.m))
 
+        // The clock, the date and the vehicle's indicators used to sit in a 48dp
+        // full-width strip above the cards, which — with its spacer — spent 60dp of a
+        // 1000dp panel on three small things that needed none of the width. They live in
+        // the system bar's own dead ends now and the boxes are 60dp taller for it. See
+        // [SystemBar] and [com.dwm.cockpit.ui.theme.DwmSize.barEdgeSlot].
         SystemBar(
             selected = Bar.HOME,
             overlaysOn = overlaysOn,
             actions = actions,
             onHome = {}
-        )
-    }
-    }
-}
+        ) {
+            val turn = body.turnSignal
+            if (turn != null && turn != 0) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_dwm_chevron),
+                    contentDescription = "Indicator",
+                    tint = colors.ok,
+                    modifier = Modifier
+                        .size(DwmSize.icon)
+                        .graphicsLayer { rotationZ = if (turn == 1) 180f else 0f }
+                )
+                Spacer(Modifier.width(DwmSpace.l))
+            }
 
-/**
- * The top strip — clock, date, and the few things that must be visible at all times.
- *
- * The speed and voltage readouts moved out of here and into the vehicle bar, where
- * they sit with the other six. Two numbers floating in a header while four cards
- * below held nothing was part of why the old screen had no centre of gravity.
- *
- * The clock is deliberately quiet: mono, tabular, muted. The signature is the rail.
- */
-@Composable
-private fun TopStrip(
-    turn: Int?,
-    reverse: Boolean,
-    canLevel: Int,
-    demo: Boolean,
-    onCan: () -> Unit
-) {
-    val colors = Dwm.colors
-    var now by remember { mutableStateOf(Date()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = Date()
-            delay(1000)
-        }
-    }
-    val time = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-    val date = remember { SimpleDateFormat("EEE d MMM", Locale.getDefault()) }
+            if (body.reverse) {
+                DwmText("R", style = DwmType.value, color = colors.warn)
+                Spacer(Modifier.width(DwmSpace.l))
+            }
 
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(DwmSize.paneHeader),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        DwmText(time.format(now), style = DwmType.clock, color = colors.muted)
-        Spacer(Modifier.width(DwmSpace.m))
-        DwmText(date.format(now), style = DwmType.caption, color = colors.muted)
-
-        Spacer(Modifier.weight(1f))
-
-        if (turn != null && turn != 0) {
-            Icon(
-                painter = painterResource(R.drawable.ic_dwm_chevron),
-                contentDescription = "Indicator",
-                tint = colors.ok,
-                modifier = Modifier
-                    .size(DwmSize.icon)
-                    .graphicsLayer { rotationZ = if (turn == 1) 180f else 0f }
+            CanDot(
+                level = head.canLevel,
+                demo = head.demo,
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = actions.settings
+                )
             )
-            Spacer(Modifier.width(DwmSpace.l))
         }
-
-        if (reverse) {
-            DwmText("R", style = DwmType.value, color = colors.warn)
-            Spacer(Modifier.width(DwmSpace.l))
-        }
-
-        CanDot(
-            level = canLevel,
-            demo = demo,
-            modifier = Modifier.clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onCan
-            )
-        )
+    }
     }
 }
 

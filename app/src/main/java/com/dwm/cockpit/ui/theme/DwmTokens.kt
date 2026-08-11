@@ -315,6 +315,24 @@ object DwmSize {
     val railIcon: Dp = 32.dp
 
     /**
+     * The slot at **each** end of the system bar.
+     *
+     * The clock and date live in the left one and the vehicle's status indicators in the
+     * right; the six nav items divide what is left. There is a slot at both ends, and the
+     * right one is empty on Settings, because that is what keeps the nav items centred on
+     * the panel instead of pushed off-centre by the clock.
+     *
+     * All of this used to be a full-width strip above the cards, which spent about 90dp of
+     * a 1000dp panel carrying a clock, a date and a status dot — the one part of the home
+     * screen holding nothing that needed the width. Moving it into the bar's own dead ends
+     * costs no height at all and gives the boxes 60dp back.
+     *
+     * Sized for "07:04  Tue 11 Aug" at [DwmType.clock] plus a [DwmGrid.margin] inset, which
+     * is the widest thing either end has to hold.
+     */
+    val barEdgeSlot: Dp = 240.dp
+
+    /**
      * The travelling accent bar. The only accent-coloured element on a screen.
      *
      * It sits above the active item on the system bar, and under the active tab in
@@ -363,15 +381,13 @@ object DwmSize {
     /** Top status strip. */
     val topStrip: Dp = 88.dp
 
-    /**
-     * A cockpit pane's header strip.
-     *
-     * Load-bearing, not trim. A live app window covers its pane exactly and consumes
-     * every touch inside it, so a swipe started over a map would go to the map. This
-     * strip is the one part of a pane that always belongs to DWM, which makes it the
-     * only place the source swipe and the position dots can live.
+    /*
+     * `paneHeader` (48dp) lived here and is gone. It described "the one part of a pane
+     * that always belongs to DWM", which is a real thing — but it is `Prefs.captionDp`
+     * and `StageChrome`'s header window now, measured against the ROM rather than
+     * declared here. Its last caller was the home screen's clock strip, which was not a
+     * pane header at all, and a token nothing sizes is how this file drifts.
      */
-    val paneHeader: Dp = 48.dp
 
     /**
      * Vertical room one `Reading` needs — overline, value and breathing space.

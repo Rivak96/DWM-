@@ -1,7 +1,7 @@
 {
-    "versionCode":  56,
-    "versionName":  "0.37.0",
-    "tag":  "v0.37.0",
+    "versionCode":  57,
+    "versionName":  "0.38.0",
+    "tag":  "v0.38.0",
     "apk":  "app-release.apk",
-    "notes":  "The live app box: opening Apps or Settings no longer blanks the screen, coming back to home puts the window back in the box, and touching the app no longer resizes it."
+    "notes":  "The clock strip above the cards is gone - the clock, the date and the CAN dot moved into the empty ends of the bottom bar, and the app box and the right-hand column are 60dp taller for it."
 }
