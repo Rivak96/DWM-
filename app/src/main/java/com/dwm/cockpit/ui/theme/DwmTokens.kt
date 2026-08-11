@@ -250,11 +250,24 @@ object DwmSpace {
     val xxxl: Dp = 48.dp
     val huge: Dp = 64.dp
 
-    /** Card interior. Anything less and a 1600dp canvas reads as a phone blown up. */
-    val cardPadding: Dp = xl
+    /**
+     * Card interior, and the frame around every card — see [DwmGrid.margin].
+     *
+     * This was `xl` (24dp), on the reasoning that anything less made a 1600dp canvas read
+     * as a phone blown up. Judged on the deck rather than on a desk monitor that turned out
+     * to be wrong: 24dp of margin, 24dp of gutter and 24dp inside every card is 88dp of the
+     * panel's width spent on nothing, and the owner's word for it was that the borders were
+     * "a bit too big... we are wasting space".
+     *
+     * Note what the codebase already thought. Of the seven `DwmCard` call sites, five
+     * already passed `l` explicitly and only the app box and the vehicle bar took the
+     * default — the design had drifted to 16dp everywhere anyone was looking at it closely.
+     * This makes the default agree with the practice.
+     */
+    val cardPadding: Dp = l
 
     /** Distance from any screen edge to content. Matches [DwmGrid.margin]. */
-    val screenMargin: Dp = xxl
+    val screenMargin: Dp = l
 }
 
 /* ---------------------------------------------------------------------- grid */
@@ -269,17 +282,29 @@ object DwmSpace {
  * exactly why the right-hand column died and the top row did not line up with the
  * row beneath it.
  *
- * Sizes are computed from the available width rather than baked in, for two reasons:
- * the nav rail's width is a token that may change, and the debug tweak panel's gutter
- * slider has to actually move something.
+ * Sizes are computed from the available width rather than baked in, so changing the frame
+ * below re-flows the whole screen instead of leaving one region behind.
  *
- * At the panel's 1600dp minus a [DwmSize.railWidth] rail, that resolves to columns of
- * about 98dp on a 122dp pitch.
+ * ### One frame value, and it is small
+ *
+ * [margin] and [gutter] were 32 and 24. Three different gaps — 32 at the screen edge, 24
+ * between cards, 24 inside each one — is 88dp of a 1600dp panel spent on air, and the owner
+ * looking at the real deck said so: the borders were "a bit too big... we are wasting
+ * space". They are all [DwmSpace.l] now, so the frame around a card and the gap between two
+ * cards are the same measure and the grid reads as a grid.
+ *
+ * **The hairline stays.** The instruction was to make the border small, not to remove it,
+ * and on this panel the hairline is what carries layer separation at all — see
+ * [DwmPalette.HAIRLINE], which is pushed to ~1.6:1 for exactly that reason. Shrinking the
+ * gap makes the line matter more, not less.
+ *
+ * At the panel's 1600dp this resolves to columns of about 116dp on a 132dp pitch, up from
+ * 106 on 130 — so the boxes gained width as well as losing padding.
  */
 object DwmGrid {
     const val COLUMNS = 12
-    val gutter: Dp = DwmSpace.xl
-    val margin: Dp = DwmSpace.xxl
+    val gutter: Dp = DwmSpace.l
+    val margin: Dp = DwmSpace.l
 
     /** Width of one column once margins and gutters are taken out of [available]. */
     fun columnWidth(available: Dp): Dp =
