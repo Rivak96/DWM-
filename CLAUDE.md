@@ -101,8 +101,10 @@ reach one and miss the other:
 |---|---|
 | `HomeActivity.kt` | The launcher home. State, feeds, permissions, legacy drawn-panel canvas, updater. Swallows Back (it is a home launcher). |
 | `ui/CockpitHome.kt` | Home layout. Read its header comment first — it carries the layout history. |
-| `ui/AppGrid.kt` | The app grid filling the big left box. |
-| `LaunchEngine.kt` | **The only thing that launches apps.** Fullscreen only, by design. |
+| `ui/AppGrid.kt` | The app grid — what the box falls back to with no live app chosen. |
+| `StageHost.kt` | **What the box's live app should be doing, decided in one place.** Pure logic, no `WindowManager` — hence `StageHostTest`. Read this before touching the stage. |
+| `StageChrome.kt` | The overlay windows that mask the freeform caption and resize handles. Drawing only; policy lives in `StageHost`. Must never go fullscreen. |
+| `LaunchEngine.kt` | **The only thing that launches apps.** Fullscreen, or into the box's rect as a freeform window. Also owns eviction. |
 | `ui/theme/DwmTokens.kt` | The whole design system. Read before any visual change. |
 | `CarInfo.kt` | Live vehicle data over the vendor CAN AIDL. |
 | `VehicleProbe.kt` | ~1400 lines of rootless CAN/package/APK discovery tooling: `saveApk()`, manifest scanner, AIDL prober. |
@@ -164,58 +166,62 @@ vehicle bus*. Same for `updateApk()`.
 Working alternatives with no vendor dependency: GPS speed (`LocationManager`), or OBD-II over
 an ELM327 dongle (`Obd.kt` — written, never verified, no dongle yet).
 
-## The big open lead — the stock launcher
+## The stock launcher — settled, and it was freeform all along
 
-The vendor launcher **hosts a live, interactive app on its home screen with no bugs** — a
-live camera feed and Waze side by side, over a widget dock carrying speed, media and TPMS.
-Reference frames sit in the working copy as `ex 1.png` / `ex 2.png` but are **gitignored and
-will not be in a clone**: they are frames from a third party's demo video, and one has a
-saved home address on the Waze panel. Ask the owner for them if you need to look.
+The vendor launcher hosts a live, interactive app on its home screen. Reference frames sit
+in the working copy as `ex 1.png` / `ex 2.png` but are **gitignored and will not be in a
+clone**: they are frames from a third party's demo video, and one has a saved home address
+on the Waze panel. Ask the owner for them if you need to look.
 
-It is **`com.dofun.variety`** (DoFun/CarDoor "Variety Theme"; the user calls it "Themes") and
-it does **not** use AOSP freeform. From the deck's own scan:
+It is **`com.dofun.variety`** v9.7.2.367, and the owner's `lnfinite_car_launcher.apk` turns
+out to *be* it. Read with `aapt dump xmltree`, its entire relevant permission set is
+`SYSTEM_ALERT_WINDOW` + `WRITE_SECURE_SETTINGS`. No `MANAGE_ACTIVITY_STACKS`, no
+`INTERNAL_SYSTEM_WINDOW`, no `INJECT_EVENTS`. **Nothing on Android puts an arbitrary app
+inside a rectangle except freeform**, so the vendor launcher is doing exactly what DWM now
+does. See the section below.
 
-```
-com.dofun.variety
-    service  cn.cardoor.desktop.window.DesktopWindowService            [exported] [UNGUARDED]
-    service  cn.cardoor.desktop.floating.app.window.FloatingAppService  [exported] [UNGUARDED]
-    activity cn.cardoor.desktop.window.DesktopWindowAppSetting
-             action cn.cardoor.desktop.window.intent.action.WINDOW_APP_SETTING
-```
+Two things not to re-investigate a fourth time: the 19 `com.dofun.variety.loader.p.*`
+provider slots are RePlugin (`com.qihoo360.replugin`) loading **theme** plugins, confirmed
+in `assets/plugins/kp.jar` — not an arbitrary-APK container. And
+`cn.cardoor.desktop.window.floating.e/f` in `com.tw.video`/`com.dofun.recorder` is a
+separate vendor-only *cooperative* SDK: those apps opt in, arbitrary apps cannot.
 
-Exported and unguarded means bindable by any app with no permission. It also declares 19
-private provider slots (`com.dofun.variety.loader.p.*`) — a VirtualApp/RePlugin-style plugin
-container, likely how it hosts arbitrary APKs. The *client* half of the protocol is embedded
-in `com.tw.video` and `com.dofun.recorder` as `cn.cardoor.desktop.window.floating.e/f`.
+## The app box — one live app, in a freeform window
 
-Next steps, cheapest signal first: bind it with `VehicleProbe.AidlProbe` and read the Binder
-descriptor (names the interface without decompiling); fire `WINDOW_APP_SETTING` to see
-whether the vendor's window picker still opens with DWM as home; then pull the three APKs
-(`adb pull`, or DWM's own Settings → Vehicle → Export APK) and decompile with **jadx, which
-is not installed — install it**.
+The big left box has been five things and this has burned several releases. Full history in
+`PLAN.md` §33–§35 and in the v0.35.0/v0.36.0/v0.37.0 commit messages. Two live panes
+(rejected on the deck as extremely buggy) → one live app in freeform (v0.29) → a static card
+(v0.30) → an app grid (v0.31) → **one live app in freeform again, and working (v0.35+)**.
 
-**Honest risk:** the service probably renders on behalf of the DoFun launcher specifically
-and may do nothing useful when DWM is home. Unknown until tested. If it works, a live app
-returns to the box and the grid goes.
+CLAUDE.md used to say "do not propose freeform again". That was right about the evidence and
+wrong about the conclusion. v0.29 failed for want of **two levers it never pulled**:
 
-## The app box saga — read before proposing a live app
+- **`force_resizable_activities`**, a plain Developer-options toggle. Without it any app
+  declaring `resizeableActivity=false` simply refuses freeform, and most do. This is the
+  whole "the stock launcher hosts anything" difference. `Settings → Cockpit` reports the
+  state; DWM cannot set it (`WRITE_SECURE_SETTINGS`).
+- **Overlay masking.** A freeform window is dragged *by its caption*, so a touch-consuming
+  `TYPE_APPLICATION_OVERLAY` over the caption removes the ugly bar and the grab handle in
+  one move. `StageChrome` draws that, plus a frame over the resize outset. v0.29 instead
+  inflated the launch rect by a guessed 32dp — the guess was the bug, not the idea.
 
-The big left box has been four things, and this has burned several releases. Full history in
-`PLAN.md` §33–§35. The short version: two live panes (rejected on the deck as extremely
-buggy) → one live app in a freeform window (v0.29) → a static card (v0.30) → **an app grid
-(v0.31, current, explicitly a stopgap)**.
+The box still falls back to the app grid when no app is chosen, when freeform is
+unavailable, or without the overlay permission. `Prefs.stagePkg` chooses.
 
-**Do not propose freeform again.** Its three failures — a caption bar drawn inside the
-bounds, a window the user can drag out of position, a z-order that lets it sink behind the
-launcher — all belong to SystemUI and are unreachable from DWM. Freeform *is* Android's
-floating-window mode; "make it not float" and "keep the live window" are the same request
-pulling opposite ways. Every other door into windowed launching was deliberately shut so the
-bugs cannot return through one.
+**The one thing that must not come back is a fullscreen overlay.** v0.35.0 covered the live
+window with a full-screen `TYPE_APPLICATION_OVERLAY` "curtain" whenever another DWM screen
+came forward. That window type is above *every* activity window, DWM's own included, so it
+covered the app drawer it was protecting and ate its touches — a dead light-grey panel with
+the hardware Home key as the only exit. There is no z-order that fixes it. v0.37.0 replaced
+it with **eviction**: relaunch the stage app *without* bounds so its task leaves the freeform
+stack, then start the screen on top. `HomeActivity.openOverStage` and
+`LaunchEngine.launchFullscreen` are the only two ways anything gets in front of home, and
+both evict.
 
-The alternatives that would give a genuinely docked pane — `TaskView`, a trusted
-`VirtualDisplay`, programmatic split-screen — all need system signature permissions, and a
-`VirtualDisplay` receives **no touch input** without root. The stock-launcher lead above is
-the only live route.
+The alternatives that would give a genuinely *docked* pane — `TaskView`, a trusted
+`VirtualDisplay`, programmatic split-screen — still need system signature permissions, and a
+`VirtualDisplay` receives **no touch input** without root. Freeform plus masking is the only
+unprivileged route, and it is the one the vendor took.
 
 ## adb is available for development
 
@@ -228,18 +234,32 @@ blind:
   screenshots and reasoning. The single biggest win.
 - **`adb install -r`** — iterate without the bump/build/push/release round trip. Sign with the
   same keystore; a debug-signed build will not install over the release-signed one.
-- **`adb pull`** the vendor APKs for the lead above, in seconds.
-- **`adb shell dumpsys activity activities` / `window`** — observe how `com.dofun.variety`
-  actually hosts its window. May answer the lead outright.
+- **`adb pull`** the vendor APKs, in seconds.
+- **`adb shell dumpsys activity activities` / `window`** — the only way to see what the ROM
+  actually does with a freeform launch. Several open questions below need exactly this.
 
 ## Open issues
 
+- **The stage has never been checked against `dumpsys`.** Everything about how this ROM
+  treats a freeform launch is still inferred. Four questions, all answerable in one sitting
+  on the cable: does it honour the launch bounds; is the caption drawn *inside* the
+  requested rect or outside it (`Prefs.captionDp` starts at 32 and the band above the app
+  measured nearer 55dp in the owner's photo, so probably not); does a bounds-less relaunch
+  really move the task out of the freeform stack, which is what all of v0.37.0 rests on; and
+  does `force_resizable_activities` make zlink relaunch on a configuration change, which
+  would be the remaining half of the reported flicker.
 - **CarPlay resolution is wrong.** Reported as "the resolution of think5 carplay is so off"
   and never diagnosed. The app is `com.zjinnova.zlink`. Unknown whether it predates v0.30.0
   (where windowed launching became fullscreen) or is a regression from it. With adb, check
   `dumpsys display` and `logcat` while launching zlink, and ask whether it looks right from
   the stock launcher — if yes, it is DWM's launch path or `Scale.kt`'s density wrapper.
-- The app grid is a stopgap pending the stock-launcher lead.
+- **The vehicle diagram card is the emptiest thing on the screen**, and got emptier in
+  v0.38.0 when the right column gained 60dp its aspect-locked camera could not use. On this
+  van its doors and all four TPMS values are permanent em dashes and its status word is a
+  hardcoded ALL CLEAR — the exact "a tile that can never fill" this file warns about
+  elsewhere. Offered to the owner as a deletion and not taken; ask again before acting.
+  Making the *camera* bigger means widening the right column, which narrows the app box —
+  that trade was offered and declined.
 - 360 camera: scan tooling is in place, hardware not yet fitted.
 
 ## Pitfalls that have already bitten
