@@ -230,6 +230,11 @@ The deck can be reached over USB from this machine (`adb` is at
 years of design. **The shipped app must still be zero-setup**, but development is no longer
 blind:
 
+- **`adb logcat -s DwmStage`** — the whole live-app path: every launch with its rect,
+  whether the greylisted `setLaunchWindowingMode` survived the blacklist, whether the start
+  went out, and every eviction with who asked for it. All four are invisible on the glass,
+  and each one turns "the app doesn't open" into a different bug. Added in v0.39.0 after
+  two releases of reasoning to the wrong answer about a path that produced no output at all.
 - **`adb logcat`** — DWM has never had real crash output; everything was diagnosed from
   screenshots and reasoning. The single biggest win.
 - **`adb install -r`** — iterate without the bump/build/push/release round trip. Sign with the
@@ -272,6 +277,17 @@ blind:
 - **Never add `FLAG_ACTIVITY_MULTIPLE_TASK`.** It spawns duplicate app copies that the
   low-RAM deck then kills — this presented as "apps closing by themselves". `NEW_TASK` alone
   reuses one task.
+- **Anything that reaches `launchFullscreen` takes the stage down with it**, because that is
+  where `evictStage` lives. That is correct for a user opening an app and wrong for anything
+  automatic. The startup autoload (`Prefs.autoLoad`, **defaults true**, guarded by a
+  per-process `didAutoLoad`) did exactly this 700ms after every cold start, and since
+  installing an APK *is* a cold start, the box came up empty on the owner's first run of two
+  releases running. It is skipped when a stage app is set. Check the same thing before
+  wiring any other automatic launch — `CameraPanel`'s fallback app is the other one.
+- **The box's rect is not final on the first layout pass.** It is reported again after
+  `goImmersive()` takes the system bars out of the window. Anything that acts on it must
+  wait for it to settle (`HomeActivity.scheduleStageLaunch`) rather than committing to the
+  first value — v0.37.0 committed, and the window was placed against a box that had moved.
 - **Do not name a `SettingsActivity` theme handler `setTheme(Int)`** — it collides with
   `Activity.setTheme(int)`. The existing one is `applyThemePreset()`.
 - **A variant flag that never varies hides for months.** `Ui.Theme.light` was hardcoded
