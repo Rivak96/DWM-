@@ -1,7 +1,7 @@
 {
-    "versionCode":  54,
-    "versionName":  "0.35.0",
-    "tag":  "v0.35.0",
+    "versionCode":  55,
+    "versionName":  "0.36.0",
+    "tag":  "v0.36.0",
     "apk":  "app-release.apk",
-    "notes":  "One live app in the box. Settings \u003e Cockpit \u003e App in the box \u003e Pick. Needs Developer options \u003e Force activities to be resizable. Use Title bar cover to hide the system title bar."
+    "notes":  "Stage fixes: opening any other app now takes the live window down with it, the drawer and Settings always cover it, and the header comes back when you return home."
 }

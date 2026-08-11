@@ -61,19 +61,25 @@ class HomeActivity : DwmActivity() {
     /** Label of the app hosted in the box, or null for the grid. */
     private val stageLabelState = mutableStateOf<String?>(null)
 
-    /** The box's screen rect, once the layout has reported it. */
-    private var stageBounds: Rect? = null
-
     /**
-     * The package the stage window was last started for.
+     * The window chrome. Built once and handed to [StageHost], which decides when it draws.
      *
-     * Guards the relaunch. `fc045f7` ("Only relaunch the stage app when it changes") records
-     * why: `onStart` used to relaunch unconditionally, so if a window ever came back
-     * fullscreen it covered the launcher and returning to DWM threw you straight back into
-     * the app — and Back is swallowed here, because this is a home launcher, so the loop had
-     * no exit.
+     * Relaunch guarding lives in the host now — `fc045f7` ("Only relaunch the stage app when
+     * it changes") records why it has to exist at all: `onStart` used to relaunch
+     * unconditionally, so if a window ever came back fullscreen it covered the launcher and
+     * returning to DWM threw you straight back into the app. Back is swallowed here, because
+     * this is a home launcher, so that loop had no exit.
      */
-    private var stageLaunchedFor: String? = null
+    private val stageChrome by lazy {
+        StageChrome(this) {
+            // The header's Full screen button. NEW_TASK alone *moves* the running task
+            // rather than recreating it, so the app comes forward at native resolution with
+            // its state intact.
+            val pkg = StageHost.stagePkg ?: return@StageChrome
+            StageHost.evict()
+            LaunchEngine.launchFullscreen(this, pkg)
+        }
+    }
     private val boostState = mutableStateOf<Float?>(null)
     private val wallpaperState = mutableStateOf<Bitmap?>(null)
     private val wallpaperDimState = mutableStateOf(0.30f)
@@ -143,9 +149,7 @@ class HomeActivity : DwmActivity() {
                             boost = boostState.value,
                             wallpaper = wallpaperState.value,
                             wallpaperDim = wallpaperDimState.value,
-                            onOpenFullscreen = { pkg ->
-                                LaunchEngine.launchFullscreen(this@HomeActivity, pkg)
-                            },
+                            onOpenFullscreen = { pkg -> openOther(pkg) },
                             drawnView = ::buildPanelView,
                             stage = stageLabelState.value,
                             onStageBounds = ::onStageBounds
@@ -174,6 +178,7 @@ class HomeActivity : DwmActivity() {
         // The dashboard is in front, so its camera outranks an overlay pointed at the
         // same device. An overlay on a different camera is left alone.
         CameraHost.setHomeVisible(true)
+        StageHost.setHomeVisible(true)
 
         ensurePermissions()
         refreshPanelsIfChanged()
@@ -207,12 +212,10 @@ class HomeActivity : DwmActivity() {
         // without this the backgrounded dashboard would sit on the device and starve
         // the overlay that is now the only thing on screen.
         CameraHost.setHomeVisible(false)
-        // Home is fully hidden, so the mask has nothing to mask. onStop, never onPause:
-        // on API 29 multi-window only the focused activity is resumed, so *touching the
-        // stage app* pauses this activity — tearing the chrome down there would strip the
-        // window's header the instant you tried to use it.
-        StageChrome.clear(this)
-        stageBounds = null
+        // onStop, never onPause: on API 29 multi-window only the focused activity is
+        // resumed, so *touching the stage app* pauses this activity — reporting home
+        // hidden there would strip the window's header the instant you tried to use it.
+        StageHost.setHomeVisible(false)
     }
 
     // ---- actions ---------------------------------------------------------
@@ -417,56 +420,32 @@ class HomeActivity : DwmActivity() {
                 packageManager.getApplicationLabel(packageManager.getApplicationInfo(p, 0)).toString()
             }.getOrNull()
         }
-        val usable = label != null && LaunchEngine.freeformState(this).usable
+        // Degrade rather than pretend: with no freeform support, or a configured app that
+        // has since been uninstalled, the box goes back to being the app grid and Settings
+        // says why. Overlay permission is required too — without it there is no mask, and
+        // an unmasked freeform window is the v0.29 bug.
+        val usable = label != null && LaunchEngine.freeformState(this).usable && canOverlay()
         stageLabelState.value = if (usable) label else null
-        if (!usable) {
-            StageChrome.clear(this)
-            stageLaunchedFor = null
-            stageBounds = null
-        }
+        if (usable) StageHost.attach(stageChrome)
+        StageHost.setStage(if (usable) pkg else null, label ?: "")
     }
 
     /**
-     * The box reported where it is. Launch into it, then lay the chrome over the result.
+     * The box reported where it is.
      *
-     * Called from `onGloballyPositioned`, so it fires on every layout pass — both the
-     * launch and the chrome are guarded to be idempotent, or this would relaunch the app
-     * continuously.
+     * Fires on every layout pass, so it must be cheap and idempotent — [StageHost] owns
+     * both of those guarantees. `launchNeeded()` commits to what it returns, so asking
+     * repeatedly cannot relaunch repeatedly.
      */
     private fun onStageBounds(bounds: Rect) {
-        if (bounds.isEmpty) return
-        val pkg = Prefs.stagePkg(this) ?: return
-        if (stageLabelState.value == null) return
-
-        val moved = stageBounds != bounds
-        stageBounds = bounds
-
-        if (stageLaunchedFor != pkg || moved) {
-            stageLaunchedFor = pkg
-            LaunchEngine.launchInBox(this, pkg, bounds)
+        StageHost.setBounds(bounds)
+        StageHost.launchNeeded()?.let { (pkg, rect) ->
+            LaunchEngine.launchInBox(this, pkg, rect)
         }
-        showStageChrome(bounds)
     }
 
-    /** The mask, frame and header, drawn over whatever the system gave the window. */
-    private fun showStageChrome(bounds: Rect) {
-        if (!canOverlay()) return
-        StageChrome.curtain(this, false)
-        StageChrome.show(
-            this,
-            bounds,
-            title = stageLabelState.value ?: "",
-            onFullscreen = {
-                val pkg = Prefs.stagePkg(this) ?: return@show
-                // NEW_TASK alone *moves* the running task rather than recreating it, so the
-                // app comes forward at native resolution with its state intact. That, plus
-                // dropping the chrome, is the whole of "seamless" here.
-                StageChrome.clear(this)
-                stageLaunchedFor = null
-                LaunchEngine.launchFullscreen(this, pkg)
-            }
-        )
-    }
+    /** Every fullscreen launch evicts the stage — see [LaunchEngine.launchFullscreen]. */
+    private fun openOther(pkg: String) = LaunchEngine.launchFullscreen(this, pkg)
 
     private fun loadCamera() {
         cameraPanelState.value = Panel(

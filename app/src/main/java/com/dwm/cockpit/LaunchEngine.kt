@@ -114,7 +114,34 @@ object LaunchEngine {
     fun launchFullscreen(c: Context, pkg: String) {
         val i = c.packageManager.getLaunchIntentForPackage(pkg) ?: return
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        evictStageFor(c, pkg)
         runCatching { c.startActivity(i) }
+    }
+
+    /**
+     * Get the live stage window out of the way before opening some *other* app.
+     *
+     * Freeform tasks float **above** fullscreen ones. Without this, opening anything from
+     * the drawer, the grid, the overlay pill or a notification would launch it *underneath*
+     * the live window — the user asks for Maps and gets Maps with CarPlay still sitting in
+     * the middle of the screen on top of it.
+     *
+     * DWM cannot close or background a task it does not own, so the only lever is to
+     * relaunch the stage app **without** freeform bounds, which moves it out of the
+     * freeform stack and into the ordinary fullscreen one. The app the user actually asked
+     * for then lands on top of it in the normal way, and coming back to home puts the stage
+     * back in its box.
+     *
+     * Lives here rather than at the call sites deliberately: there are six launch paths and
+     * patching them one at a time is how one gets missed.
+     */
+    private fun evictStageFor(c: Context, pkg: String) {
+        val stage = StageHost.stagePkg ?: return
+        StageHost.evict()
+        if (stage == pkg) return
+        val back = c.packageManager.getLaunchIntentForPackage(stage) ?: return
+        back.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { c.startActivity(back) }
     }
 
     /**

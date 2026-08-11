@@ -45,12 +45,12 @@ abstract class DwmActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        if (coversStage) StageChrome.curtain(this, true)
+        if (coversStage) StageHost.setDwmScreenInFront(true)
     }
 
     override fun onStop() {
         super.onStop()
-        if (coversStage) StageChrome.curtain(this, false)
+        if (coversStage) StageHost.setDwmScreenInFront(false)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
