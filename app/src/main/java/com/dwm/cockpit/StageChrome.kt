@@ -47,6 +47,14 @@ import android.widget.TextView
  * The header is also the only place a control can go: anything drawn in the Compose card
  * is *underneath* the window it belongs to. So it carries the title and the full-screen
  * button, and the system's caption is replaced rather than merely hidden.
+ *
+ * ### The one thing this must not grow back
+ *
+ * There was a fullscreen "curtain" here as well, raised whenever another DWM screen came
+ * forward. `TYPE_APPLICATION_OVERLAY` is above *every* activity window, DWM's own
+ * included, so it covered the app drawer it was meant to protect and ate its touches with
+ * it. [StageHost]'s header explains what replaced it. Nothing in this class may go
+ * fullscreen.
  */
 class StageChrome(
     context: Context,
@@ -61,57 +69,72 @@ class StageChrome(
     private val app = context.applicationContext
     private val wm = app.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-    private val panes = ArrayList<View>()
-    private var curtainView: View? = null
+    private var header: View? = null
+    private var titleView: TextView? = null
+
+    /** Left, right and bottom, in that order. Held so they can be moved, not rebuilt. */
+    private val edges = ArrayList<View>()
+
     private var shown: Rect? = null
     private var shownTitle: String? = null
 
+    /**
+     * Put the mask over [bounds], or move it if it is already up.
+     *
+     * Idempotent, because the box re-reports its rect on every layout pass. **Moving**
+     * rather than rebuilding matters as well: removing four overlay windows and adding
+     * four more flashes the header and the frame, and the rect can be reported many times
+     * a second while the user is working in the app.
+     */
     override fun showMask(bounds: Rect, title: String) {
         if (bounds.isEmpty) return
-        // Idempotent: the box re-reports its rect on every layout pass, and tearing the
-        // windows down and rebuilding them each time would flicker.
         if (shown == bounds && shownTitle == title) return
-        hideMask()
 
-        val theme = Ui.th(app)
         val caption = Prefs.captionPx(app)
         val frame = Ui.dp(app, FRAME_DP)
 
-        addHeader(theme, bounds, caption, title)
-        add(theme.card, bounds.left - frame, bounds.top, frame, bounds.height())
-        add(theme.card, bounds.right, bounds.top, frame, bounds.height())
-        add(theme.card, bounds.left - frame, bounds.bottom, bounds.width() + frame * 2, frame)
+        // A caption height of zero means no header window at all, so the set of windows
+        // itself changes when the user nudges it through zero — the only case that has to
+        // rebuild rather than move.
+        val intact = edges.size == 3 && (caption > 0) == (header != null)
+        if (intact) {
+            titleView?.text = title
+            header?.let { move(it, bounds.left, bounds.top, bounds.width(), caption) }
+            move(edges[0], bounds.left - frame, bounds.top, frame, bounds.height())
+            move(edges[1], bounds.right, bounds.top, frame, bounds.height())
+            move(edges[2], bounds.left - frame, bounds.bottom, bounds.width() + frame * 2, frame)
+        } else {
+            hideMask()
+            val theme = Ui.th(app)
+            addHeader(theme, bounds, caption, title)
+            add(theme.card, bounds.left - frame, bounds.top, frame, bounds.height())
+            add(theme.card, bounds.right, bounds.top, frame, bounds.height())
+            add(theme.card, bounds.left - frame, bounds.bottom, bounds.width() + frame * 2, frame)
+        }
 
         shown = Rect(bounds)
         shownTitle = title
     }
 
     override fun hideMask() {
-        panes.forEach { v -> runCatching { wm.removeView(v) } }
-        panes.clear()
+        header?.let { v -> runCatching { wm.removeView(v) } }
+        edges.forEach { v -> runCatching { wm.removeView(v) } }
+        header = null
+        titleView = null
+        edges.clear()
         shown = null
         shownTitle = null
-    }
-
-    /** Opaque, and touchable so the app underneath cannot be poked through it. */
-    override fun showCurtain() {
-        if (curtainView != null) return
-        val v = View(app).apply { setBackgroundColor(Ui.th(app).bg) }
-        val lp = params(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT, 0, 0
-        )
-        runCatching { wm.addView(v, lp) }.onSuccess { curtainView = v }
-    }
-
-    override fun hideCurtain() {
-        curtainView?.let { v -> runCatching { wm.removeView(v) } }
-        curtainView = null
     }
 
     private fun addHeader(theme: Ui.Theme, bounds: Rect, height: Int, title: String) {
         if (height <= 0) return
         val pad = Ui.dp(app, 12)
+        val label = TextView(app).apply {
+            text = title
+            setTextColor(theme.dim)
+            textSize = 13f
+            maxLines = 1
+        }
         val row = LinearLayout(app).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -119,12 +142,7 @@ class StageChrome(
             setPadding(pad, 0, pad, 0)
         }
         row.addView(
-            TextView(app).apply {
-                text = title
-                setTextColor(theme.dim)
-                textSize = 13f
-                maxLines = 1
-            },
+            label,
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         )
         row.addView(
@@ -137,13 +155,18 @@ class StageChrome(
             }
         )
         runCatching { wm.addView(row, params(bounds.width(), height, bounds.left, bounds.top)) }
-            .onSuccess { panes.add(row) }
+            .onSuccess { header = row; titleView = label }
     }
 
     private fun add(color: Int, x: Int, y: Int, w: Int, h: Int) {
         if (w <= 0 || h <= 0) return
         val v = View(app).apply { setBackgroundColor(color) }
-        runCatching { wm.addView(v, params(w, h, x, y)) }.onSuccess { panes.add(v) }
+        runCatching { wm.addView(v, params(w, h, x, y)) }.onSuccess { edges.add(v) }
+    }
+
+    private fun move(v: View, x: Int, y: Int, w: Int, h: Int) {
+        if (w <= 0 || h <= 0) return
+        runCatching { wm.updateViewLayout(v, params(w, h, x, y)) }
     }
 
     /**

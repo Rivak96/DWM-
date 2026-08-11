@@ -1,7 +1,7 @@
 {
-    "versionCode":  55,
-    "versionName":  "0.36.0",
-    "tag":  "v0.36.0",
+    "versionCode":  56,
+    "versionName":  "0.37.0",
+    "tag":  "v0.37.0",
     "apk":  "app-release.apk",
-    "notes":  "Stage fixes: opening any other app now takes the live window down with it, the drawer and Settings always cover it, and the header comes back when you return home."
+    "notes":  "The live app box: opening Apps or Settings no longer blanks the screen, coming back to home puts the window back in the box, and touching the app no longer resizes it."
 }

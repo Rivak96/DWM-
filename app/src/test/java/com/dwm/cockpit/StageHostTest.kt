@@ -10,18 +10,17 @@ import org.junit.Test
 /**
  * The stage's visibility rules, on the JVM.
  *
- * Every case here is a bug that the first cut of this feature actually had. They were all
- * ordering bugs between two activities issuing orders to the window manager independently,
- * which is exactly the class of fault a golden cannot see and the deck shows only as
- * "it's buggy". Testable at all because [StageHost] talks to a [StageHost.Chrome] rather
- * than to a real `WindowManager` — the same trick `CameraHostTest` uses.
+ * Every case here is a bug this feature actually had — first a set of ordering faults
+ * between two activities issuing orders to the window manager independently, then the three
+ * the owner found in the van. Both classes are invisible to a golden and show on the deck
+ * only as "it's buggy". Testable at all because [StageHost] talks to a [StageHost.Chrome]
+ * rather than to a real `WindowManager` — the same trick `CameraHostTest` uses.
  */
 class StageHostTest {
 
     private class FakeChrome : StageHost.Chrome {
         var mask: Rect? = null
         var maskTitle: String? = null
-        var curtain = false
         /** Ordered log, because *when* each window appears is the thing under test. */
         val events = ArrayList<String>()
 
@@ -31,14 +30,6 @@ class StageHostTest {
 
         override fun hideMask() {
             mask = null; maskTitle = null; events.add("mask-")
-        }
-
-        override fun showCurtain() {
-            curtain = true; events.add("curtain+")
-        }
-
-        override fun hideCurtain() {
-            curtain = false; events.add("curtain-")
         }
     }
 
@@ -64,7 +55,6 @@ class StageHostTest {
         StageHost.setHomeVisible(true)
         StageHost.setBounds(box)
         assertNull(chrome.mask)
-        assertTrue(!chrome.curtain)
     }
 
     @Test
@@ -72,59 +62,26 @@ class StageHostTest {
         goLive()
         assertEquals(box, chrome.mask)
         assertEquals("CarPlay", chrome.maskTitle)
-        assertTrue(!chrome.curtain)
+    }
+
+    @Test
+    fun `leaving home takes the mask down`() {
+        goLive()
+        StageHost.setHomeVisible(false)
+        assertNull(chrome.mask)
     }
 
     /**
-     * The drawer bug. Android runs `B.onStart` *before* `A.onStop`, so the first cut raised
-     * the curtain and then home's stop cleared it — the drawer ran with a live app floating
-     * through it.
-     */
-    @Test
-    fun `curtain survives home stopping after the drawer starts`() {
-        goLive()
-        StageHost.setDwmScreenInFront(true)   // drawer onStart
-        StageHost.setHomeVisible(false)       // home onStop, afterwards
-        assertTrue("curtain must still be up", chrome.curtain)
-        assertNull("mask must be down behind the curtain", chrome.mask)
-    }
-
-    /** And there must be no frame where the live window is uncovered between the two. */
-    @Test
-    fun `curtain goes up before the mask comes down`() {
-        goLive()
-        chrome.events.clear()
-        StageHost.setDwmScreenInFront(true)
-        assertEquals(listOf("curtain+", "mask-"), chrome.events)
-    }
-
-    /**
-     * The other half of the drawer bug: coming back, the mask was only redrawn from
-     * `onGloballyPositioned`, which does not necessarily fire again for an unchanged
-     * layout. The window returned with its system caption exposed and draggable.
+     * Coming back, the mask was once only redrawn from `onGloballyPositioned`, which does
+     * not necessarily fire again for an unchanged layout. The window returned with its
+     * system caption exposed and draggable.
      */
     @Test
     fun `mask returns from remembered bounds without a new layout pass`() {
         goLive()
-        StageHost.setDwmScreenInFront(true)
         StageHost.setHomeVisible(false)
-        // ...back to home. No setBounds() call — nothing re-laid out. Real lifecycle order
-        // again: home's onStart runs before the drawer's onStop.
-        StageHost.setHomeVisible(true)
-        StageHost.setDwmScreenInFront(false)
+        StageHost.setHomeVisible(true)   // no setBounds — nothing re-laid out
         assertEquals(box, chrome.mask)
-        assertTrue(!chrome.curtain)
-    }
-
-    @Test
-    fun `mask comes down only after the curtain is gone`() {
-        goLive()
-        StageHost.setDwmScreenInFront(true)
-        StageHost.setHomeVisible(false)
-        chrome.events.clear()
-        StageHost.setHomeVisible(true)
-        StageHost.setDwmScreenInFront(false)
-        assertEquals(listOf("mask+", "curtain-"), chrome.events)
     }
 
     /** `onGloballyPositioned` fires on every layout pass; each one asks for a launch. */
@@ -137,13 +94,24 @@ class StageHostTest {
         assertNull(StageHost.launchNeeded())
     }
 
+    /**
+     * The flicker reported from the van: "sometimes it flickers, or kinda resizes then
+     * resizes back."
+     *
+     * A moved box used to relaunch, on the reasoning that a window cannot be repositioned
+     * any other way. But bounds arrive on every layout pass and `goImmersive()` runs from
+     * `onWindowFocusChanged`, so touching the live app and then touching DWM could move the
+     * rect by an inset and move it straight back — two relaunches, which is exactly what a
+     * resize-and-resize-back looks like. The box does not move on this deck.
+     */
     @Test
-    fun `a moved box relaunches, because a window cannot be repositioned any other way`() {
+    fun `a moved box moves the mask but never relaunches`() {
         goLive()
         StageHost.launchNeeded()
         val moved = Rect(40, 120, 1400, 820)
         StageHost.setBounds(moved)
-        assertEquals("com.zjinnova.zlink" to moved, StageHost.launchNeeded())
+        assertNull("bounds churn must not relaunch", StageHost.launchNeeded())
+        assertEquals("the mask still follows the box", moved, chrome.mask)
     }
 
     @Test
@@ -163,7 +131,6 @@ class StageHostTest {
         StageHost.launchNeeded()
         StageHost.evict()
         assertNull(chrome.mask)
-        assertTrue(!chrome.curtain)
         assertNull(StageHost.launchNeeded())
     }
 
@@ -175,9 +142,26 @@ class StageHostTest {
         StageHost.evict()
         StageHost.setHomeVisible(false)
         StageHost.setHomeVisible(true)
-        StageHost.setDwmScreenInFront(false)
         assertEquals("com.zjinnova.zlink" to box, StageHost.launchNeeded())
         assertEquals(box, chrome.mask)
+    }
+
+    /**
+     * The photo of a stage header sitting over an empty card.
+     *
+     * `setHomeVisible(true)` cleared `evicted` and claimed to be "a fresh start for the
+     * stage", but left the launch marked as already done — so nothing put the window back,
+     * and the one caller that would have asked does not necessarily fire for an unchanged
+     * layout. Note there is no `evict()` here: this is the plain case of leaving home and
+     * coming back, where DWM never sent the user anywhere.
+     */
+    @Test
+    fun `returning home relaunches even when nothing evicted the stage`() {
+        goLive()
+        assertEquals("com.zjinnova.zlink" to box, StageHost.launchNeeded())
+        StageHost.setHomeVisible(false)
+        StageHost.setHomeVisible(true)
+        assertEquals("com.zjinnova.zlink" to box, StageHost.launchNeeded())
     }
 
     /**
@@ -189,10 +173,10 @@ class StageHostTest {
     @Test
     fun `mask stays up while the user works in the app`() {
         goLive()
-        val before = chrome.mask
+        chrome.events.clear()
         StageHost.setBounds(box)
-        assertEquals(before, chrome.mask)
-        assertTrue(!chrome.curtain)
+        assertEquals(box, chrome.mask)
+        assertTrue("nothing may be torn down", chrome.events.none { it == "mask-" })
     }
 
     @Test
@@ -200,7 +184,6 @@ class StageHostTest {
         goLive()
         StageHost.setStage(null, "")
         assertNull(chrome.mask)
-        assertTrue(!chrome.curtain)
         assertNull(StageHost.launchNeeded())
     }
 

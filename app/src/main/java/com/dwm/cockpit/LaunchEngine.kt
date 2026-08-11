@@ -46,7 +46,7 @@ import java.lang.reflect.Method
  *   [freeformState].
  * - **Overlay masking.** A freeform window is dragged *by its caption bar*, so a
  *   touch-consuming overlay laid over the caption removes the ugly bar and the grab handle
- *   in one move. `StageService` draws it. v0.29 instead inflated the rect by a guessed
+ *   in one move. [StageChrome] draws it. v0.29 instead inflated the rect by a guessed
  *   32 dp, which overhung the vehicle bar when the guess ran long and cropped the app when
  *   it ran short — the guess was the bug, not the idea.
  *
@@ -114,12 +114,12 @@ object LaunchEngine {
     fun launchFullscreen(c: Context, pkg: String) {
         val i = c.packageManager.getLaunchIntentForPackage(pkg) ?: return
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        evictStageFor(c, pkg)
+        evictStage(c, except = pkg)
         runCatching { c.startActivity(i) }
     }
 
     /**
-     * Get the live stage window out of the way before opening some *other* app.
+     * Get the live stage window out of the way before putting anything else in front.
      *
      * Freeform tasks float **above** fullscreen ones. Without this, opening anything from
      * the drawer, the grid, the overlay pill or a notification would launch it *underneath*
@@ -128,17 +128,28 @@ object LaunchEngine {
      *
      * DWM cannot close or background a task it does not own, so the only lever is to
      * relaunch the stage app **without** freeform bounds, which moves it out of the
-     * freeform stack and into the ordinary fullscreen one. The app the user actually asked
-     * for then lands on top of it in the normal way, and coming back to home puts the stage
-     * back in its box.
+     * freeform stack and into the ordinary fullscreen one. Whatever starts next then lands
+     * on top of it in the normal way, and coming back to home puts the stage back in its
+     * box.
      *
-     * Lives here rather than at the call sites deliberately: there are six launch paths and
-     * patching them one at a time is how one gets missed.
+     * **DWM's own screens need this too**, which is what v0.35.0 got wrong: it covered the
+     * live window with a fullscreen overlay instead, and that overlay covered the app
+     * drawer as well — see [StageHost]. `HomeActivity.openDwmScreen` calls this with no
+     * [except].
+     *
+     * Lives here rather than at the call sites deliberately: there are seven paths that put
+     * something in front of home, and patching them one at a time is how one gets missed.
+     *
+     * The cost is that the stage app is visible fullscreen for the moment before the new
+     * window lands on it. There is no lever that avoids that.
+     *
+     * @param except the app about to be opened — if it *is* the stage, it is already coming
+     *   forward and must not be started twice.
      */
-    private fun evictStageFor(c: Context, pkg: String) {
+    fun evictStage(c: Context, except: String? = null) {
         val stage = StageHost.stagePkg ?: return
         StageHost.evict()
-        if (stage == pkg) return
+        if (stage == except) return
         val back = c.packageManager.getLaunchIntentForPackage(stage) ?: return
         back.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { c.startActivity(back) }

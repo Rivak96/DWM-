@@ -119,19 +119,17 @@ class HomeActivity : DwmActivity() {
             overlayMenu = { overlayMenu() },
             bluetooth = { openSetting(Settings.ACTION_BLUETOOTH_SETTINGS) },
             wifi = { openSetting(Settings.ACTION_WIFI_SETTINGS) },
-            apps = { startActivity(Intent(this, AppDrawerActivity::class.java)) },
-            edit = { startActivity(Intent(this, LayoutEditorActivity::class.java)) },
-            settings = { startActivity(Intent(this, SettingsActivity::class.java)) },
+            apps = { openOverStage(Intent(this, AppDrawerActivity::class.java)) },
+            edit = { openOverStage(Intent(this, LayoutEditorActivity::class.java)) },
+            settings = { openOverStage(Intent(this, SettingsActivity::class.java)) },
             reload = { reloadCockpit() },
             pill = { startPill() },
             appMenu = { pkg -> appMenu(pkg) },
             grantNotifications = {
-                runCatching {
-                    startActivity(
-                        Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                }
+                openOverStage(
+                    Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
             }
         )
 
@@ -160,8 +158,27 @@ class HomeActivity : DwmActivity() {
         }
     }
 
-    /** This is the screen the stage belongs to — it must never curtain its own window. */
-    override val coversStage: Boolean get() = false
+    /**
+     * Start anything that has to appear **in front of home**, with the stage taken down.
+     *
+     * A freeform window floats above fullscreen activities, so the drawer, Settings, the
+     * editor and every system-settings screen DWM opens do not cover it merely by starting
+     * — they come up with a live app punched through the middle of them. v0.35.0 answered
+     * that by covering the window with a fullscreen overlay, which covered these screens
+     * too and swallowed their touches; that is the blank screen reported from the van. See
+     * [StageHost].
+     *
+     * Eviction is the same lever [LaunchEngine.launchFullscreen] already pulled for every
+     * *other* app. This is the path for the intents that are **not** package launches —
+     * DWM's own activities, and the `Settings.ACTION_*` screens, neither of which has a
+     * launch intent to hand to `launchFullscreen`. Between the two, nothing gets in front
+     * of home without the stage standing down first, which is the property that matters:
+     * patching these one at a time is how one gets missed.
+     */
+    private fun openOverStage(intent: Intent) {
+        LaunchEngine.evictStage(this)
+        runCatching { startActivity(intent) }
+    }
 
     override fun onStart() {
         super.onStart()
@@ -183,6 +200,13 @@ class HomeActivity : DwmActivity() {
         ensurePermissions()
         refreshPanelsIfChanged()
         loadStage()
+        // Ask for the launch here as well as from the layout pass. Coming back to home owes
+        // one — the window may have been evicted, or moved fullscreen, or killed for RAM —
+        // and `onGloballyPositioned` does not necessarily fire again when an unchanged
+        // layout resumes, which left the stage header sitting over an empty card. [StageHost]
+        // is process-global, so the box's last rect is still here even after a recreate; on
+        // a genuine cold start it is null and the layout pass does the first launch.
+        launchStageIfNeeded()
 
         if (!didAutoLoad && Prefs.autoLoad(this)) {
             didAutoLoad = true
@@ -228,7 +252,7 @@ class HomeActivity : DwmActivity() {
 
     private fun toggleOverlays() {
         if (!canOverlay()) {
-            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            openOverStage(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             return
         }
         if (OverlayPanelsService.isRunning) OverlayPanelsService.stop(this)
@@ -238,7 +262,7 @@ class HomeActivity : DwmActivity() {
 
     private fun startPill() {
         if (!canOverlay()) {
-            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            openOverStage(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             return
         }
         OverlayService.start(this)
@@ -251,7 +275,7 @@ class HomeActivity : DwmActivity() {
         if (base != null) LaunchEngine.launchFullscreen(this, base)
         else {
             Toast.makeText(this, "Pick your CarPlay app in Settings > Cockpit", Toast.LENGTH_LONG).show()
-            startActivity(Intent(this, SettingsActivity::class.java))
+            openOverStage(Intent(this, SettingsActivity::class.java))
         }
     }
 
@@ -273,7 +297,7 @@ class HomeActivity : DwmActivity() {
             .setItems(items) { _, w ->
                 when (w) {
                     0 -> if (running) OverlayPanelsService.stop(this) else toggleOverlays()
-                    1 -> startActivity(Intent(this, LayoutEditorActivity::class.java))
+                    1 -> openOverStage(Intent(this, LayoutEditorActivity::class.java))
                     2 -> {
                         Prefs.setOverlayEdit(this, !Prefs.overlayEdit(this))
                         if (OverlayPanelsService.isRunning) {
@@ -335,14 +359,12 @@ class HomeActivity : DwmActivity() {
                         Prefs.saveFavorites(this, cur)
                         loadApps()
                     }
-                    2 -> runCatching {
-                        startActivity(
-                            Intent(
-                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                Uri.parse("package:$pkg")
-                            )
+                    2 -> openOverStage(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:$pkg")
                         )
-                    }
+                    )
                 }
             }
             .show()
@@ -435,10 +457,16 @@ class HomeActivity : DwmActivity() {
      *
      * Fires on every layout pass, so it must be cheap and idempotent — [StageHost] owns
      * both of those guarantees. `launchNeeded()` commits to what it returns, so asking
-     * repeatedly cannot relaunch repeatedly.
+     * repeatedly cannot relaunch repeatedly, and a rect that merely *moved* is no longer a
+     * reason to relaunch at all.
      */
     private fun onStageBounds(bounds: Rect) {
         StageHost.setBounds(bounds)
+        launchStageIfNeeded()
+    }
+
+    /** The only place `launchInBox` is called from. Safe to ask as often as you like. */
+    private fun launchStageIfNeeded() {
         StageHost.launchNeeded()?.let { (pkg, rect) ->
             LaunchEngine.launchInBox(this, pkg, rect)
         }
@@ -674,7 +702,7 @@ class HomeActivity : DwmActivity() {
 
     private fun startUpdate(info: Updater.Info) {
         if (!Updater.canInstall(this)) {
-            runCatching { startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))) }
+            openOverStage(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
             return
         }
         val dlg = Ui.dialog(this).setTitle("Updating").setMessage("Starting…").setCancelable(false).create()
@@ -688,7 +716,7 @@ class HomeActivity : DwmActivity() {
     }
 
     private fun openSetting(action: String) {
-        runCatching { startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        openOverStage(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     private fun canOverlay() = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this)

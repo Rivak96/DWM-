@@ -28,30 +28,20 @@ abstract class DwmActivity : ComponentActivity() {
         return false
     }
 
-    /**
-     * Whether this screen must hide the home screen's live stage window.
+    /*
+     * There is deliberately no stage handling here any more.
      *
      * A freeform window floats **above** fullscreen activities, so a DWM screen starting
-     * does not cover it — the app drawer would otherwise come up with a live app punched
-     * through the middle of it. [StageChrome.curtain] is a fullscreen overlay that does
-     * cover it, and every DWM screen raises it except the home screen that owns the stage.
+     * does not cover it. v0.35.0 answered that with a fullscreen overlay "curtain" raised
+     * from every DWM screen's `onStart`. `TYPE_APPLICATION_OVERLAY` is above *every*
+     * activity window, DWM's own included, so it covered the app drawer instead of the
+     * live app and — being touchable — ate the drawer's touches too. That is the blank
+     * screen reported from the van.
      *
-     * Driven from `onStart`/`onStop` and deliberately **not** from `onPause`: on API 29
-     * multi-window only the focused activity is resumed, so merely touching the stage app
-     * pauses `HomeActivity` — a pause-driven curtain would black the app out the moment you
-     * tried to use it.
+     * What replaced it is not a lifecycle callback at all: whoever *starts* a DWM screen
+     * evicts the stage first, so the freeform task is out of the way before the screen
+     * exists. See `HomeActivity.openDwmScreen` and [LaunchEngine.evictStage].
      */
-    protected open val coversStage: Boolean get() = true
-
-    override fun onStart() {
-        super.onStart()
-        if (coversStage) StageHost.setDwmScreenInFront(true)
-    }
-
-    override fun onStop() {
-        super.onStop()
-        if (coversStage) StageHost.setDwmScreenInFront(false)
-    }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
