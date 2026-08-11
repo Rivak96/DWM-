@@ -116,6 +116,7 @@ reach one and miss the other:
 | `ui/theme/DwmTokens.kt` | The whole design system. Read before any visual change. |
 | `CarInfo.kt` | Live vehicle data over the vendor CAN AIDL. |
 | `VehicleProbe.kt` | ~1400 lines of rootless CAN/package/APK discovery tooling: `saveApk()`, manifest scanner, AIDL prober. |
+| `Diagnostics.kt`, `DumpFlow.kt`, `GitHub.kt` | The dump button — collect, then gist or paste. **Reach for this before reasoning about a bug from a photograph.** |
 | `Prefs.kt` | All persisted state. |
 | `Overlay*Service.kt`, `VehicleStripService.kt` | Three floating-window services (`SYSTEM_ALERT_WINDOW`). Still present and running. |
 | `LayoutEditorActivity.kt`, `Panel.kt`, `Templates.kt` | Legacy panel/canvas system. Largely vestigial, kept dormant. |
@@ -231,6 +232,53 @@ The alternatives that would give a genuinely *docked* pane — `TaskView`, a tru
 `VirtualDisplay` receives **no touch input** without root. Freeform plus masking is the only
 unprivileged route, and it is the one the vendor took.
 
+## The dump button — ask for this before reasoning
+
+**When something on the deck is wrong, ask the owner to send a dump. Do not reason from a
+photograph.** That is not a style preference: v0.37.0 and v0.39.0 each shipped a confident,
+wrong answer to a real bug, derived by reading code against a photo, and each cost a
+release. Both were four lines of log away from obvious.
+
+Owner-side it is one tap — **Settings → About → Send a dump**, or a **long-press on the CAN
+dot** on the home screen. The long-press is the one that matters when DWM itself is broken:
+the v0.36.0 white screen made Settings and the drawer untouchable, which is exactly the
+state a dump is wanted from.
+
+How it gets to you, in order (`DumpFlow.kt`):
+
+1. Always written to Downloads first, through `VehicleProbe.saveDump`. The van is on a phone
+   hotspot as often as not, and a dump lost to a failed upload is worse than none.
+2. A **secret gist** on the owner's account if signed in — `gh api /gists --jq '.[0]'` finds
+   it and **the owner has to tell you nothing**.
+3. Otherwise `dpaste.com`, and the owner reads you the short URL. Works with no setup at all.
+
+**`GitHub.CLIENT_ID` is currently blank**, so only the dpaste path runs. Filling it needs
+the owner to register an OAuth app (github.com/settings/developers → New OAuth App, with
+**"Enable Device Flow" ticked** — it is off by default and silently breaks the whole flow)
+and send the Client ID. A client ID is public by design; **a client secret must never be
+added** — this repo and every release APK are public, and `GitHubTest` fails the build if a
+field with "secret" in its name appears.
+
+What a dump contains: `VehicleProbe.header`, the stage section (configured package, the
+three freeform settings, overlay permission, caption height, and `StageHost.snapshot()`),
+display geometry, redacted prefs, and DWM's own logcat. `StageHost.snapshot()` is the part
+to read first — "the box shows its placeholder" has five causes that are identical on the
+glass, and it names which one.
+
+**What it cannot see**: anything belonging to the system. It answers *what did DWM do*,
+never *what did the ROM do with the window*. `dumpsys window` and the full system log need
+`DUMP` and `READ_LOGS` — see below.
+
+### The upgrade, if a ROM-side question ever gets urgent
+
+`DUMP` and `READ_LOGS` both carry Android's **`development`** protection flag, so
+`adb shell pm grant com.dwm.cockpit android.permission.DUMP` can hand them to an ordinary
+app, and this deck is API 29 — before Google tightened it. Declare them in the manifest,
+grant them once on a cable, and the dump button thereafter carries the full system log and
+`dumpsys window` / `activity` / `display` with no cable ever again. Offered to the owner
+and declined in favour of keeping the app setup-free; it is one minute's work if the
+freeform questions in Open issues ever need answering from the van.
+
 ## adb is available for development
 
 The deck can be reached over USB from this machine (`adb` is at
@@ -311,3 +359,10 @@ When a term could mean two things that imply opposite work, ask briefly rather t
 ambiguous words have cost real time here ("overlay" has meant both the app box and the
 overlay services). Commit messages in this repo are long and explain why, including what was
 rejected and what is still unverified — match that.
+
+**On a bug report from the van, ask for a dump first.** The tempting move is to read the
+code against the photo and produce an explanation, because that has usually worked here and
+because it feels like the fast path. It is the slow path: it produced two wrong releases in
+a row, and the owner has said plainly that shuttling files by hand is not acceptable, which
+is why the button exists. One tap, and then you are reading facts. A guess that is right
+still teaches the next session to guess.
