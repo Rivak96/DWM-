@@ -76,6 +76,12 @@ class SettingsUi(
     val modeHint: String,
     val autoLoad: Boolean,
     val carplay: String,
+    /** Label of the app hosted live in the box, or "None". */
+    val stageApp: String,
+    /** Height of the masked system caption, e.g. "32dp". */
+    val stageCaption: String,
+    /** Why the box can or cannot host a live app — [com.dwm.cockpit.LaunchEngine.Freeform]. */
+    val stageStatus: String,
     val favGrid: Boolean,
     val pillRunning: Boolean,
     val panelsRunning: Boolean,
@@ -109,6 +115,10 @@ class SettingsActions(
     val setMode: (Int) -> Unit = {},
     val setAutoLoad: (Boolean) -> Unit = {},
     val pickCarplay: () -> Unit = {},
+    val pickStageApp: () -> Unit = {},
+    val clearStageApp: () -> Unit = {},
+    /** Walk the caption mask a step at a time, against the real window. */
+    val nudgeCaption: (Int) -> Unit = {},
     val setFavGrid: (Boolean) -> Unit = {},
     val manageFavourites: () -> Unit = {},
     val editLayout: () -> Unit = {},

@@ -55,6 +55,7 @@ class SettingsActivity : DwmActivity() {
     private val updateStatusState = mutableStateOf("")
     private val aboutState = mutableStateOf("")
     private val carplayState = mutableStateOf("")
+    private val stageAppState = mutableStateOf("")
     private val obdState = mutableStateOf("")
     private val diagnosticsState = mutableStateOf("")
 
@@ -78,6 +79,7 @@ class SettingsActivity : DwmActivity() {
         super.onCreate(savedInstanceState)
 
         refreshCarplayLabel()
+        refreshStageLabel()
         refreshObdLabel()
         refreshUpdateStatus()
         refreshModeHint()
@@ -135,6 +137,9 @@ class SettingsActivity : DwmActivity() {
             modeHint = modeHintState.value,
             autoLoad = Prefs.autoLoad(this),
             carplay = carplayState.value,
+            stageApp = stageAppState.value,
+            stageCaption = "${Prefs.captionDp(this)}dp",
+            stageStatus = LaunchEngine.freeformState(this).summary,
             favGrid = Prefs.showFavGrid(this),
             pillRunning = Prefs.overlaysOn(this),
             panelsRunning = OverlayPanelsService.isRunning,
@@ -182,6 +187,15 @@ class SettingsActivity : DwmActivity() {
         setMode = { setMode(it) },
         setAutoLoad = { Prefs.setAutoLoad(this, it); bump() },
         pickCarplay = { pickCarplay() },
+        pickStageApp = {
+            startActivityForResult(
+                Intent(this, AppDrawerActivity::class.java)
+                    .putExtra(AppDrawerActivity.EXTRA_PICK, true),
+                REQ_STAGE
+            )
+        },
+        clearStageApp = { Prefs.setStagePkg(this, null); refreshStageLabel(); bump() },
+        nudgeCaption = { Prefs.setCaptionDp(this, Prefs.captionDp(this) + it); bump() },
         setFavGrid = { Prefs.setShowFavGrid(this, it); bump() },
         manageFavourites = { manageFavourites() },
         // The cockpit layout editor. It used to be the "Cockpit" item in the home
@@ -770,6 +784,17 @@ class SettingsActivity : DwmActivity() {
                 "custom HTML · OBD-II gauges · GPS speed · clock · images."
     }
 
+    private fun refreshStageLabel() {
+        val pkg = Prefs.stagePkg(this)
+        stageAppState.value = when {
+            pkg == null -> "None — the box shows the app grid"
+            else -> runCatching {
+                packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0))
+                    .toString()
+            }.getOrNull() ?: "$pkg (not installed)"
+        }
+    }
+
     private fun refreshCarplayLabel() {
         val cp = Prefs.carplay(this)
         carplayState.value =
@@ -941,6 +966,11 @@ class SettingsActivity : DwmActivity() {
                 Prefs.setCarplay(this, data.getStringExtra(AppDrawerActivity.EXTRA_PKG))
                 refreshCarplayLabel()
             }
+            REQ_STAGE -> {
+                Prefs.setStagePkg(this, data.getStringExtra(AppDrawerActivity.EXTRA_PKG))
+                refreshStageLabel()
+                bump()
+            }
             REQ_WALL -> {
                 val uri = data.data ?: return
                 runCatching {
@@ -968,5 +998,6 @@ class SettingsActivity : DwmActivity() {
         private const val REQ_CAM = 203
         private const val REQ_WALL = 204
         private const val REQ_FAV = 205
+        private const val REQ_STAGE = 206
     }
 }

@@ -43,6 +43,17 @@ class SettingsSnapshotTest {
         }
     }
 
+    /** Carries the stage controls — the app picker, the freeform status line and the
+     *  title-bar cover nudge, none of which any other golden renders. */
+    @Test
+    fun `settings cockpit section`() {
+        paparazzi.snapshot {
+            DwmPreviewTheme {
+                SettingsScreen(previewSettings, SettingsActions(), previewActions, true, startSection = 1)
+            }
+        }
+    }
+
     @Test
     fun `settings vehicle section`() {
         paparazzi.snapshot {

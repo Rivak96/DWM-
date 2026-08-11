@@ -78,6 +78,29 @@ class HomeSnapshotTest {
         )
     }
 
+    /**
+     * The box reserved for a live app.
+     *
+     * What this golden can and cannot show is worth being clear about. The real app is a
+     * freeform window floating *above* this screen and a JVM renderer has no window
+     * manager, so this is the reservation underneath — plus proof that the rest of the
+     * cockpit still lays out correctly when the grid is not there. The masked caption and
+     * the full-screen button live in `StageChrome`, which is overlay windows and can only
+     * be judged on the deck.
+     */
+    @Test
+    fun `cockpit with a live app in the box`() = snap {
+        CockpitHome(
+            cameraPanel = previewCameraPanel,
+            allApps = previewFavourites,
+            overlaysOn = true,
+            actions = previewActions,
+            vehicle = previewVehicleIdle,
+            drawnView = drawn,
+            stage = "CarPlay"
+        )
+    }
+
     @Test
     fun `cockpit reversing`() = snap {
         CockpitHome(

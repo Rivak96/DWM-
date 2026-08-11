@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Rect
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -56,6 +57,23 @@ class HomeActivity : DwmActivity() {
     private val showCanvasState = mutableStateOf(false)
     private val allAppsState = mutableStateOf<List<HomeApp>>(emptyList())
     private val cameraPanelState = mutableStateOf(Panel(PanelType.CAMERA, 0f, 0f, 1f, 1f, label = "Camera"))
+
+    /** Label of the app hosted in the box, or null for the grid. */
+    private val stageLabelState = mutableStateOf<String?>(null)
+
+    /** The box's screen rect, once the layout has reported it. */
+    private var stageBounds: Rect? = null
+
+    /**
+     * The package the stage window was last started for.
+     *
+     * Guards the relaunch. `fc045f7` ("Only relaunch the stage app when it changes") records
+     * why: `onStart` used to relaunch unconditionally, so if a window ever came back
+     * fullscreen it covered the launcher and returning to DWM threw you straight back into
+     * the app — and Back is swallowed here, because this is a home launcher, so the loop had
+     * no exit.
+     */
+    private var stageLaunchedFor: String? = null
     private val boostState = mutableStateOf<Float?>(null)
     private val wallpaperState = mutableStateOf<Bitmap?>(null)
     private val wallpaperDimState = mutableStateOf(0.30f)
@@ -128,13 +146,18 @@ class HomeActivity : DwmActivity() {
                             onOpenFullscreen = { pkg ->
                                 LaunchEngine.launchFullscreen(this@HomeActivity, pkg)
                             },
-                            drawnView = ::buildPanelView
+                            drawnView = ::buildPanelView,
+                            stage = stageLabelState.value,
+                            onStageBounds = ::onStageBounds
                         )
                     }
                 }
             }
         }
     }
+
+    /** This is the screen the stage belongs to — it must never curtain its own window. */
+    override val coversStage: Boolean get() = false
 
     override fun onStart() {
         super.onStart()
@@ -154,6 +177,7 @@ class HomeActivity : DwmActivity() {
 
         ensurePermissions()
         refreshPanelsIfChanged()
+        loadStage()
 
         if (!didAutoLoad && Prefs.autoLoad(this)) {
             didAutoLoad = true
@@ -183,6 +207,12 @@ class HomeActivity : DwmActivity() {
         // without this the backgrounded dashboard would sit on the device and starve
         // the overlay that is now the only thing on screen.
         CameraHost.setHomeVisible(false)
+        // Home is fully hidden, so the mask has nothing to mask. onStop, never onPause:
+        // on API 29 multi-window only the focused activity is resumed, so *touching the
+        // stage app* pauses this activity — tearing the chrome down there would strip the
+        // window's header the instant you tried to use it.
+        StageChrome.clear(this)
+        stageBounds = null
     }
 
     // ---- actions ---------------------------------------------------------
@@ -370,6 +400,74 @@ class HomeActivity : DwmActivity() {
      * window. The box is an app grid now — there is no single chosen app to remember —
      * so all that is left here is the camera.
      */
+    // ---- the stage: one live app in the box ------------------------------
+
+    /**
+     * Decide whether the box is a stage or the app grid, and put the label up.
+     *
+     * A stage needs freeform to actually be available, so this degrades rather than
+     * pretending: with no freeform support the box stays the grid and Settings says why
+     * (see [LaunchEngine.freeformState]). A configured package that has since been
+     * uninstalled falls back the same way.
+     */
+    private fun loadStage() {
+        val pkg = Prefs.stagePkg(this)
+        val label = pkg?.let { p ->
+            runCatching {
+                packageManager.getApplicationLabel(packageManager.getApplicationInfo(p, 0)).toString()
+            }.getOrNull()
+        }
+        val usable = label != null && LaunchEngine.freeformState(this).usable
+        stageLabelState.value = if (usable) label else null
+        if (!usable) {
+            StageChrome.clear(this)
+            stageLaunchedFor = null
+            stageBounds = null
+        }
+    }
+
+    /**
+     * The box reported where it is. Launch into it, then lay the chrome over the result.
+     *
+     * Called from `onGloballyPositioned`, so it fires on every layout pass — both the
+     * launch and the chrome are guarded to be idempotent, or this would relaunch the app
+     * continuously.
+     */
+    private fun onStageBounds(bounds: Rect) {
+        if (bounds.isEmpty) return
+        val pkg = Prefs.stagePkg(this) ?: return
+        if (stageLabelState.value == null) return
+
+        val moved = stageBounds != bounds
+        stageBounds = bounds
+
+        if (stageLaunchedFor != pkg || moved) {
+            stageLaunchedFor = pkg
+            LaunchEngine.launchInBox(this, pkg, bounds)
+        }
+        showStageChrome(bounds)
+    }
+
+    /** The mask, frame and header, drawn over whatever the system gave the window. */
+    private fun showStageChrome(bounds: Rect) {
+        if (!canOverlay()) return
+        StageChrome.curtain(this, false)
+        StageChrome.show(
+            this,
+            bounds,
+            title = stageLabelState.value ?: "",
+            onFullscreen = {
+                val pkg = Prefs.stagePkg(this) ?: return@show
+                // NEW_TASK alone *moves* the running task rather than recreating it, so the
+                // app comes forward at native resolution with its state intact. That, plus
+                // dropping the chrome, is the whole of "seamless" here.
+                StageChrome.clear(this)
+                stageLaunchedFor = null
+                LaunchEngine.launchFullscreen(this, pkg)
+            }
+        )
+    }
+
     private fun loadCamera() {
         cameraPanelState.value = Panel(
             PanelType.CAMERA, 0f, 0f, 1f, 1f,

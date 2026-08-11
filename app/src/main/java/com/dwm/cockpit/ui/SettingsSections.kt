@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import com.dwm.cockpit.ui.theme.Dwm
@@ -128,6 +129,35 @@ fun cockpitSection(ui: SettingsUi, a: SettingsActions): List<@Composable () -> U
             SettingsRow("CarPlay app", ui.carplay) { SettingsButton("Pick", a.pickCarplay) }
             SettingsRow("Show the favourites grid") { SettingsSwitch(ui.favGrid, a.setFavGrid) }
             SettingsRow("Favourites") { SettingsButton("Manage", a.manageFavourites) }
+        }
+    },
+    {
+        SettingsGroup("App in the box") {
+            SettingsRow("Live app", ui.stageApp) {
+                Row(horizontalArrangement = Arrangement.spacedBy(DwmSpace.s)) {
+                    SettingsButton("Pick", a.pickStageApp)
+                    SettingsButton("None", a.clearStageApp)
+                }
+            }
+            SettingsRow("Status", ui.stageStatus) {}
+            // The one number v0.29 got wrong. It hid the system caption by inflating the
+            // launch rect by a hardcoded 32dp, which overhung the vehicle bar when the
+            // guess ran long and cropped the app when it ran short. This walks the mask
+            // against the real window instead of predicting it.
+            SettingsRow(
+                "Title bar cover",
+                "Raise until the system's own title bar is hidden, lower until the app " +
+                    "is not clipped."
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(DwmSpace.s),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DwmText(ui.stageCaption, style = DwmType.body, color = Dwm.colors.muted)
+                    SettingsButton("Less", { a.nudgeCaption(-2) })
+                    SettingsButton("More", { a.nudgeCaption(2) })
+                }
+            }
         }
     },
     {

@@ -1,7 +1,7 @@
 {
-    "versionCode":  53,
-    "versionName":  "0.34.0",
-    "tag":  "v0.34.0",
+    "versionCode":  54,
+    "versionName":  "0.35.0",
+    "tag":  "v0.35.0",
     "apk":  "app-release.apk",
-    "notes":  "Dashboard camera can be rotated. Settings \u003e Vehicle \u003e Cameras \u003e Rotation, then try Picture fit = Fit if it is still cropped."
+    "notes":  "One live app in the box. Settings \u003e Cockpit \u003e App in the box \u003e Pick. Needs Developer options \u003e Force activities to be resizable. Use Title bar cover to hide the system title bar."
 }

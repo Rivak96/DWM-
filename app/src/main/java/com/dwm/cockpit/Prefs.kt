@@ -48,6 +48,28 @@ object Prefs {
     fun camId(c: Context): String? = sp(c).getString("cam_id", null)
     fun setCamId(c: Context, v: String?) = sp(c).edit().putString("cam_id", v).apply()
 
+    // ---- the stage: one live app in the home screen's box --------------------
+
+    /** Package hosted in the box, or null for the app grid. See [LaunchEngine.launchInBox]. */
+    fun stagePkg(c: Context): String? = sp(c).getString("stage_pkg", null)
+    fun setStagePkg(c: Context, v: String?) = sp(c).edit().putString("stage_pkg", v).apply()
+
+    /**
+     * Height of the system caption bar to mask, in dp.
+     *
+     * **Nudged, never guessed.** v0.29 hid the caption by inflating the launch rect by a
+     * hardcoded 32 dp; it overhung the vehicle bar when the guess ran long and cropped the
+     * app when it ran short, and there was no way to correct it without a release. 32 is
+     * only where the control starts — AOSP's own `decor_caption_title_height` — and
+     * Settings → Cockpit can walk it to whatever this ROM actually draws, against the real
+     * window, in the van. Same shape as [camTrim], for the same reason.
+     */
+    fun captionDp(c: Context) = sp(c).getInt("caption_dp", 32)
+    fun setCaptionDp(c: Context, v: Int) =
+        sp(c).edit().putInt("caption_dp", v.coerceIn(0, 96)).apply()
+
+    fun captionPx(c: Context) = Ui.dp(c, captionDp(c))
+
     /** Preview rotation, 0/90/180/270. Analog inputs often arrive on their side. */
     fun camRotation(c: Context) = sp(c).getInt("cam_rot", 0)
     fun setCamRotation(c: Context, v: Int) =

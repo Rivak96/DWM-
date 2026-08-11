@@ -1,5 +1,6 @@
 package com.dwm.cockpit.ui
 
+import android.graphics.Rect
 import android.view.View
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
@@ -30,7 +31,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import com.dwm.cockpit.Panel
 import com.dwm.cockpit.R
@@ -44,6 +50,7 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * The cockpit.
@@ -138,9 +145,20 @@ fun CockpitHome(
     wallpaperDim: Float = 0.30f,
     /** Open an app the ordinary way — a plain fullscreen `startActivity`. */
     onOpenFullscreen: (pkg: String) -> Unit = {},
-    drawnView: (Panel) -> View? = { null }
+    drawnView: (Panel) -> View? = { null },
+    /**
+     * Label of the app hosted live in the box, or null for the app grid.
+     *
+     * The box is a *reservation* when this is set: the real app is a freeform window
+     * floating above this screen, so what matters here is the rectangle, not the content.
+     */
+    stage: String? = null,
+    /** The box's rect in screen pixels — the launch bounds. See [com.dwm.cockpit.LaunchEngine.launchInBox]. */
+    onStageBounds: (Rect) -> Unit = {}
 ) {
     val colors = Dwm.colors
+    val inspecting = LocalInspectionMode.current
+    val rootView = LocalView.current.rootView
     val head by vehicle.head
     val drive by vehicle.drive
     val body by vehicle.body
@@ -203,36 +221,61 @@ fun CockpitHome(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
+                            .then(
+                                // Only a stage needs its rect measured, and only off the
+                                // renderer: under LocalInspectionMode there is no window to
+                                // take a screen position from, and a golden must never call
+                                // back into the activity.
+                                if (stage != null && !inspecting) Modifier.onGloballyPositioned {
+                                    onStageBounds(it.screenRect(rootView))
+                                } else Modifier
+                            )
                     ) {
-                        Column(Modifier.fillMaxSize()) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                CardLabel("Apps")
-                                Spacer(Modifier.weight(1f))
+                        if (stage != null) {
+                            // Deliberately near-empty. The live window covers this card
+                            // entirely, so anything drawn here is invisible in normal use —
+                            // it is what shows if the app is slow to appear or refuses to
+                            // start, which is why it names the app rather than being blank.
+                            // The title and the full-screen control live in StageChrome's
+                            // mask, the one surface drawn *above* the window.
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 DwmText(
-                                    "All apps",
+                                    stage,
                                     style = DwmType.label,
-                                    color = colors.muted,
-                                    modifier = Modifier
-                                        .clip(DwmShapes.small)
-                                        .clickable(onClick = actions.apps)
-                                        .padding(
-                                            horizontal = DwmSpace.m,
-                                            vertical = DwmSpace.s
-                                        )
+                                    color = colors.muted
                                 )
                             }
+                        } else {
+                            Column(Modifier.fillMaxSize()) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    CardLabel("Apps")
+                                    Spacer(Modifier.weight(1f))
+                                    DwmText(
+                                        "All apps",
+                                        style = DwmType.label,
+                                        color = colors.muted,
+                                        modifier = Modifier
+                                            .clip(DwmShapes.small)
+                                            .clickable(onClick = actions.apps)
+                                            .padding(
+                                                horizontal = DwmSpace.m,
+                                                vertical = DwmSpace.s
+                                            )
+                                    )
+                                }
 
-                            Spacer(Modifier.height(DwmSpace.l))
+                                Spacer(Modifier.height(DwmSpace.l))
 
-                            AppGrid(
-                                apps = allApps,
-                                onLaunch = onOpenFullscreen,
-                                onAppMenu = actions.appMenu,
-                                onWallpaper = false
-                            )
+                                AppGrid(
+                                    apps = allApps,
+                                    onLaunch = onOpenFullscreen,
+                                    onAppMenu = actions.appMenu,
+                                    onWallpaper = false
+                                )
+                            }
                         }
                     }
 
@@ -365,4 +408,24 @@ private fun TopStrip(
             )
         )
     }
+}
+
+/**
+ * This composable's bounds in **screen** pixels.
+ *
+ * `boundsInWindow()` is measured from the window's origin, but a freeform launch rect is
+ * absolute, so the window's own position on screen has to be added. The offset is taken
+ * from the **root** view rather than the `ComposeView`, so it is the window's origin and
+ * not the composition's — using the ComposeView double-counts any inset between them.
+ */
+private fun LayoutCoordinates.screenRect(root: View): Rect {
+    val b = boundsInWindow()
+    val loc = IntArray(2)
+    root.getLocationOnScreen(loc)
+    return Rect(
+        loc[0] + b.left.roundToInt(),
+        loc[1] + b.top.roundToInt(),
+        loc[0] + b.right.roundToInt(),
+        loc[1] + b.bottom.roundToInt()
+    )
 }

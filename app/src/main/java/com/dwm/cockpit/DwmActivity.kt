@@ -28,6 +28,31 @@ abstract class DwmActivity : ComponentActivity() {
         return false
     }
 
+    /**
+     * Whether this screen must hide the home screen's live stage window.
+     *
+     * A freeform window floats **above** fullscreen activities, so a DWM screen starting
+     * does not cover it — the app drawer would otherwise come up with a live app punched
+     * through the middle of it. [StageChrome.curtain] is a fullscreen overlay that does
+     * cover it, and every DWM screen raises it except the home screen that owns the stage.
+     *
+     * Driven from `onStart`/`onStop` and deliberately **not** from `onPause`: on API 29
+     * multi-window only the focused activity is resumed, so merely touching the stage app
+     * pauses `HomeActivity` — a pause-driven curtain would black the app out the moment you
+     * tried to use it.
+     */
+    protected open val coversStage: Boolean get() = true
+
+    override fun onStart() {
+        super.onStart()
+        if (coversStage) StageChrome.curtain(this, true)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (coversStage) StageChrome.curtain(this, false)
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) goImmersive()

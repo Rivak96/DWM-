@@ -27,6 +27,11 @@ IMG_*.png
 # Same call as the declined Sketchfab model — unverifiable licence in a public repo.
 ex *.png
 
+# The stock launcher hosting live CarPlay, which is what proved the freeform route in
+# v0.35.0. Same call again: it is a watermarked product photo from a reseller's listing,
+# so it is evidence to work from and not ours to republish.
+Picsart-*.webp
+
 # A whole second copy of this project, extracted from "DWM context.zip" during the
 # 2026-08-08 machine move. Its one unique file, "context DWM.md", is merged into
 # CLAUDE.md. Never track it: it carries a duplicate release keystore, and the nested
