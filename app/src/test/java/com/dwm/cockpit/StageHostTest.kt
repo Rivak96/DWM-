@@ -95,23 +95,39 @@ class StageHostTest {
     }
 
     /**
-     * The flicker reported from the van: "sometimes it flickers, or kinda resizes then
-     * resizes back."
+     * A window cannot be repositioned any other way, so a box that ends up somewhere else
+     * owes a relaunch.
      *
-     * A moved box used to relaunch, on the reasoning that a window cannot be repositioned
-     * any other way. But bounds arrive on every layout pass and `goImmersive()` runs from
-     * `onWindowFocusChanged`, so touching the live app and then touching DWM could move the
-     * rect by an inset and move it straight back — two relaunches, which is exactly what a
-     * resize-and-resize-back looks like. The box does not move on this deck.
+     * v0.37.0 dropped this, keying the launch on the package alone to stop bounds churn
+     * relaunching the window. It went too far: the box reports its rect several times while
+     * the screen settles — the first pass runs before `goImmersive()` has taken the system
+     * bars out of the window — so the **unsettled** rect won permanently and the window was
+     * placed against a box that was not where it ended up. The owner saw an empty box with
+     * its own placeholder in it.
+     *
+     * Churn is answered by `HomeActivity` waiting for the layout to stop moving before it
+     * asks, which is a question about time rather than about state and does not belong here.
      */
     @Test
-    fun `a moved box moves the mask but never relaunches`() {
+    fun `a box that settled somewhere else relaunches, and the mask follows`() {
         goLive()
         StageHost.launchNeeded()
         val moved = Rect(40, 120, 1400, 820)
         StageHost.setBounds(moved)
-        assertNull("bounds churn must not relaunch", StageHost.launchNeeded())
-        assertEquals("the mask still follows the box", moved, chrome.mask)
+        assertEquals("com.zjinnova.zlink" to moved, StageHost.launchNeeded())
+        assertEquals(moved, chrome.mask)
+    }
+
+    /**
+     * A committed launch that never went out must not leave the box empty until the user
+     * happens to leave home and come back.
+     */
+    @Test
+    fun `a refused launch is owed again`() {
+        goLive()
+        assertEquals("com.zjinnova.zlink" to box, StageHost.launchNeeded())
+        StageHost.launchFailed()
+        assertEquals("com.zjinnova.zlink" to box, StageHost.launchNeeded())
     }
 
     @Test

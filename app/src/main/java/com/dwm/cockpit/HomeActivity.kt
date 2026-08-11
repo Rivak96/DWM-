@@ -17,6 +17,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.webkit.WebView
@@ -206,11 +207,27 @@ class HomeActivity : DwmActivity() {
         // layout resumes, which left the stage header sitting over an empty card. [StageHost]
         // is process-global, so the box's last rect is still here even after a recreate; on
         // a genuine cold start it is null and the layout pass does the first launch.
-        launchStageIfNeeded()
+        scheduleStageLaunch()
 
         if (!didAutoLoad && Prefs.autoLoad(this)) {
             didAutoLoad = true
-            handler.postDelayed({ LaunchEngine.launchLayout(this, Prefs.panels(this)) }, 700)
+            // ...but never while the box is a live app.
+            //
+            // The saved layout's base app opens *fullscreen over the launcher*, and getting
+            // there goes through `launchFullscreen`, which evicts the stage. So 700ms after
+            // every cold start — and installing an APK is a cold start — the box the owner
+            // had just configured came up empty and stayed empty, because `evicted` is only
+            // cleared by leaving home and returning. That is the "select carplay, click
+            // home, it shows Tlink5 as text and the app doesn't open at all" report.
+            //
+            // The two features are alternatives, not layers: the stage IS this screen's live
+            // app. A second one fullscreen on top of it is the legacy dashboard mode, and it
+            // only makes sense when the box is the app grid.
+            if (StageHost.stagePkg == null) {
+                handler.postDelayed({ LaunchEngine.launchLayout(this, Prefs.panels(this)) }, 700)
+            } else {
+                Log.i(TAG_STAGE, "autoload skipped — the box is a live app")
+            }
         }
         if (Prefs.overlayOnStart(this) && canOverlay()) OverlayService.start(this)
         if (Prefs.vehicleStrip(this) && canOverlay() && !VehicleStripService.isRunning) {
@@ -240,6 +257,8 @@ class HomeActivity : DwmActivity() {
         // resumed, so *touching the stage app* pauses this activity — reporting home
         // hidden there would strip the window's header the instant you tried to use it.
         StageHost.setHomeVisible(false)
+        // A launch waiting on the settle timer must not fire into a screen that has gone.
+        handler.removeCallbacks(stageLaunch)
     }
 
     // ---- actions ---------------------------------------------------------
@@ -453,22 +472,44 @@ class HomeActivity : DwmActivity() {
     }
 
     /**
-     * The box reported where it is.
+     * The box reported where it is. Fires on every layout pass, so it must be cheap.
      *
-     * Fires on every layout pass, so it must be cheap and idempotent — [StageHost] owns
-     * both of those guarantees. `launchNeeded()` commits to what it returns, so asking
-     * repeatedly cannot relaunch repeatedly, and a rect that merely *moved* is no longer a
-     * reason to relaunch at all.
+     * The rect is handed straight to [StageHost], but the *launch* is deferred — see
+     * [scheduleStageLaunch]. Launching from here directly is what produced both stage bugs
+     * the owner has reported: launching on every pass relaunched the window repeatedly
+     * (the flicker), and launching on the first pass only pinned the window to a rect the
+     * screen had not settled into yet.
      */
     private fun onStageBounds(bounds: Rect) {
         StageHost.setBounds(bounds)
-        launchStageIfNeeded()
+        scheduleStageLaunch()
     }
 
-    /** The only place `launchInBox` is called from. Safe to ask as often as you like. */
-    private fun launchStageIfNeeded() {
-        StageHost.launchNeeded()?.let { (pkg, rect) ->
-            LaunchEngine.launchInBox(this, pkg, rect)
+    /**
+     * Launch the stage once the box has stopped moving.
+     *
+     * The screen reports its layout several times while it settles — the first pass runs
+     * before `goImmersive()` has taken the system bars out of the window, so the box's rect
+     * changes underneath us. Every report restarts this timer, so a burst of passes results
+     * in exactly one launch, at the rect that was still true when the dust cleared.
+     *
+     * That is the honest place for this. [StageHost] answers "is a launch owed", which is a
+     * question about state; "has the screen finished moving" is a question about time, and
+     * belongs to the activity that owns the layout.
+     */
+    private fun scheduleStageLaunch() {
+        handler.removeCallbacks(stageLaunch)
+        handler.postDelayed(stageLaunch, STAGE_SETTLE_MS)
+    }
+
+    private val stageLaunch = Runnable {
+        val (pkg, rect) = StageHost.launchNeeded() ?: return@Runnable
+        Log.i(TAG_STAGE, "launchInBox $pkg at $rect")
+        if (!LaunchEngine.launchInBox(this, pkg, rect)) {
+            // No launch intent, or the start threw. Un-commit, or the box sits empty until
+            // the user leaves home and comes back.
+            Log.w(TAG_STAGE, "launchInBox refused $pkg — will retry")
+            StageHost.launchFailed()
         }
     }
 
@@ -726,5 +767,22 @@ class HomeActivity : DwmActivity() {
         private var didUpdateCheck = false
         private const val REQ_PERMS = 301
 
+        /**
+         * `adb logcat -s DwmStage` — the whole live-app path in one filter.
+         *
+         * DWM has never had diagnostic output, and the stage is the one part of it that
+         * cannot be judged from a screenshot: whether a launch went out at all, and at what
+         * rect, is invisible on the glass and has now cost two releases of guessing.
+         */
+        private const val TAG_STAGE = "DwmStage"
+
+        /**
+         * How long the box has to hold still before its rect is treated as final.
+         *
+         * Long enough to cover the layout passes between `setContent` and `goImmersive()`
+         * taking the system bars out of the window; short enough that the app appears in
+         * the box without the delay reading as a stall.
+         */
+        private const val STAGE_SETTLE_MS = 250L
     }
 }

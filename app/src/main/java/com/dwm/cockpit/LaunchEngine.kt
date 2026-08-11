@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.WindowManager
 import java.lang.reflect.Method
 
@@ -53,6 +54,9 @@ import java.lang.reflect.Method
  * [launchFullscreen] is unchanged and is still what every ordinary app launch uses.
  */
 object LaunchEngine {
+
+    /** Shared with `HomeActivity` — `adb logcat -s DwmStage` is the whole live-app path. */
+    private const val TAG = "DwmStage"
 
     /** `WindowConfiguration.WINDOWING_MODE_FREEFORM` — hidden, and stable since API 28. */
     private const val WINDOWING_MODE_FREEFORM = 5
@@ -148,6 +152,10 @@ object LaunchEngine {
      */
     fun evictStage(c: Context, except: String? = null) {
         val stage = StageHost.stagePkg ?: return
+        // Logged because an eviction is invisible: the box simply goes back to showing its
+        // own placeholder, and nothing on screen says who asked for that. One of these
+        // firing unnoticed from the startup autoload is what emptied the box in v0.38.0.
+        Log.i(TAG, "evict $stage (for ${except ?: "a DWM screen"})")
         StageHost.evict()
         if (stage == except) return
         val back = c.packageManager.getLaunchIntentForPackage(stage) ?: return
@@ -176,18 +184,26 @@ object LaunchEngine {
 
         allowHiddenApis()
         val opts = ActivityOptions.makeBasic()
+        var freeform = false
         // Hidden since it was added, and greylisted, hence [allowHiddenApis] above. If it
         // fails we still pass the bounds: on a ROM with freeform already the default for
         // bounded launches that is enough, and a fullscreen app is a better failure than
         // no app.
-        runCatching {
+        freeform = runCatching {
             ActivityOptions::class.java
                 .getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType)
                 .invoke(opts, WINDOWING_MODE_FREEFORM)
-        }
+        }.isSuccess
         opts.launchBounds = bounds
 
-        return runCatching { c.startActivity(i, opts.toBundle()) }.isSuccess
+        val started = runCatching { c.startActivity(i, opts.toBundle()) }
+        // The three things that decide whether an app lands in the box, none of which is
+        // visible on the glass: did the hidden windowing-mode call survive the blacklist,
+        // did the start go out, and what rect did it go out with. Without this the only
+        // symptom of any of them failing is "the app doesn't open at all".
+        Log.i(TAG, "launchInBox $pkg bounds=$bounds freeform=$freeform started=${started.isSuccess}")
+        started.exceptionOrNull()?.let { Log.w(TAG, "launchInBox $pkg threw", it) }
+        return started.isSuccess
     }
 
     /**

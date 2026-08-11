@@ -41,8 +41,9 @@ import android.graphics.Rect
  *   while home is in front and the box has reported a rect.
  * - It stays down once the stage is [evict]ed, which is what happens when DWM sends the
  *   user anywhere else.
- * - A **launch** is owed when the stage app changes or when home comes back — never
- *   because the box moved. See [launchNeeded].
+ * - A **launch** is owed when the stage app changes, when home comes back, or when the box
+ *   is somewhere the window is not. See [launchNeeded] — and note that *when to ask* is
+ *   `HomeActivity`'s problem, not this object's.
  */
 object StageHost {
 
@@ -69,17 +70,22 @@ object StageHost {
     private var evicted = false
 
     /**
-     * The package the window was last actually started for, or null when a launch is owed.
+     * What the window was last actually started for, or null when a launch is owed.
      *
-     * The rect it was started *for* is deliberately not remembered. It used to be, and a
-     * changed rect used to force a relaunch on the reasoning that a window cannot be
-     * repositioned any other way — but bounds are reported on every layout pass, and
-     * `goImmersive()` runs from `onWindowFocusChanged`, so touching the live app and then
-     * touching DWM could move the rect by an inset and move it straight back. Each move
-     * relaunched the window. That is the "flickers, or kinda resizes then resizes back"
-     * reported from the van, and the box does not move on this deck anyway.
+     * The rect is part of it, and briefly was not — v0.37.0 keyed the launch on the package
+     * alone, to stop bounds churn relaunching the window. That went too far. The box reports
+     * its rect several times while the screen settles (the first pass runs before
+     * `goImmersive()` has taken the system bars out of the layout), and dropping the rect
+     * from the comparison meant the **first, unsettled** rect won permanently: the window
+     * was placed against a box that was not where it ended up, and the box came up showing
+     * its own placeholder. Which is what the owner saw.
+     *
+     * Churn is handled where it actually belongs — `HomeActivity` coalesces the burst of
+     * layout passes and only asks once things have stopped moving, so the rect that gets
+     * here is the settled one.
      */
     private var launchedPkg: String? = null
+    private var launchedFor: Rect? = null
 
     private var maskUp = false
 
@@ -99,6 +105,7 @@ object StageHost {
     fun setStage(p: String?, label: String) {
         if (p != pkg) {
             launchedPkg = null
+            launchedFor = null
             evicted = false
         }
         pkg = p
@@ -128,6 +135,7 @@ object StageHost {
         if (visible) {
             evicted = false
             launchedPkg = null
+            launchedFor = null
         }
         apply()
     }
@@ -141,7 +149,21 @@ object StageHost {
     fun evict() {
         evicted = true
         launchedPkg = null
+        launchedFor = null
         apply()
+    }
+
+    /**
+     * The launch [launchNeeded] committed to never went out — un-commit it.
+     *
+     * `launchInBox` returns false when the app has no launch intent or the start threw, and
+     * a committed launch that never happened is a box that stays empty until the user
+     * leaves home and comes back. Rare, and exactly the kind of thing that gets reported as
+     * "it just doesn't work".
+     */
+    fun launchFailed() {
+        launchedPkg = null
+        launchedFor = null
     }
 
     val stagePkg: String? get() = pkg
@@ -158,8 +180,9 @@ object StageHost {
         val p = pkg ?: return null
         val b = bounds ?: return null
         if (evicted || !homeVisible || b.isEmpty) return null
-        if (launchedPkg == p) return null
+        if (launchedPkg == p && launchedFor == b) return null
         launchedPkg = p
+        launchedFor = Rect(b)
         return p to Rect(b)
     }
 
@@ -182,6 +205,7 @@ object StageHost {
         homeVisible = false
         evicted = false
         launchedPkg = null
+        launchedFor = null
         maskUp = false
     }
 }

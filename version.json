@@ -1,7 +1,7 @@
 {
-    "versionCode":  57,
-    "versionName":  "0.38.0",
-    "tag":  "v0.38.0",
+    "versionCode":  58,
+    "versionName":  "0.39.0",
+    "tag":  "v0.39.0",
     "apk":  "app-release.apk",
-    "notes":  "The clock strip above the cards is gone - the clock, the date and the CAN dot moved into the empty ends of the bottom bar, and the app box and the right-hand column are 60dp taller for it."
+    "notes":  "The live app opens in the box again. The startup autoload was evicting it 700ms after every cold start, and the launch was pinned to the box\u0027s rect before the screen had settled."
 }
