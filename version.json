@@ -1,7 +1,7 @@
 {
-    "versionCode":  64,
-    "versionName":  "0.45.0",
-    "tag":  "v0.45.0",
+    "versionCode":  65,
+    "versionName":  "0.46.0",
+    "tag":  "v0.46.0",
     "apk":  "app-release.apk",
-    "notes":  "The dump button can now post to a secret gist on your own GitHub account. Settings \u003e About \u003e GitHub \u003e Sign in shows a code; type it at github.com/login/device on your phone once and never again. Until you do, dumps still go to an anonymous paste exactly as before."
+    "notes":  "The nav bar is now only as wide as the app box, like the readings strip. Nothing spans the full width any more, so the right-hand column runs from the top of the screen to the bottom and the camera reaches the floor. The space that frees goes to the card above it, which is being held for the 360 feed."
 }

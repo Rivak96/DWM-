@@ -59,17 +59,20 @@ import kotlin.math.roundToInt
  *  │  app, at the app's own aspect         │                             │
  *  │                                       │                             │
  *  ├───────────────────────────────────────┤                             │
- *  │  ♪  ▲  ⊕  ▣   favourites dock         ├─────────────────────────────┤
- *  ├───────────────────────────────────────┤                             │
- *  │ speed gear coolant volts fuel rpm ··· │  CAMERA  16:9               │
- *  ├───────────────────────────────────────┴─────────────────────────────┤
- *  │ 07:04  Home  Apps  Overlays  Bluetooth  Wi-Fi  Settings    ▸ R ● CAN │
- *  └─────────────────────────────────────────────────────────────────────┘
+ *  │  ♪  ▲  ⊕  ▣   favourites dock         │                             │
+ *  ├───────────────────────────────────────┼─────────────────────────────┤
+ *  │ speed gear coolant volts fuel rpm ··· │                             │
+ *  ├───────────────────────────────────────┤  CAMERA  16:9               │
+ *  │ 07:04  Home Apps Overlays … ▸ R ● CAN │                             │
+ *  └───────────────────────────────────────┴─────────────────────────────┘
  * ```
  *
- * The readings strip is **as wide as the box, not as wide as the screen**. That is the
- * whole reason the right-hand rail reaches the nav bar, and it is why the camera is where
- * it is rather than 116dp higher.
+ * **Nothing spans the full width.** The readings strip and the nav bar are both only as
+ * wide as the box, which is the single idea behind this layout: the right rail owns an
+ * unbroken column from the top margin to the bottom one, so the camera reaches the floor
+ * instead of stopping 200dp short of it. Both bands used to run edge to edge and carry
+ * their last items under the rail — the one part of the panel with something better to do
+ * with the space.
  *
  * ### The app box, and the three things it has been
  *
@@ -111,19 +114,25 @@ import kotlin.math.roundToInt
  *
  * ### The budget, at the deck's 1600×1000dp
  *
- * 88dp of nav bar and a 12dp frame top and bottom leave **876dp** for the content row. The
- * two columns spend it differently, which is the point of splitting the readings out:
+ * A 12dp frame top and bottom leaves **976dp** for the content row, and both columns get
+ * all of it. The left one spends it on four stacked bands; the right one on two:
  *
  * | | left (1047dp) | right (517dp) |
  * |---|---|---|
- * | | box 589 (16:9) | 360 slot 573 |
- * | | dock 159 | camera 291 (16:9) |
- * | | readings 104 | |
+ * | | box 589 (16:9) | 360 slot 673 |
+ * | | dock 159 | |
+ * | | readings 104 | camera 291 (16:9) |
+ * | | nav bar 88 | |
  *
- * Everything above was measured at a 12dp frame — see [DwmGrid]. The camera was 380×214
- * before this and the readings ran the full 1568dp; the rail went to four columns and the
- * strip came in to the box's width in the same change, because neither is worth much
- * alone.
+ * The camera's bottom edge and the nav bar's are the same line. **The camera is 291dp
+ * because it is 16:9 against a 517dp column, and that is the only thing that sets it** —
+ * it reaches the floor now, but the height it gained went to the 360 slot above it, since
+ * a 16:9 card cannot grow downward without growing sideways. Making the *picture* bigger
+ * means [DwmGrid.span] going to five columns, which costs the box ~130dp of width. That
+ * trade has been offered; four is where it stands.
+ *
+ * For reference, before any of this: camera 380×214, readings and nav bar both full-bleed
+ * at 1568dp, and a 16dp frame.
  */
 
 /**
@@ -357,6 +366,63 @@ fun CockpitHome(
                             .fillMaxWidth()
                             .height(DwmSize.vehicleBar)
                     )
+
+                    // The nav bar is cropped to the box as well, and for the same reason:
+                    // it was the last full-width band holding the right rail off the floor.
+                    // With both it and the readings inside this column, the rail runs the
+                    // entire height of the panel and the camera reaches the bottom.
+                    //
+                    // It costs the bar width. Six items divide `maxWidth - barEdgeSlot * 2`,
+                    // which was ~187dp each across 1568dp and is ~94dp each across 1047 —
+                    // clear of [DwmSize.touchTarget] but just under the 96dp
+                    // [DwmSize.touchTargetMoving] figure that sized this bar in the first
+                    // place. Checked in the goldens rather than predicted. If it ever needs
+                    // to give, the honest lever is [DwmSize.barEdgeSlot]: two 240dp slots
+                    // are 46% of the cropped bar, and the clock does not need all of it.
+                    //
+                    // It is no longer full-bleed. The column's bottom padding lifts it
+                    // [DwmGrid.gutter] off the screen edge, which is what puts its baseline
+                    // on the camera's.
+                    Spacer(Modifier.height(DwmGrid.gutter))
+                    SystemBar(
+                        selected = Bar.HOME,
+                        overlaysOn = overlaysOn,
+                        actions = actions,
+                        onHome = {}
+                    ) {
+                        val turn = body.turnSignal
+                        if (turn != null && turn != 0) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_dwm_chevron),
+                                contentDescription = "Indicator",
+                                tint = colors.ok,
+                                modifier = Modifier
+                                    .size(DwmSize.icon)
+                                    .graphicsLayer { rotationZ = if (turn == 1) 180f else 0f }
+                            )
+                            Spacer(Modifier.width(DwmSpace.l))
+                        }
+
+                        if (body.reverse) {
+                            DwmText("R", style = DwmType.value, color = colors.warn)
+                            Spacer(Modifier.width(DwmSpace.l))
+                        }
+
+                        // Long-press sends a diagnostics dump. Deliberately here and not
+                        // only in Settings: the v0.36.0 white screen made Settings and the
+                        // drawer untouchable, and that is exactly the state someone needs a
+                        // dump from. Tap still opens Settings, so nothing is taken away.
+                        CanDot(
+                            level = head.canLevel,
+                            demo = head.demo,
+                            modifier = Modifier.combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = actions.settings,
+                                onLongClick = actions.sendDump
+                            )
+                        )
+                    }
                   }
 
                     Spacer(Modifier.width(DwmGrid.gutter))
@@ -405,56 +471,10 @@ fun CockpitHome(
             }
         }
 
-        // The vehicle bar used to sit here, full width, directly on the nav bar. It is
-        // inside the left column now — see the comment there. There is no spacer left in
-        // its place either: the content column already pads its bottom by
-        // [DwmGrid.gutter], so the bar keeps the same gap above the nav bar it always had,
-        // and the camera's bottom edge lands on the same line as the bar's.
-
-        // The clock, the date and the vehicle's indicators used to sit in a 48dp
-        // full-width strip above the cards, which — with its spacer — spent 60dp of a
-        // 1000dp panel on three small things that needed none of the width. They live in
-        // the system bar's own dead ends now and the boxes are 60dp taller for it. See
-        // [SystemBar] and [com.dwm.cockpit.ui.theme.DwmSize.barEdgeSlot].
-        SystemBar(
-            selected = Bar.HOME,
-            overlaysOn = overlaysOn,
-            actions = actions,
-            onHome = {}
-        ) {
-            val turn = body.turnSignal
-            if (turn != null && turn != 0) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_dwm_chevron),
-                    contentDescription = "Indicator",
-                    tint = colors.ok,
-                    modifier = Modifier
-                        .size(DwmSize.icon)
-                        .graphicsLayer { rotationZ = if (turn == 1) 180f else 0f }
-                )
-                Spacer(Modifier.width(DwmSpace.l))
-            }
-
-            if (body.reverse) {
-                DwmText("R", style = DwmType.value, color = colors.warn)
-                Spacer(Modifier.width(DwmSpace.l))
-            }
-
-            // Long-press sends a diagnostics dump. Deliberately here and not only in
-            // Settings: the v0.36.0 white screen made Settings and the drawer untouchable,
-            // and that is exactly the state someone needs a dump from. Tap still opens
-            // Settings, so nothing is taken away.
-            CanDot(
-                level = head.canLevel,
-                demo = head.demo,
-                modifier = Modifier.combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = actions.settings,
-                    onLongClick = actions.sendDump
-                )
-            )
-        }
+        // Both bands that used to live here — the readings and the nav bar — are inside
+        // the left column now. Nothing spans the full width any more, which is the whole
+        // point: the right rail owns its strip of the panel from the top margin to the
+        // bottom one, and the camera ends where the nav bar ends.
     }
     }
 }

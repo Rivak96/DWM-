@@ -312,6 +312,15 @@ blind:
 
 ## Open issues
 
+- **The ROM remembers freeform bounds per task, and that outlives DWM's stage setting.**
+  The owner set zlink as the stage, hand-resized the window while fighting it, then cleared
+  the stage — and zlink still opens in the hand-drawn rect, with `stage_pkg` unset and the
+  box showing the app grid behind it. So "the app is in the box" does **not** imply DWM put
+  it there, and a photo of a live app in the box proves nothing about the stage. Check
+  `Prefs.stagePkg` in a dump before assuming. It also means a hand-resized rect can be
+  *smaller* than the box, which shows as an unexplained band of empty card above the app —
+  reported as "a huge margin at the top". `Settings → Cockpit → Show box outline` settles
+  which rect is which in one photo.
 - **The stage has never been checked against `dumpsys`.** Everything about how this ROM
   treats a freeform launch is still inferred. Four questions, all answerable in one sitting
   on the cable: does it honour the launch bounds; is the caption drawn *inside* the
