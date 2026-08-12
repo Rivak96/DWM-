@@ -252,12 +252,23 @@ How it gets to you, in order (`DumpFlow.kt`):
    it and **the owner has to tell you nothing**.
 3. Otherwise `dpaste.com`, and the owner reads you the short URL. Works with no setup at all.
 
-**`GitHub.CLIENT_ID` is currently blank**, so only the dpaste path runs. Filling it needs
-the owner to register an OAuth app (github.com/settings/developers → New OAuth App, with
-**"Enable Device Flow" ticked** — it is off by default and silently breaks the whole flow)
-and send the Client ID. A client ID is public by design; **a client secret must never be
-added** — this repo and every release APK are public, and `GitHubTest` fails the build if a
-field with "secret" in its name appears.
+**`GitHub.CLIENT_ID` is filled in as of v0.45.0** (`Ov23li9H6NMRyQH4lbA9`, on the owner's
+account, `gist` scope only), so the gist path is live. It was blank for eleven releases,
+which also made Settings → About's "Sign in" button dead UI that could only ever print "No
+GitHub client ID is built into this version yet" — the owner read that as the dump button
+being broken, which it never was.
+
+**The deck must be signed in as `Rivak96`** for `gh api /gists --jq '.[0]'` to find the
+dump. Signing the deck into any other account silently costs you the whole benefit: the
+upload still works and you still have to be told the URL.
+
+A client ID is public by design; **a client secret must never be added** — this repo and
+every release APK are public, and `GitHubTest` fails the build if a field with "secret" in
+its name appears. **"Enable Device Flow" must stay ticked** on the OAuth app; it is off by
+default and its absence only bites at the last step, where the code is shown and then never
+accepted. `curl -X POST https://github.com/login/device/code -H "Accept: application/json"
+-d "client_id=...&scope=gist"` returns a real `user_code` when it is on — check that before
+debugging anything else.
 
 What a dump contains: `VehicleProbe.header`, the stage section (configured package, the
 three freeform settings, overlay permission, caption height, and `StageHost.snapshot()`),

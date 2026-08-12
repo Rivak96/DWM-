@@ -1,7 +1,7 @@
 {
-    "versionCode":  63,
-    "versionName":  "0.44.0",
-    "tag":  "v0.44.0",
+    "versionCode":  64,
+    "versionName":  "0.45.0",
+    "tag":  "v0.45.0",
     "apk":  "app-release.apk",
-    "notes":  "The readings strip is now only as wide as the app box, so the right-hand column runs all the way down and the camera comes with it. The camera is also wider: the column went from three grid columns to four, which is the only way an aspect-locked feed gets bigger. Borders are down from 16dp to 12dp everywhere."
+    "notes":  "The dump button can now post to a secret gist on your own GitHub account. Settings \u003e About \u003e GitHub \u003e Sign in shows a code; type it at github.com/login/device on your phone once and never again. Until you do, dumps still go to an anonymous paste exactly as before."
 }

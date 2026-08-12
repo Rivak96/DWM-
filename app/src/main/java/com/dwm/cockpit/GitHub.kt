@@ -34,11 +34,23 @@ object GitHub {
     /**
      * The OAuth app's client ID. **Public by design** — see the class comment.
      *
-     * Registered by the owner at github.com/settings/developers → New OAuth App, with
-     * **"Enable Device Flow" ticked** (nothing works without it, and it is off by default).
-     * Blank until then, and [signIn] says so rather than failing at the network.
+     * Registered at github.com/settings/developers → New OAuth App on the owner's account,
+     * scoped to `gist` and nothing else. This is a client *ID*, not a secret: GitHub's docs
+     * state plainly that "the `client_secret` is not needed for the device flow", and
+     * `GitHubTest` fails the build if a field with "secret" in its name ever appears here.
+     *
+     * **"Enable Device Flow" must stay ticked** on the app's settings page. It is off by
+     * default and turning it off does not break anything until the very last step — the deck
+     * still shows the user a code, and the code is simply never accepted. Verified working
+     * before this shipped by POSTing to `login/device/code` and getting a real `user_code`
+     * back; if sign-in ever starts failing at the phone, re-run that check first.
+     *
+     * Blank for eleven releases, which meant the Settings → About "Sign in" button could
+     * only ever produce "No GitHub client ID is built into this version yet" — dead UI that
+     * read as a broken dump button. [signIn] still guards for blank, because a future fork
+     * without its own OAuth app should degrade to the paste rather than to a network error.
      */
-    const val CLIENT_ID = ""
+    const val CLIENT_ID = "Ov23li9H6NMRyQH4lbA9"
 
     private const val UA = "DWM-Cockpit"
 
