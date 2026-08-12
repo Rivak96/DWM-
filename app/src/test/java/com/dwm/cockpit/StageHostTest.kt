@@ -212,6 +212,54 @@ class StageHostTest {
         assertEquals("Waze", chrome.maskTitle)
     }
 
+    /**
+     * The leak that walled the launcher off from its own overlays.
+     *
+     * `StageChrome` draws through the application WindowManager, so its windows outlive the
+     * activity, and `HomeActivity.stageChrome` is one instance per activity. A recreate
+     * built a second chrome and attached it here — and the first one's four opaque,
+     * touch-consuming overlays were orphaned with nothing left to remove them, stacked above
+     * everything drawn later including the floating camera panel.
+     */
+    @Test
+    fun `attaching a new chrome takes the old one down`() {
+        goLive()
+        assertEquals(box, chrome.mask)
+
+        val replacement = FakeChrome()
+        StageHost.attach(replacement)
+
+        assertNull("the replaced chrome must have been told to hide", chrome.mask)
+        assertEquals("and the new one must be drawing", box, replacement.mask)
+    }
+
+    /**
+     * `recreate()` runs `new.onStart` before `old.onDestroy`, so a dying activity's teardown
+     * arrives *after* its replacement has attached. Unguarded, it would strip the live
+     * screen's chrome on behalf of a dead one — the same ordering fault three times over in
+     * v0.35.0.
+     */
+    @Test
+    fun `a dead screen detaching cannot take down the live one`() {
+        goLive()
+        val old = chrome
+        val replacement = FakeChrome()
+        StageHost.attach(replacement)
+        replacement.events.clear()
+
+        StageHost.detach(old)
+
+        assertEquals("the live chrome must be untouched", box, replacement.mask)
+        assertTrue(replacement.events.isEmpty())
+    }
+
+    @Test
+    fun `detaching the current chrome takes its windows down`() {
+        goLive()
+        StageHost.detach(chrome)
+        assertNull(chrome.mask)
+    }
+
     @Test
     fun `an empty box never launches`() {
         StageHost.setStage("com.zjinnova.zlink", "CarPlay")

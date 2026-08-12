@@ -262,6 +262,24 @@ class HomeActivity : DwmActivity() {
         handler.removeCallbacks(stageLaunch)
     }
 
+    /**
+     * Hand back the stage chrome, so its overlay windows die with this activity.
+     *
+     * [StageChrome] draws through the *application* WindowManager, so without this its
+     * windows outlive the activity that owns them and nothing is left holding a reference
+     * to remove them. `stageChrome` is `by lazy` — one per activity instance — so a
+     * recreate used to leak four opaque, touch-consuming overlays every time, stacked above
+     * everything drawn afterwards including the camera overlay panel.
+     *
+     * [StageHost.detach] ignores this if a newer screen has already attached: `recreate()`
+     * runs `new.onStart` before `old.onDestroy`, so this call routinely arrives from a dead
+     * activity after its replacement is live.
+     */
+    override fun onDestroy() {
+        super.onDestroy()
+        StageHost.detach(stageChrome)
+    }
+
     // ---- actions ---------------------------------------------------------
 
     private fun reloadCockpit() {

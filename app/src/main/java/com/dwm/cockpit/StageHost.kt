@@ -89,14 +89,44 @@ object StageHost {
 
     private var maskUp = false
 
+    /**
+     * Take over the drawing, **tearing down whoever had it**.
+     *
+     * The teardown is the whole point and it was missing. [StageChrome] adds its windows
+     * through the *application* WindowManager, so they outlive the activity that built it —
+     * and `HomeActivity.stageChrome` is `by lazy`, one instance per activity. Every recreate
+     * (a scale change, a theme change, any config change the system answers by restarting
+     * the activity) therefore built a second chrome, attached it here, and **orphaned the
+     * first one's four windows with nothing left holding a reference to remove them**.
+     *
+     * They are `PixelFormat.OPAQUE` and touch-consuming, and overlays stack in the order
+     * they were added, so each leaked set sits above everything drawn later — including the
+     * floating camera panel and the vehicle strip. That is a launcher that quietly walls
+     * itself off, one config change at a time.
+     *
+     * Note this cannot clean up windows already orphaned by a build without this fix: the
+     * only reference to them died with the old chrome. Those need the process restarted.
+     */
     fun attach(c: Chrome) {
+        if (chrome === c) { apply(); return }
+        chrome?.hideMask()
+        maskUp = false
         chrome = c
         apply()
     }
 
-    /** Drop everything — the process is going away or the chrome is being replaced. */
-    fun detach() {
-        chrome?.hideMask()
+    /**
+     * Give up the drawing — but only if [c] is still the one doing it.
+     *
+     * The guard is not defensive coding, it is the lifecycle. `recreate()` runs
+     * `new.onStart` **before** `old.onDestroy`, so the dying activity's teardown arrives
+     * after its replacement has already attached; an unguarded detach would tear down the
+     * live screen's chrome on behalf of a dead one. This is the same ordering that produced
+     * three separate faults in v0.35.0 and it will keep producing them.
+     */
+    fun detach(c: Chrome) {
+        if (chrome !== c) return
+        c.hideMask()
         maskUp = false
         chrome = null
     }

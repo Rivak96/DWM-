@@ -1,7 +1,7 @@
 {
-    "versionCode":  60,
-    "versionName":  "0.41.0",
-    "tag":  "v0.41.0",
+    "versionCode":  61,
+    "versionName":  "0.42.0",
+    "tag":  "v0.42.0",
     "apk":  "app-release.apk",
-    "notes":  "Tighter frame: the margins, gutters and card padding drop from 32/24/24dp to 16dp everywhere. The hairline border stays. Every box on the home screen gains width and height."
+    "notes":  "Fixes overlay windows leaking every time the home screen restarted - opaque, touch-eating panels that stacked above the camera overlay. If yours is still dead after updating, reboot the deck once to clear ones already leaked."
 }
