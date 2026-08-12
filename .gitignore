@@ -16,10 +16,13 @@ DWM vehicle scan*.txt
 DWM CAN getters*.txt
 
 # Photos of the deck dropped in for debugging — they show the car interior and
-# are not project files.
+# are not project files. Screenshots of those photos count: the one that prompted
+# v0.44.0 has a live map with the owner's position on it and a reflection of the
+# owner in the glass.
 IMG_*.jpg
 IMG_*.jpeg
 IMG_*.png
+Screenshot *.png
 
 # Reference frames of the stock launcher hosting a live app (the com.dofun.variety
 # lead in CLAUDE.md). Kept locally, never published: they are frames from someone

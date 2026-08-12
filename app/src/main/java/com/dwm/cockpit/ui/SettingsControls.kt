@@ -60,7 +60,7 @@ fun SettingsGroup(
     Column(modifier.fillMaxWidth()) {
         CardLabel(title)
         Spacer(Modifier.height(DwmSpace.m))
-        DwmCard(Modifier.fillMaxWidth(), padding = DwmSpace.l) {
+        DwmCard(Modifier.fillMaxWidth(), padding = DwmSpace.cardPadding) {
             Column(
                 Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(DwmSpace.l),
@@ -233,7 +233,7 @@ fun SettingsSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
 @Composable
 fun DataPanel(text: String, modifier: Modifier = Modifier) {
     val colors = Dwm.colors
-    DwmCard(modifier.fillMaxWidth(), raised = true, padding = DwmSpace.l) {
+    DwmCard(modifier.fillMaxWidth(), raised = true, padding = DwmSpace.cardPadding) {
         DwmText(
             text,
             style = DwmType.data,

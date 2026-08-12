@@ -74,7 +74,7 @@ fun VehicleDiagram(body: BodyState, modifier: Modifier = Modifier) {
     val radius = with(d) { DwmRadius.m.toPx() }
     val pip = with(d) { DwmSpace.s.toPx() }
 
-    DwmCard(modifier = modifier, padding = DwmSpace.l) {
+    DwmCard(modifier = modifier, padding = DwmSpace.cardPadding) {
         Column(Modifier.fillMaxSize()) {
             CardLabel("Vehicle")
 

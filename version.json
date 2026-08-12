@@ -1,7 +1,7 @@
 {
-    "versionCode":  62,
-    "versionName":  "0.43.0",
-    "tag":  "v0.43.0",
+    "versionCode":  63,
+    "versionName":  "0.44.0",
+    "tag":  "v0.44.0",
     "apk":  "app-release.apk",
-    "notes":  "The box now takes the app\u0027s shape instead of whatever was left over, and the caption height finally corrects the launch rect so the app is not pushed down and clipped. The strip this frees is a dock of your favourites. Settings \u003e Cockpit \u003e Show box outline draws what DWM asked for, so a photo shows where the window really landed."
+    "notes":  "The readings strip is now only as wide as the app box, so the right-hand column runs all the way down and the camera comes with it. The camera is also wider: the column went from three grid columns to four, which is the only way an aspect-locked feed gets bigger. Borders are down from 16dp to 12dp everywhere."
 }

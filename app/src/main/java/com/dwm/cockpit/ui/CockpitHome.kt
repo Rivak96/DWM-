@@ -53,17 +53,23 @@ import kotlin.math.roundToInt
  * The cockpit.
  *
  * ```
- *  ┌─────────────────────────────────────────────┬───────────────────────┐
- *  │                                             │  TPMS · doors · radar │
- *  │   THE BOX — the app grid, or one live app   │                       │
- *  │                                             ├───────────────────────┤
- *  │                                             │  CAMERA  16:9         │
- *  ├─────────────────────────────────────────────┴───────────────────────┤
- *  │  speed  gear  coolant  volts  fuel  rpm  boost  outside             │
- *  ├─────────────────────────────────────────────────────────────────────┤
+ *  ┌───────────────────────────────────────┬─────────────────────────────┐
+ *  │                                       │  TPMS · doors · radar       │
+ *  │  THE BOX — the app grid, or one live  │  (held for the 360 feed)    │
+ *  │  app, at the app's own aspect         │                             │
+ *  │                                       │                             │
+ *  ├───────────────────────────────────────┤                             │
+ *  │  ♪  ▲  ⊕  ▣   favourites dock         ├─────────────────────────────┤
+ *  ├───────────────────────────────────────┤                             │
+ *  │ speed gear coolant volts fuel rpm ··· │  CAMERA  16:9               │
+ *  ├───────────────────────────────────────┴─────────────────────────────┤
  *  │ 07:04  Home  Apps  Overlays  Bluetooth  Wi-Fi  Settings    ▸ R ● CAN │
  *  └─────────────────────────────────────────────────────────────────────┘
  * ```
+ *
+ * The readings strip is **as wide as the box, not as wide as the screen**. That is the
+ * whole reason the right-hand rail reaches the nav bar, and it is why the camera is where
+ * it is rather than 116dp higher.
  *
  * ### The app box, and the three things it has been
  *
@@ -103,8 +109,21 @@ import kotlin.math.roundToInt
  * margin at each end, because six items do not fill 1600dp. They swapped places. See
  * [SystemBar].
  *
- * Vertical budget at the deck's 1000dp: 88 nav + 12 + 104 vehicle bar + a 32dp top margin
- * and a 24dp bottom gutter leaves **~735dp** for the boxes, up from 675.
+ * ### The budget, at the deck's 1600×1000dp
+ *
+ * 88dp of nav bar and a 12dp frame top and bottom leave **876dp** for the content row. The
+ * two columns spend it differently, which is the point of splitting the readings out:
+ *
+ * | | left (1047dp) | right (517dp) |
+ * |---|---|---|
+ * | | box 589 (16:9) | 360 slot 573 |
+ * | | dock 159 | camera 291 (16:9) |
+ * | | readings 104 | |
+ *
+ * Everything above was measured at a 12dp frame — see [DwmGrid]. The camera was 380×214
+ * before this and the readings ran the full 1568dp; the rail went to four columns and the
+ * strip came in to the box's width in the same change, because neither is worth much
+ * alone.
  */
 
 /**
@@ -313,17 +332,52 @@ fun CockpitHome(
                             modifier = Modifier.fillMaxWidth().weight(1f)
                         )
                     }
+
+                    // The readings belong to the *left* column, not to the screen.
+                    //
+                    // This ran the full width and carried its last two readings under the
+                    // right-hand rail, which is the one part of the panel that has
+                    // somewhere better to put them: cropping it here is what lets the rail
+                    // run uninterrupted to the nav bar and the camera come down with it.
+                    // The owner pointed at that dead right end directly.
+                    //
+                    // The cost is real and was taken deliberately — eight readings now
+                    // divide ~1023dp instead of ~1536dp, so the strip is dense rather than
+                    // airy. It still fits: every value is mono and tabular, so the width is
+                    // known and does not move when the CAN bus starts talking. If a reading
+                    // ever does clip, drop Boost and Outside — both are permanent em dashes
+                    // on this van — rather than shrinking the type.
+                    Spacer(Modifier.height(DwmGrid.gutter))
+                    VehicleBar(
+                        drive = drive,
+                        vitals = vitals,
+                        ambient = head.ambient,
+                        boost = boost,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(DwmSize.vehicleBar)
+                    )
                   }
 
                     Spacer(Modifier.width(DwmGrid.gutter))
 
-                    // Three columns of twelve — the width the vehicle diagram used to
-                    // get along the bottom, now turned on its side. The diagram wants a
-                    // portrait region and was being given 159dp of drawing width in a
-                    // landscape card; here it gets roughly twice that.
+                    // Four columns of twelve, and it runs the full height now that the
+                    // readings no longer cut across its foot.
+                    //
+                    // It was three. The camera is aspect-locked, so the only way it gets
+                    // taller is by getting wider — and widening this rail narrows the app
+                    // box, which is the trade that was offered and declined in v0.38.0.
+                    // What changed is the price: the box is aspect-locked too, so a
+                    // narrower box is also a *shorter* one, and the height that frees is
+                    // exactly what the vehicle bar now needs on this side. The favourites
+                    // dock comes out ahead rather than behind.
+                    //
+                    // The top slot is held for the 360 bird's-eye feed — see
+                    // [VehicleDiagram]. It is the emptiest card on the screen and it is
+                    // meant to be; the hardware is not fitted yet.
                     Column(
                         Modifier
-                            .width(DwmGrid.span(content, 3))
+                            .width(DwmGrid.span(content, 4))
                             .fillMaxHeight()
                     ) {
                         VehicleDiagram(
@@ -351,21 +405,11 @@ fun CockpitHome(
             }
         }
 
-        // Outside the margin-padded column so it sits directly on the nav bar, which
-        // is where the controls were asked for. It keeps its horizontal margin so it
-        // still reads as a card; the nav bar below stays full-bleed.
-        VehicleBar(
-            drive = drive,
-            vitals = vitals,
-            ambient = head.ambient,
-            boost = boost,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = DwmGrid.margin)
-                .height(DwmSize.vehicleBar)
-        )
-
-        Spacer(Modifier.height(DwmSpace.m))
+        // The vehicle bar used to sit here, full width, directly on the nav bar. It is
+        // inside the left column now — see the comment there. There is no spacer left in
+        // its place either: the content column already pads its bottom by
+        // [DwmGrid.gutter], so the bar keeps the same gap above the nav bar it always had,
+        // and the camera's bottom edge lands on the same line as the bar's.
 
         // The clock, the date and the vehicle's indicators used to sit in a 48dp
         // full-width strip above the cards, which — with its spacer — spent 60dp of a

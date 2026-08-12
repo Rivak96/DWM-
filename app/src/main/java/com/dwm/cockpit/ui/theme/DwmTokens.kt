@@ -253,21 +253,23 @@ object DwmSpace {
     /**
      * Card interior, and the frame around every card — see [DwmGrid.margin].
      *
-     * This was `xl` (24dp), on the reasoning that anything less made a 1600dp canvas read
-     * as a phone blown up. Judged on the deck rather than on a desk monitor that turned out
-     * to be wrong: 24dp of margin, 24dp of gutter and 24dp inside every card is 88dp of the
-     * panel's width spent on nothing, and the owner's word for it was that the borders were
-     * "a bit too big... we are wasting space".
+     * `xl` (24dp) → `l` (16dp) → `m` (12dp), and the same sentence caused both moves: the
+     * owner, looking at the real deck rather than a desk monitor, said the borders were
+     * "a bit too big... we are wasting space". They said it again at 16dp. A 1600dp canvas
+     * does not need a phone's breathing room, and on this panel the hairline — pushed to
+     * ~1.6:1 for exactly this reason, see [DwmPalette.HAIRLINE] — is what actually
+     * separates one surface from the next. The gap was never doing that work.
      *
-     * Note what the codebase already thought. Of the seven `DwmCard` call sites, five
-     * already passed `l` explicitly and only the app box and the vehicle bar took the
-     * default — the design had drifted to 16dp everywhere anyone was looking at it closely.
-     * This makes the default agree with the practice.
+     * **This token only means anything if call sites use it.** The 16dp step shipped with
+     * five of seven `DwmCard` call sites hardcoding `padding = DwmSpace.l`, so the token
+     * moved and the screen did not — the reduction reached the app box and nothing else.
+     * Every card now passes `cardPadding`; the only deliberate exception is the favourites
+     * dock at `s`, which is a row of targets rather than a card of content.
      */
-    val cardPadding: Dp = l
+    val cardPadding: Dp = m
 
     /** Distance from any screen edge to content. Matches [DwmGrid.margin]. */
-    val screenMargin: Dp = l
+    val screenMargin: Dp = m
 }
 
 /* ---------------------------------------------------------------------- grid */
@@ -287,24 +289,25 @@ object DwmSpace {
  *
  * ### One frame value, and it is small
  *
- * [margin] and [gutter] were 32 and 24. Three different gaps — 32 at the screen edge, 24
- * between cards, 24 inside each one — is 88dp of a 1600dp panel spent on air, and the owner
- * looking at the real deck said so: the borders were "a bit too big... we are wasting
- * space". They are all [DwmSpace.l] now, so the frame around a card and the gap between two
- * cards are the same measure and the grid reads as a grid.
+ * [margin] and [gutter] were 32 and 24, then 16, and are now 12. Three different gaps — at
+ * the screen edge, between cards, and inside each one — is a large share of a 1600dp panel
+ * spent on air, and the owner looking at the real deck has now said so twice: the borders
+ * were "a bit too big... we are wasting space". One value, [DwmSpace.m], for all three, so
+ * the frame around a card and the gap between two cards are the same measure and the grid
+ * reads as a grid.
  *
  * **The hairline stays.** The instruction was to make the border small, not to remove it,
  * and on this panel the hairline is what carries layer separation at all — see
  * [DwmPalette.HAIRLINE], which is pushed to ~1.6:1 for exactly that reason. Shrinking the
  * gap makes the line matter more, not less.
  *
- * At the panel's 1600dp this resolves to columns of about 116dp on a 132dp pitch, up from
- * 106 on 130 — so the boxes gained width as well as losing padding.
+ * At the panel's 1600dp this resolves to columns of about 120dp on a 132dp pitch, up from
+ * 116 on 132 — so the boxes gain width as well as losing padding, again.
  */
 object DwmGrid {
     const val COLUMNS = 12
-    val gutter: Dp = DwmSpace.l
-    val margin: Dp = DwmSpace.l
+    val gutter: Dp = DwmSpace.m
+    val margin: Dp = DwmSpace.m
 
     /** Width of one column once margins and gutters are taken out of [available]. */
     fun columnWidth(available: Dp): Dp =

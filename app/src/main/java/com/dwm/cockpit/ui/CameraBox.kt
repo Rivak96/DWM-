@@ -40,7 +40,7 @@ fun CameraBox(
     drawnView: (Panel) -> View?,
     modifier: Modifier = Modifier
 ) {
-    DwmCard(modifier = modifier, padding = DwmSpace.l) {
+    DwmCard(modifier = modifier, padding = DwmSpace.cardPadding) {
         Column(Modifier.fillMaxSize()) {
             CardLabel(label)
             Spacer(Modifier.height(DwmSpace.s))

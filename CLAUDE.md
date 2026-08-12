@@ -314,14 +314,15 @@ blind:
   (where windowed launching became fullscreen) or is a regression from it. With adb, check
   `dumpsys display` and `logcat` while launching zlink, and ask whether it looks right from
   the stock launcher — if yes, it is DWM's launch path or `Scale.kt`'s density wrapper.
-- **The vehicle diagram card is the emptiest thing on the screen**, and got emptier in
-  v0.38.0 when the right column gained 60dp its aspect-locked camera could not use. On this
-  van its doors and all four TPMS values are permanent em dashes and its status word is a
-  hardcoded ALL CLEAR — the exact "a tile that can never fill" this file warns about
-  elsewhere. Offered to the owner as a deletion and not taken; ask again before acting.
-  Making the *camera* bigger means widening the right column, which narrows the app box —
-  that trade was offered and declined.
-- 360 camera: scan tooling is in place, hardware not yet fitted.
+- **The vehicle diagram card is a reserved slot, not dead space — stop offering to delete
+  it.** It is the emptiest card on the screen and it looks exactly like the "a tile that can
+  never fill" this file warns about: doors and all four TPMS values are permanent em dashes
+  and the status word is a hardcoded ALL CLEAR. It has been offered as a deletion twice and
+  refused twice. The reason, given plainly the second time: **the owner is holding that
+  region for the live 360 bird's-eye feed** once the hardware is fitted. Asking a third time
+  is not diligence, it is not having read this.
+- 360 camera: scan tooling is in place, hardware not yet fitted. The screen space is already
+  allocated (above).
 
 ## Pitfalls that have already bitten
 

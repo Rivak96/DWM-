@@ -40,7 +40,7 @@ fun VehicleBar(
     boost: Float?,
     modifier: Modifier = Modifier
 ) {
-    DwmCard(modifier = modifier, padding = DwmSpace.l) {
+    DwmCard(modifier = modifier, padding = DwmSpace.cardPadding) {
         Row(
             Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.SpaceBetween,
