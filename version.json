@@ -1,7 +1,7 @@
 {
-    "versionCode":  61,
-    "versionName":  "0.42.0",
-    "tag":  "v0.42.0",
+    "versionCode":  62,
+    "versionName":  "0.43.0",
+    "tag":  "v0.43.0",
     "apk":  "app-release.apk",
-    "notes":  "Fixes overlay windows leaking every time the home screen restarted - opaque, touch-eating panels that stacked above the camera overlay. If yours is still dead after updating, reboot the deck once to clear ones already leaked."
+    "notes":  "The box now takes the app\u0027s shape instead of whatever was left over, and the caption height finally corrects the launch rect so the app is not pushed down and clipped. The strip this frees is a dock of your favourites. Settings \u003e Cockpit \u003e Show box outline draws what DWM asked for, so a photo shows where the window really landed."
 }

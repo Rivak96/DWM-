@@ -19,6 +19,7 @@ import com.dwm.cockpit.ui.HomeActions
 import com.dwm.cockpit.ui.SettingsActions
 import com.dwm.cockpit.ui.SettingsScreen
 import com.dwm.cockpit.ui.SettingsUi
+import java.util.Locale
 
 /**
  * Settings.
@@ -140,6 +141,8 @@ class SettingsActivity : DwmActivity() {
             stageApp = stageAppState.value,
             stageCaption = "${Prefs.captionDp(this)}dp",
             stageStatus = LaunchEngine.freeformState(this).summary,
+            stageAspect = String.format(Locale.US, "%.2f:1", Prefs.stageAspect(this)),
+            stageOutline = Prefs.stageOutline(this),
             favGrid = Prefs.showFavGrid(this),
             pillRunning = Prefs.overlaysOn(this),
             panelsRunning = OverlayPanelsService.isRunning,
@@ -199,6 +202,8 @@ class SettingsActivity : DwmActivity() {
         },
         clearStageApp = { Prefs.setStagePkg(this, null); refreshStageLabel(); bump() },
         nudgeCaption = { Prefs.setCaptionDp(this, Prefs.captionDp(this) + it); bump() },
+        nudgeStageAspect = { Prefs.setStageAspect(this, Prefs.stageAspect(this) + it); bump() },
+        setStageOutline = { Prefs.setStageOutline(this, it); bump() },
         setFavGrid = { Prefs.setShowFavGrid(this, it); bump() },
         manageFavourites = { manageFavourites() },
         // The cockpit layout editor. It used to be the "Cockpit" item in the home

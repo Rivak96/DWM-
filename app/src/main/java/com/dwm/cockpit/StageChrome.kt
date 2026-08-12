@@ -1,14 +1,17 @@
 package com.dwm.cockpit
 
 import android.content.Context
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.dwm.cockpit.ui.theme.DwmPalette
 
 /**
  * The overlay chrome that makes a freeform window sit still and look built-in.
@@ -61,9 +64,12 @@ class StageChrome(
     private val onFullscreen: () -> Unit
 ) : StageHost.Chrome {
 
-    /** Covers the resize outset. Outward from the stage rect — see the class comment. */
     private companion object {
+        /** Covers the resize outset. Outward from the stage rect — see the class comment. */
         const val FRAME_DP = 16
+
+        /** Thick enough to read in a photograph taken through a windscreen at night. */
+        const val OUTLINE_DP = 2
     }
 
     private val app = context.applicationContext
@@ -74,6 +80,10 @@ class StageChrome(
 
     /** Left, right and bottom, in that order. Held so they can be moved, not rebuilt. */
     private val edges = ArrayList<View>()
+
+    /** The two diagnostic rectangles. Null unless [Prefs.stageOutline] is on. */
+    private var outlineBox: View? = null
+    private var outlineLaunch: View? = null
 
     private var shown: Rect? = null
     private var shownTitle: String? = null
@@ -112,13 +122,84 @@ class StageChrome(
             add(theme.card, bounds.left - frame, bounds.bottom, bounds.width() + frame * 2, frame)
         }
 
+        // Last, so it stacks above the mask — overlays layer in the order they are added,
+        // and the point of the outline is to be visible over everything.
+        updateOutlines(bounds, caption)
+
         shown = Rect(bounds)
         shownTitle = title
+    }
+
+    /**
+     * The ruler: draw what DWM *asked for*, over what the ROM actually did.
+     *
+     * Android gives an unprivileged app no way to read another app's window frame, so when
+     * the owner reports that the live window "overlaps the right column" there is no way to
+     * learn by how much — or whether the ROM honoured the request at all. Seven releases
+     * have aimed fixes at a frame nobody has measured.
+     *
+     * Two rectangles, because the interesting thing is the gap between them and the app:
+     *
+     * - **accent** — the box, where the app's *content* is meant to end up;
+     * - **warn** — the rect actually handed to `setLaunchBounds`, which is the box grown
+     *   upward by the caption ([StageHost.launchRectFor]).
+     *
+     * One photograph then carries all three frames — asked, intended, actual — and every
+     * offset can be read straight off it. Off by default; this is scaffolding, not design,
+     * which is why it may use the semantic colours without breaking the one-accent rule.
+     */
+    private fun updateOutlines(bounds: Rect, caption: Int) {
+        if (!Prefs.stageOutline(app)) {
+            hideOutlines()
+            return
+        }
+        val night = Ui.night(app)
+        val boxColor = if (night) DwmPalette.N_ACCENT else DwmPalette.ACCENT
+        val launchColor = if (night) DwmPalette.N_WARN else DwmPalette.WARN
+        val launch = StageHost.launchRectFor(bounds, caption)
+
+        outlineBox = outline(outlineBox, bounds, boxColor)
+        outlineLaunch = outline(outlineLaunch, launch, launchColor)
+    }
+
+    /**
+     * One hollow rectangle, moved rather than rebuilt when it already exists.
+     *
+     * `TRANSLUCENT` and **`FLAG_NOT_TOUCHABLE`** — the opposite of the mask, and
+     * deliberately so. The mask exists to swallow touches; this exists to be looked at, and
+     * a diagnostic that stole input from the app it is measuring would change the thing it
+     * is meant to observe.
+     */
+    private fun outline(existing: View?, r: Rect, color: Int): View? {
+        if (r.isEmpty) return existing
+        val lp = params(
+            r.width(), r.height(), r.left, r.top,
+            format = PixelFormat.TRANSLUCENT,
+            extraFlags = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        )
+        existing?.let { v ->
+            runCatching { wm.updateViewLayout(v, lp) }.onSuccess { return v }
+        }
+        val v = View(app).apply {
+            background = GradientDrawable().apply {
+                setColor(Color.TRANSPARENT)
+                setStroke(Ui.dp(app, OUTLINE_DP), color)
+            }
+        }
+        return runCatching { wm.addView(v, lp); v }.getOrNull()
+    }
+
+    private fun hideOutlines() {
+        outlineBox?.let { v -> runCatching { wm.removeView(v) } }
+        outlineLaunch?.let { v -> runCatching { wm.removeView(v) } }
+        outlineBox = null
+        outlineLaunch = null
     }
 
     override fun hideMask() {
         header?.let { v -> runCatching { wm.removeView(v) } }
         edges.forEach { v -> runCatching { wm.removeView(v) } }
+        hideOutlines()
         header = null
         titleView = null
         edges.clear()
@@ -175,7 +256,14 @@ class StageChrome(
      * is a property of the window, not of the view, so a plain `View` that handles nothing
      * still blocks the freeform window beneath it.
      */
-    private fun params(w: Int, h: Int, x: Int, y: Int) = WindowManager.LayoutParams(
+    private fun params(
+        w: Int,
+        h: Int,
+        x: Int,
+        y: Int,
+        format: Int = PixelFormat.OPAQUE,
+        extraFlags: Int = 0
+    ) = WindowManager.LayoutParams(
         w, h,
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -183,8 +271,9 @@ class StageChrome(
             @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-        PixelFormat.OPAQUE
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            extraFlags,
+        format
     ).apply {
         gravity = Gravity.TOP or Gravity.START
         this.x = x

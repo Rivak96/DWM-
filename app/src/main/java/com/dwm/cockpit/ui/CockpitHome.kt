@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,7 @@ import com.dwm.cockpit.Panel
 import com.dwm.cockpit.R
 import com.dwm.cockpit.ui.theme.Dwm
 import com.dwm.cockpit.ui.theme.DwmGrid
+import com.dwm.cockpit.ui.theme.DwmIcons
 import com.dwm.cockpit.ui.theme.DwmShapes
 import com.dwm.cockpit.ui.theme.DwmSize
 import com.dwm.cockpit.ui.theme.DwmSpace
@@ -159,7 +161,17 @@ fun CockpitHome(
      * floating above this screen, so what matters here is the rectangle, not the content.
      */
     stage: String? = null,
-    /** The box's rect in screen pixels — the launch bounds. See [com.dwm.cockpit.LaunchEngine.launchInBox]. */
+    /**
+     * The shape the box asks for when it holds a live app, as width ÷ height.
+     *
+     * The app picks the shape and DWM works around it. See `Prefs.stageAspect` — nudgeable,
+     * because what shape a given app wants on this ROM is not knowable from here.
+     */
+    stageAspect: Float = 16f / 9f,
+    /** Favourites for the strip under a live app. Empty when the box is the grid. */
+    favourites: List<HomeApp> = emptyList(),
+    /** The box's rect in screen pixels. Grown by the caption before launch — see
+     *  [com.dwm.cockpit.StageHost.launchRectFor]. */
     onStageBounds: (Rect) -> Unit = {}
 ) {
     val colors = Dwm.colors
@@ -213,10 +225,22 @@ fun CockpitHome(
                         .fillMaxWidth()
                         .weight(1f)
                 ) {
+                  // The left column. With a live app it is the box at the app's own shape
+                  // plus a favourites strip; with the grid it is one card filling the height.
+                  Column(Modifier.weight(1f).fillMaxHeight()) {
                     DwmCard(
                         modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
+                            .fillMaxWidth()
+                            .then(
+                                // A live app gets the shape it wants and DWM works around
+                                // it, rather than the app being handed whatever rectangle
+                                // was left over. CarPlay is laid out for a screen and does
+                                // not adapt to an arbitrary box — squeezed and clipped is
+                                // what the owner photographed. The grid, which is DWM's own
+                                // and reflows happily, still takes the height.
+                                if (stage != null) Modifier.aspectRatio(stageAspect)
+                                else Modifier.weight(1f)
+                            )
                             .then(
                                 // Only a stage needs its rect measured, and only off the
                                 // renderer: under LocalInspectionMode there is no window to
@@ -274,6 +298,22 @@ fun CockpitHome(
                             }
                         }
                     }
+
+                    // The strip the aspect-locked box frees, and it is not decoration:
+                    // with a live app in the box there is otherwise **no way to open
+                    // anything** without going through the full-screen drawer. The
+                    // favourites band was deleted from this screen once as redundant — it
+                    // was, while the box itself was a grid of every app. It is not now.
+                    if (stage != null) {
+                        Spacer(Modifier.height(DwmGrid.gutter))
+                        FavouriteStrip(
+                            apps = favourites,
+                            onLaunch = onOpenFullscreen,
+                            onAppMenu = actions.appMenu,
+                            modifier = Modifier.fillMaxWidth().weight(1f)
+                        )
+                    }
+                  }
 
                     Spacer(Modifier.width(DwmGrid.gutter))
 
@@ -372,6 +412,76 @@ fun CockpitHome(
             )
         }
     }
+    }
+}
+
+/**
+ * The dock under a live app — glyphs only, no labels.
+ *
+ * Not [AppGrid]. The grid is labelled, scrolling and sized for a card that owns the height;
+ * this owns whatever the aspect-locked box leaves over, which is about 90dp at 16:9. A
+ * label needs ~30dp of that and the glyph needs 48dp, so labelling this row would clip
+ * every tile — the same "a scaling rule quietly generating two different designs" that
+ * [com.dwm.cockpit.ui.theme.DwmSize.tile] warns about.
+ *
+ * These are the owner's own favourites and a dock is not a place things are read, it is a
+ * place they are hit. The count comes from the width so the row never overflows, and
+ * nothing is drawn at all when there is nothing to draw — an empty card saying "No apps"
+ * would be worse than the background.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FavouriteStrip(
+    apps: List<HomeApp>,
+    onLaunch: (String) -> Unit,
+    onAppMenu: (String) -> Unit,
+    modifier: Modifier
+) {
+    if (apps.isEmpty()) return
+    val colors = Dwm.colors
+
+    DwmCard(modifier = modifier, padding = DwmSpace.s) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // Below this there is no honest way to draw a 48dp glyph inside a target big
+            // enough to hit while moving, so the strip stands down rather than clipping.
+            if (maxHeight < DwmSize.touchTarget) return@BoxWithConstraints
+
+            val slots = (maxWidth / DwmSize.touchTargetMoving).toInt().coerceAtLeast(1)
+            Row(
+                Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                apps.take(slots).forEach { app ->
+                    Box(
+                        Modifier
+                            .width(DwmSize.touchTargetMoving)
+                            .fillMaxHeight()
+                            .clip(DwmShapes.small)
+                            .combinedClickable(
+                                onClick = { onLaunch(app.pkg) },
+                                onLongClick = { onAppMenu(app.pkg) }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (app.glyph != null) {
+                            Icon(
+                                painter = painterResource(app.glyph),
+                                contentDescription = app.label,
+                                tint = colors.text,
+                                modifier = Modifier.size(DwmSize.tileGlyph)
+                            )
+                        } else {
+                            DwmText(
+                                DwmIcons.monogram(app.label),
+                                style = DwmType.title,
+                                color = colors.text
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

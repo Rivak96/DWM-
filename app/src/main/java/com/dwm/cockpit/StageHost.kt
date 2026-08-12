@@ -199,6 +199,38 @@ object StageHost {
     val stagePkg: String? get() = pkg
 
     /**
+     * The rect to hand `setLaunchBounds`, given where the box is and how tall the caption is.
+     *
+     * ### The bug this fixes
+     *
+     * [Prefs.captionPx] existed since v0.35.0 and compensated **nothing** — its only
+     * consumer was `StageChrome.showMask`, which used it to size the header. So the system
+     * caption ate the top of the window, the app's usable content area came out as
+     * `box.height - caption`, DWM's header hid the caption, and the app was left squeezed
+     * into a shorter box than the one it was drawn against. That is the "content shifted
+     * down and cut off at the bottom" the owner photographed: the app's own layout runs off
+     * the bottom edge because it was given less height than the box implies.
+     *
+     * Growing the request upward gives the *content* the box, which is what the number was
+     * always for.
+     *
+     * ### Upward, and never downward
+     *
+     * v0.29 inflated the rect by a hardcoded 32dp and it "overhung the vehicle bar when the
+     * guess ran long" — that is what got freeform deleted in v0.30.0. Growing upward
+     * overhangs the 16dp screen margin above the box, which is DWM's own empty background,
+     * rather than the instrument strip below it. And [Prefs.captionDp] is nudged against the
+     * real window now instead of guessed, so a wrong value is a Settings tap rather than a
+     * release.
+     *
+     * Clamped at the top of the screen: a negative `y` is not a smaller window, it is an
+     * undefined one.
+     */
+    fun launchRectFor(box: Rect, captionPx: Int): Rect =
+        if (captionPx <= 0) Rect(box)
+        else Rect(box.left, (box.top - captionPx).coerceAtLeast(0), box.right, box.bottom)
+
+    /**
      * Every field, for a diagnostics dump. Pure, so it is testable and cannot itself fail.
      *
      * This object's state is private on purpose and is also the single most useful thing to

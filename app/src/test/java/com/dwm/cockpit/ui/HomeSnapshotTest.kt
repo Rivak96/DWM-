@@ -97,7 +97,11 @@ class HomeSnapshotTest {
             actions = previewActions,
             vehicle = previewVehicleIdle,
             drawnView = drawn,
-            stage = "CarPlay"
+            stage = "CarPlay",
+            // The box is aspect-locked to the app's shape now, and what it leaves over is
+            // the dock. That strip is the only way to open anything with a live app in the
+            // box, so a golden that renders it empty would be showing the wrong screen.
+            favourites = previewFavourites
         )
     }
 

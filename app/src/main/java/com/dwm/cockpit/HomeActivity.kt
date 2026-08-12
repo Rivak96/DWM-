@@ -57,10 +57,18 @@ class HomeActivity : DwmActivity() {
     private val overlaysOnState = mutableStateOf(false)
     private val showCanvasState = mutableStateOf(false)
     private val allAppsState = mutableStateOf<List<HomeApp>>(emptyList())
+
+    /** The strip under a live app. Built from the same favourites list the drawer's
+     *  long-press menu and the overlay pill write to, so all three stay in step. */
+    private val favouritesState = mutableStateOf<List<HomeApp>>(emptyList())
     private val cameraPanelState = mutableStateOf(Panel(PanelType.CAMERA, 0f, 0f, 1f, 1f, label = "Camera"))
 
     /** Label of the app hosted in the box, or null for the grid. */
     private val stageLabelState = mutableStateOf<String?>(null)
+
+    /** Observable, not read straight from Prefs in the composition: a plain read is
+     *  captured once and would not follow the Settings nudge back to this screen. */
+    private val stageAspectState = mutableStateOf(16f / 9f)
 
     /**
      * The window chrome. Built once and handed to [StageHost], which decides when it draws.
@@ -152,6 +160,8 @@ class HomeActivity : DwmActivity() {
                             onOpenFullscreen = { pkg -> openOther(pkg) },
                             drawnView = ::buildPanelView,
                             stage = stageLabelState.value,
+                            stageAspect = stageAspectState.value,
+                            favourites = favouritesState.value,
                             onStageBounds = ::onStageBounds
                         )
                     }
@@ -368,9 +378,15 @@ class HomeActivity : DwmActivity() {
             val all = Apps.all(this)
                 .map { e -> HomeApp(e.pkg, e.label, DwmIcons.forApp(e.pkg, e.label)) }
                 .sortedBy { it.label.lowercase() }
+            // Two lists again, and the reason is good this time: with a live app in the box
+            // the grid is gone, so the strip below it is the only way to open anything
+            // without the full-screen drawer.
+            val byPkg = all.associateBy { it.pkg }
+            val favs = Apps.effectiveFavorites(this).mapNotNull { byPkg[it] }
             runOnUiThread {
                 if (isFinishing) return@runOnUiThread
                 allAppsState.value = all
+                favouritesState.value = favs
             }
         }.start()
     }
@@ -486,6 +502,7 @@ class HomeActivity : DwmActivity() {
         // an unmasked freeform window is the v0.29 bug.
         val usable = label != null && LaunchEngine.freeformState(this).usable && canOverlay()
         stageLabelState.value = if (usable) label else null
+        stageAspectState.value = Prefs.stageAspect(this)
         if (usable) StageHost.attach(stageChrome)
         StageHost.setStage(if (usable) pkg else null, label ?: "")
     }
@@ -522,8 +539,12 @@ class HomeActivity : DwmActivity() {
     }
 
     private val stageLaunch = Runnable {
-        val (pkg, rect) = StageHost.launchNeeded() ?: return@Runnable
-        Log.i(TAG_STAGE, "launchInBox $pkg at $rect")
+        val (pkg, box) = StageHost.launchNeeded() ?: return@Runnable
+        // The box is where the app's *content* should land; the window has to be asked for
+        // bigger than that, because the system caption is drawn inside it. See
+        // [StageHost.launchRectFor] — this was the missing half of Prefs.captionDp.
+        val rect = StageHost.launchRectFor(box, Prefs.captionPx(this))
+        Log.i(TAG_STAGE, "launchInBox $pkg box=$box rect=$rect caption=${Prefs.captionDp(this)}dp")
         if (!LaunchEngine.launchInBox(this, pkg, rect)) {
             // No launch intent, or the start threw. Un-commit, or the box sits empty until
             // the user leaves home and comes back.

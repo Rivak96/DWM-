@@ -82,6 +82,10 @@ class SettingsUi(
     val stageCaption: String,
     /** Why the box can or cannot host a live app — [com.dwm.cockpit.LaunchEngine.Freeform]. */
     val stageStatus: String,
+    /** The box's shape as a ratio, e.g. "1.78:1". */
+    val stageAspect: String,
+    /** Whether the diagnostic rectangles are drawn over the live window. */
+    val stageOutline: Boolean,
     val favGrid: Boolean,
     val pillRunning: Boolean,
     val panelsRunning: Boolean,
@@ -121,6 +125,9 @@ class SettingsActions(
     val clearStageApp: () -> Unit = {},
     /** Walk the caption mask a step at a time, against the real window. */
     val nudgeCaption: (Int) -> Unit = {},
+    /** Walk the box's shape until the app stops looking stretched. */
+    val nudgeStageAspect: (Float) -> Unit = {},
+    val setStageOutline: (Boolean) -> Unit = {},
     val setFavGrid: (Boolean) -> Unit = {},
     val manageFavourites: () -> Unit = {},
     val editLayout: () -> Unit = {},

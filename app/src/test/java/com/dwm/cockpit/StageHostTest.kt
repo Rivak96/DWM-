@@ -260,6 +260,54 @@ class StageHostTest {
         assertNull(chrome.mask)
     }
 
+    /* ---- the launch rect: where the window is asked for vs where content lands ---- */
+
+    /**
+     * The bug behind "content shifted down and cut off at the bottom".
+     *
+     * `Prefs.captionPx` sized the mask and compensated nothing, so the system caption ate
+     * the top of the window and the app's usable area came out as `box.height - caption` —
+     * the app laid itself out against a shorter box than the one on screen and ran off the
+     * bottom edge. Asking for the window taller by exactly the caption gives the *content*
+     * the box.
+     */
+    @Test
+    fun `the launch rect grows upward by the caption, so content lands on the box`() {
+        val box = Rect(40, 100, 1400, 800)
+        val rect = StageHost.launchRectFor(box, 40)
+
+        assertEquals("the top must rise by the caption", 60, rect.top)
+        assertEquals("and nothing else may move", box.left, rect.left)
+        assertEquals(box.right, rect.right)
+        assertEquals(box.bottom, rect.bottom)
+        assertEquals(
+            "the content area must equal the box",
+            box.height(), rect.height() - 40
+        )
+    }
+
+    /** Never downward. v0.29 inflated by a guessed 32dp, overhung the vehicle bar, and got
+     *  freeform deleted in v0.30.0. Upward overhangs DWM's own empty top margin. */
+    @Test
+    fun `the launch rect never grows downward into the instruments`() {
+        val box = Rect(40, 100, 1400, 800)
+        assertEquals(800, StageHost.launchRectFor(box, 40).bottom)
+    }
+
+    /** A negative y is not a smaller window, it is an undefined one. */
+    @Test
+    fun `a box near the screen edge clamps instead of going negative`() {
+        val box = Rect(40, 10, 1400, 800)
+        val rect = StageHost.launchRectFor(box, 40)
+        assertEquals(0, rect.top)
+    }
+
+    @Test
+    fun `no caption means no change at all`() {
+        val box = Rect(40, 100, 1400, 800)
+        assertEquals(box, StageHost.launchRectFor(box, 0))
+    }
+
     @Test
     fun `an empty box never launches`() {
         StageHost.setStage("com.zjinnova.zlink", "CarPlay")

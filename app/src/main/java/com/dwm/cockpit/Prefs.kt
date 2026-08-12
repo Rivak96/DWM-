@@ -90,6 +90,39 @@ object Prefs {
 
     fun captionPx(c: Context) = Ui.dp(c, captionDp(c))
 
+    /**
+     * The shape the box asks for, as width ÷ height.
+     *
+     * The box used to be "whatever is left after the right-hand column", and the app got
+     * whatever shape that produced. CarPlay is laid out for a screen and does not adapt
+     * gracefully to an arbitrary rectangle — the owner's word for the result was that it
+     * renders "crappy", squeezed and clipped. So the box takes the app's shape and DWM
+     * works around it, which is the way round the stock launcher does it.
+     *
+     * Nudgeable for the same reason as [captionDp] and `camTrim`: what shape this
+     * particular app wants on this particular ROM is not knowable from here. 16:9 is where
+     * the control starts, not an answer.
+     */
+    fun stageAspect(c: Context) = sp(c).getFloat("stage_aspect", 16f / 9f)
+    fun setStageAspect(c: Context, v: Float) =
+        sp(c).edit().putFloat("stage_aspect", v.coerceIn(1.0f, 2.5f)).apply()
+
+    /**
+     * Draw the rect DWM *asked* for, on top of the live window.
+     *
+     * A ruler, not a feature. Android gives an unprivileged app no way to read another
+     * app's window frame — that needs `android.permission.DUMP` — so when the owner reports
+     * that the window "overlaps the right column" there has been no way to find out by how
+     * much, or even whether the ROM honoured the request at all. Seven releases have aimed
+     * fixes at a frame nobody has measured.
+     *
+     * With this on, one photograph contains both the requested rect and the real window,
+     * and every offset can be read off it. Off by default; it is diagnostic scaffolding.
+     */
+    fun stageOutline(c: Context) = sp(c).getBoolean("stage_outline", false)
+    fun setStageOutline(c: Context, v: Boolean) =
+        sp(c).edit().putBoolean("stage_outline", v).apply()
+
     /** Preview rotation, 0/90/180/270. Analog inputs often arrive on their side. */
     fun camRotation(c: Context) = sp(c).getInt("cam_rot", 0)
     fun setCamRotation(c: Context, v: Int) =

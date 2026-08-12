@@ -158,6 +158,35 @@ fun cockpitSection(ui: SettingsUi, a: SettingsActions): List<@Composable () -> U
                     SettingsButton("More", { a.nudgeCaption(2) })
                 }
             }
+            // The app picks the shape; DWM works around it. CarPlay is drawn for a screen
+            // and does not adapt to an arbitrary rectangle — handed one, it renders
+            // squeezed and clipped. What shape a given app wants on this ROM cannot be
+            // known from here, so it is a control rather than a constant.
+            SettingsRow(
+                "Box shape",
+                "Widen or narrow the box until the app stops looking stretched. The space " +
+                    "left over becomes the favourites strip."
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(DwmSpace.s),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DwmText(ui.stageAspect, style = DwmType.body, color = Dwm.colors.muted)
+                    SettingsButton("Taller", { a.nudgeStageAspect(-0.05f) })
+                    SettingsButton("Wider", { a.nudgeStageAspect(0.05f) })
+                }
+            }
+            // Scaffolding, not design. Android gives an unprivileged app no way to read
+            // another app's window frame, so "it overlaps the right column" has never had
+            // a number attached to it. This draws what DWM asked for, on top of what the
+            // ROM did, and one photograph then carries both.
+            SettingsRow(
+                "Show box outline",
+                "Draws the rectangle DWM asked for over the live app, so a photo shows " +
+                    "exactly where the window really landed. For diagnosing only."
+            ) {
+                SettingsSwitch(ui.stageOutline, a.setStageOutline)
+            }
         }
     },
     {
