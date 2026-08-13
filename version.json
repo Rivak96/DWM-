@@ -1,7 +1,7 @@
 {
-    "versionCode":  65,
-    "versionName":  "0.46.0",
-    "tag":  "v0.46.0",
+    "versionCode":  66,
+    "versionName":  "0.47.0",
+    "tag":  "v0.47.0",
     "apk":  "app-release.apk",
-    "notes":  "The nav bar is now only as wide as the app box, like the readings strip. Nothing spans the full width any more, so the right-hand column runs from the top of the screen to the bottom and the camera reaches the floor. The space that frees goes to the card above it, which is being held for the 360 feed."
+    "notes":  "The nav controls move to the top of the screen, above the app, still only as wide as the app box. The accent under the active item moves to the underside of the bar so it points at the screen rather than at the ceiling."
 }

@@ -95,6 +95,18 @@ fun SystemBar(
     onHome: () -> Unit = {},
     modifier: Modifier = Modifier,
     /**
+     * Which edge this bar is mounted against, which decides only where the accent and its
+     * hairline sit — above the items, or below them.
+     *
+     * Both exist because the bar is on both edges now: Settings keeps it along the bottom,
+     * and the home screen moved it to the top of its left column. The indicator has to face
+     * the content either way. Left at the bottom edge of a top-mounted bar it points at the
+     * ceiling, and the hairline separates the bar from the screen edge rather than from the
+     * screen — which is a line doing nothing, on a panel where the hairline *is* the layer
+     * separation.
+     */
+    mountedAtTop: Boolean = false,
+    /**
      * Screen-level status, right-aligned in the trailing slot. Home puts the turn signal,
      * reverse and the CAN dot here; Settings has no vehicle state and leaves it empty.
      */
@@ -126,9 +138,9 @@ fun SystemBar(
             label = "systemBar"
         )
 
-        Column {
-            // The travelling accent, above the active item, over a hairline that
-            // separates the bar from the content it belongs to.
+        // The travelling accent, over a hairline that separates the bar from the content it
+        // belongs to. Declared once and placed on whichever side faces that content.
+        val indicator: @Composable () -> Unit = {
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -147,8 +159,12 @@ fun SystemBar(
                         .background(colors.accent)
                 )
             }
+        }
 
-            Row(Modifier.fillMaxWidth().fillMaxHeight()) {
+        Column {
+            if (!mountedAtTop) indicator()
+
+            Row(Modifier.fillMaxWidth().weight(1f)) {
                 BarClock(
                     Modifier
                         .width(edge)
@@ -168,6 +184,8 @@ fun SystemBar(
                     content = status
                 )
             }
+
+            if (mountedAtTop) indicator()
         }
     }
 }
