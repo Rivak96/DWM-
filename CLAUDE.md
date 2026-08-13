@@ -312,6 +312,21 @@ blind:
 
 ## Open issues
 
+- **The stuck black bar is fixed blind in v0.48.0 and not confirmed.** Reported in v0.47.0:
+  with a live app in the box, a full-width strip the height of a system bar appears across
+  the top, over the DWM nav row and the vehicle card, and *stays after the system nav
+  minimises*. The buttons under it still work — the pixels are stale, the window is not.
+  Two causes were addressed at once because the owner asked to skip the diagnostic round:
+  `styles.xml` painted the bars `#000000` (so a stuck strip is an opaque slab on the
+  `#E4E9EF` day background — now transparent, which helps whichever window owns the bar),
+  and `goImmersive()` had exactly one trigger, focus-gain, which the freeform case never
+  fires because touching the stage app moves focus away and it never comes back
+  (`DwmActivity` now re-asserts on a 2.5s tick bracketed by `onStart`/`onStop`). **The
+  re-assert may do nothing**: bar visibility is governed by the *focused* window. If the
+  strip is still there, the dump's new `---- window ----` section
+  (`DwmActivity.snapshot()`) and `adb logcat -s DwmImmersive` separate the two — wanted ≠
+  found means the ROM cleared DWM's flags; a non-zero top inset with the flags intact means
+  the ROM believes a bar is up regardless. Do not re-derive this from a photograph.
 - **The ROM remembers freeform bounds per task, and that outlives DWM's stage setting.**
   The owner set zlink as the stage, hand-resized the window while fighting it, then cleared
   the stage — and zlink still opens in the hand-drawn rect, with `stage_pkg` unset and the

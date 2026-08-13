@@ -5,8 +5,21 @@
         <item name="android:colorBackground">@color/bg</item>
         <item name="android:colorAccent">@color/accent</item>
         <item name="android:textColorPrimary">@color/textPrimary</item>
-        <item name="android:statusBarColor">#000000</item>
-        <item name="android:navigationBarColor">#000000</item>
+        <!--
+            Transparent, not a palette colour: this is the background the ROM paints the
+            system-bar strips with, over DWM's own window, and DWM's content already lays
+            out underneath them (SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN / LAYOUT_HIDE_NAVIGATION
+            in DwmActivity.goImmersive).
+
+            These were #000000, which is what made the reported bug unusable rather than
+            merely untidy: a bar strip the ROM left painted after the system nav minimised
+            became an opaque black slab across the DWM nav row and the vehicle card — on a
+            day palette whose background is #E4E9EF. The buttons underneath still worked,
+            they just could not be seen. Transparent means the same stuck strip shows the
+            cockpit through it, whichever window the ROM decided owns the bar.
+        -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowAnimationStyle">@style/DwmWindowAnim</item>
     </style>
 

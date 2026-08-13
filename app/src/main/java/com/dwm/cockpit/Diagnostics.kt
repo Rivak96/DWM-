@@ -54,6 +54,9 @@ object Diagnostics {
         append("\n---- display ----\n")
         append(display(c))
 
+        append("\n---- window ----\n")
+        append(DwmActivity.snapshot())
+
         append("\n---- settings ----\n")
         append(prefs(c))
 

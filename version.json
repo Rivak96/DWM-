@@ -1,7 +1,7 @@
 {
-    "versionCode":  66,
-    "versionName":  "0.47.0",
-    "tag":  "v0.47.0",
+    "versionCode":  67,
+    "versionName":  "0.48.0",
+    "tag":  "v0.48.0",
     "apk":  "app-release.apk",
-    "notes":  "The nav controls move to the top of the screen, above the app, still only as wide as the app box. The accent under the active item moves to the underside of the bar so it points at the screen rather than at the ceiling."
+    "notes":  "Fixes the black bar that stayed across the top of the screen after the system navigation bar minimised. The system bar backgrounds were painted solid black over DWM\u0027s own window, and nothing re-hid the bars while a live app in the box held focus."
 }
