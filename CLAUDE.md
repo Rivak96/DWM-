@@ -37,10 +37,14 @@ command fails.** The pin exists because AGP 8.7.3 wants JDK 17 and the JDK on PA
   washes out at the top. Hairlines and contrast are pushed harder than looks right on a desk
   monitor, deliberately.
 
-**No root, and the shipped app must stay zero-setup for normal use.** The only elevated
-thing DWM uses is the user-granted "Display over other apps" toggle. `PLAN.md:7` says the
-user will not do ADB — that is now obsolete *for development* (see below) but still governs
-what ships.
+**No root, no adb, and the shipped app must stay zero-setup.** The only elevated thing DWM
+uses is the user-granted "Display over other apps" toggle. `PLAN.md:7` says the user will
+not do ADB; that is not just a preference any more — **the deck has no USB device port and
+API 29 rules out wireless debugging, so there is no adb to do.** See the adb section below
+before planning anything that assumes a shell. The one permission still worth reaching for
+is `WRITE_SETTINGS` ("Modify system settings"), which is user-grantable like the overlay
+toggle and would let DWM write `Settings.System` — `Settings.Secure`/`Global` need
+`WRITE_SECURE_SETTINGS` and are closed.
 
 ## Build, test, release
 
@@ -280,35 +284,64 @@ glass, and it names which one.
 never *what did the ROM do with the window*. `dumpsys window` and the full system log need
 `DUMP` and `READ_LOGS` — see below.
 
-### The upgrade, if a ROM-side question ever gets urgent
+### The upgrade that is not actually available
 
 `DUMP` and `READ_LOGS` both carry Android's **`development`** protection flag, so
 `adb shell pm grant com.dwm.cockpit android.permission.DUMP` can hand them to an ordinary
 app, and this deck is API 29 — before Google tightened it. Declare them in the manifest,
-grant them once on a cable, and the dump button thereafter carries the full system log and
-`dumpsys window` / `activity` / `display` with no cable ever again. Offered to the owner
-and declined in favour of keeping the app setup-free; it is one minute's work if the
-freeform questions in Open issues ever need answering from the van.
+grant them once, and the dump button thereafter carries the full system log and
+`dumpsys window` / `activity` / `display` for good.
 
-## adb is available for development
+**It needs a shell, and this deck cannot give one** — see the section below. This was
+written up as "one minute's work on a cable", offered to the owner and declined; the
+declining turned out not to matter, because the cable was never there. Treat `READ_LOGS`
+as closed unless a route to a shell appears. The practical consequence is permanent: the
+dump answers *what did DWM do*, never *what did the ROM do*, and no amount of asking
+changes that.
 
-The deck can be reached over USB from this machine (`adb` is at
-`%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`). This lifts a constraint that shaped
-years of design. **The shipped app must still be zero-setup**, but development is no longer
-blind:
+## adb is NOT available — the deck has no USB device port
 
-- **`adb logcat -s DwmStage`** — the whole live-app path: every launch with its rect,
-  whether the greylisted `setLaunchWindowingMode` survived the blacklist, whether the start
-  went out, and every eviction with who asked for it. All four are invisible on the glass,
-  and each one turns "the app doesn't open" into a different bug. Added in v0.39.0 after
-  two releases of reasoning to the wrong answer about a path that produced no output at all.
-- **`adb logcat`** — DWM has never had real crash output; everything was diagnosed from
-  screenshots and reasoning. The single biggest win.
-- **`adb install -r`** — iterate without the bump/build/push/release round trip. Sign with the
-  same keystore; a debug-signed build will not install over the release-signed one.
-- **`adb pull`** the vendor APKs, in seconds.
-- **`adb shell dumpsys activity activities` / `window`** — the only way to see what the ROM
-  actually does with a freeform launch. Several open questions below need exactly this.
+**This section previously claimed the opposite and was wrong.** It said "the deck can be
+reached over USB from this machine", and every session since has been steering toward a
+diagnostic route that does not exist. Corrected 2026-08-16 against the evidence:
+
+- **Windows has never enumerated an Android device on this machine.** All 28 USB vendor IDs
+  in `HKLM\SYSTEM\CurrentControlSet\Enum\USB` are keyboards, controllers, hubs, a Bluetooth
+  dongle and an audio device. No Google (`18D1`), no Unisoc/Spreadtrum, no `9BB5`.
+- **`~/.android/adb_usb.ini` has `0x9BB5` hand-added to it** — exactly what someone does when
+  trying to force an unrecognised head unit to enumerate. It never did. The only adb
+  artefacts on the machine are emulator ones (`modem-nv-ram-5554`).
+- The deck's USB ports are **host-only**. There is no device port to plug into.
+- This is consistent with Open issues below, which have said for several releases that the
+  cable session "has never happened".
+
+**The network routes are closed too, and for a reason that will not change.** LADB and
+`adb pair` both need Android 11+ Wireless Debugging, and **this deck is API 29** — it reports
+`RELEASE == "12"` but `SDK_INT` is 29, the same fact that kills `RenderEffect` and
+`Modifier.blur`. There is no pairing UI to use. `adb connect <ip>:5555` would need
+`service.adb.tcp.port` already set in the ROM, and setting it needs the shell we are trying
+to get.
+
+**So the dump button is not the convenient route, it is the only route.** Everything below
+that wants a shell has to be answered another way or not at all:
+
+- `adb logcat -s DwmStage` and `-s DwmImmersive` still write their lines, and they still go
+  into the dump — `Diagnostics` collects DWM's own logcat with no permission at all. What is
+  lost is *other* processes' logs: the 360 app's crash is unreadable without `READ_LOGS`.
+- `adb shell dumpsys activity activities` / `window` — **unavailable.** The open freeform
+  questions below cannot be settled this way, and pretending otherwise has already cost
+  time. `DwmActivity.snapshot()` and `StageHost.snapshot()` are what there is.
+- `adb install -r` — unavailable. Releases go through the updater, as they always have.
+- `adb pull` the vendor APKs — unnecessary: `VehicleProbe.saveApk()` copies any installed
+  APK to Downloads from `publicSourceDir`, which is how the manifest scan already works.
+- `adb shell pm grant … DUMP` / `READ_LOGS` — **unreachable**, so the "one minute's work on
+  a cable" upgrade described above under the dump button is not one minute's work. It needs
+  a cable that does not exist.
+
+If a shell ever genuinely becomes worth it, the remaining options are a ROM that ships
+`service.adb.tcp.port=5555`, or a factory/engineering screen that toggles network adb —
+`Settings → Vehicle → 360 input format → Vendor screens` lists every vendor screen on the
+deck and opens the ones Android permits, which is the cheapest place to look.
 
 ## Open issues
 
@@ -336,19 +369,23 @@ blind:
   *smaller* than the box, which shows as an unexplained band of empty card above the app —
   reported as "a huge margin at the top". `Settings → Cockpit → Show box outline` settles
   which rect is which in one photo.
-- **The stage has never been checked against `dumpsys`.** Everything about how this ROM
-  treats a freeform launch is still inferred. Four questions, all answerable in one sitting
-  on the cable: does it honour the launch bounds; is the caption drawn *inside* the
-  requested rect or outside it (`Prefs.captionDp` starts at 32 and the band above the app
-  measured nearer 55dp in the owner's photo, so probably not); does a bounds-less relaunch
-  really move the task out of the freeform stack, which is what all of v0.37.0 rests on; and
-  does `force_resizable_activities` make zlink relaunch on a configuration change, which
-  would be the remaining half of the reported flicker.
+- **The stage has never been checked against `dumpsys`, and now cannot be.** Everything
+  about how this ROM treats a freeform launch is still inferred. Four questions: does it
+  honour the launch bounds; is the caption drawn *inside* the requested rect or outside it
+  (`Prefs.captionDp` starts at 32 and the band above the app measured nearer 55dp in the
+  owner's photo, so probably not); does a bounds-less relaunch really move the task out of
+  the freeform stack, which is what all of v0.37.0 rests on; and does
+  `force_resizable_activities` make zlink relaunch on a configuration change, which would be
+  the remaining half of the reported flicker. **This used to say "answerable in one sitting
+  on the cable" — there is no cable.** They are answerable only by what DWM can observe
+  itself: the box's own rect, `StageHost.snapshot()`, and `Settings → Cockpit → Show box
+  outline`. Do not plan around `dumpsys`.
 - **CarPlay resolution is wrong.** Reported as "the resolution of think5 carplay is so off"
   and never diagnosed. The app is `com.zjinnova.zlink`. Unknown whether it predates v0.30.0
-  (where windowed launching became fullscreen) or is a regression from it. With adb, check
-  `dumpsys display` and `logcat` while launching zlink, and ask whether it looks right from
-  the stock launcher — if yes, it is DWM's launch path or `Scale.kt`'s density wrapper.
+  (where windowed launching became fullscreen) or is a regression from it. `dumpsys display`
+  is not available; the cheap discriminator that is, and that has never been asked for, is
+  **whether it looks right when launched from the stock launcher** — if yes, it is DWM's
+  launch path or `Scale.kt`'s density wrapper, and if no, it is the app or the ROM.
 - **The vehicle diagram card is a reserved slot, not dead space — stop offering to delete
   it.** It is the emptiest card on the screen and it looks exactly like the "a tile that can
   never fill" this file warns about: doors and all four TPMS values are permanent em dashes
@@ -356,8 +393,34 @@ blind:
   refused twice. The reason, given plainly the second time: **the owner is holding that
   region for the live 360 bird's-eye feed** once the hardware is fitted. Asking a third time
   is not diligence, it is not having read this.
-- 360 camera: scan tooling is in place, hardware not yet fitted. The screen space is already
-  allocated (above).
+- **360 camera: hardware is fitted, and the input format is wrong.** Four AHD fisheye
+  cameras on the 12-pin, no stitching box — the deck's own 360 module dewarps and stitches.
+  The module, decoder and app all work: the vehicle model, guidelines and view switching
+  render correctly. But the cameras are **fixed AHD 1080P** and the deck decodes
+  **`MODE_720P_25FPS`** (About → Hardware information), so the video layer is a dense
+  horizontal stripe pattern — the textbook AHD timing mismatch, and the one the kit's own
+  manual documents. This firmware build ships **no format selector anywhere**; the
+  "Reversing system" menu the manual and the seller both show does not exist here. Factory
+  (123456) has the `360panorama` source toggle and nothing else relevant. Corroborated on
+  XDA by TS18 owners with the identical symptom.
+
+  Replacement switchable 720P/1080P cameras are on the way, so this is time-boxed. **A clean
+  negative is a useful result.** The `---- camera ----` dump section (shipped in v0.49.0) is what
+  settles it: it reads the property store (`getprop`, which DWM had never looked at), all
+  three settings tables, and **every vendor activity including non-exported and disabled ones** —
+  `manifestScan` only sees components with an `<intent-filter>`, so a factory screen reached
+  by explicit `ComponentName` was invisible to everything this app had. The section states
+  its own verdict, because only two answers are actionable without a shell: an **exported,
+  enabled, unguarded** vendor screen (DWM starts it, the vendor's own code does the write —
+  `Settings → Vehicle → 360 input format → Vendor screens`), or a **`Settings.System`** key
+  (writable under a granted `WRITE_SETTINGS`). A property, a `Secure`/`Global` key, a
+  non-exported activity, or the MCU all mean no.
+
+  Two things not to re-derive: **the seller must confirm the replacements are 25fps** — a
+  720P **30**FPS camera reproduces the identical stripes — and the plain reverse camera is a
+  separate signal path that already handles higher formats, so one existing 1080P camera
+  works as an ordinary rear camera today. **Do not take an OTA as a fix attempt**: OTAs are
+  known to remove the 360 option on TS18 with no clean downgrade.
 
 ## Pitfalls that have already bitten
 

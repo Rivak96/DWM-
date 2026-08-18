@@ -1,5 +1,7 @@
 .gradle/
 build/
+# Kotlin 2.x session/error scratch, regenerated every build.
+.kotlin/
 /local.properties
 *.apk
 .idea/

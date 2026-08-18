@@ -311,6 +311,42 @@ fun vehicleSection(ui: SettingsUi, a: SettingsActions): List<@Composable () -> U
                 SettingsButton("Allow", a.notifAccess)
             }
         }
+    },
+    // Its own group, and last on purpose. These four rows inside "Cameras" pushed that
+    // group past the fold — [TwoColumns] fills alternately, so index 4 lands at the foot
+    // of the *left* column, which is the half of this section with room to spare. The
+    // existing arrangement is untouched.
+    {
+        SettingsGroup("360 view") {
+            // The kit multiplexes its four fisheyes into one input, so this is a second
+            // ordinary camera feed carrying a 2x2 quad — not the vendor's stitched
+            // bird's-eye, which lives in native code and DWM cannot reproduce.
+            SettingsRow(
+                "360 quad view",
+                "Shows all four 360 cameras in the dashboard's top-right card. Not the " +
+                    "stitched view — the four raw fisheyes as the kit tiles them."
+            ) {
+                SettingsSwitch(ui.cam360On, a.setCam360On)
+            }
+            // The sizes in this value are the point: the kit is fixed AHD 1080P and the
+            // deck decodes 720P25, so whether an input offers 1920x1080 at all is what
+            // separates "DWM can drive this" from "the decoder is the wall".
+            SettingsRow("360 camera", ui.cam360Pick) {
+                SettingsButton("Choose", a.scanCam360)
+            }
+            SettingsRow("360 rotation", "Turns the quad only.") {
+                SegmentedChoice(
+                    listOf("0°", "90°", "180°", "270°"),
+                    ui.cam360Rotation,
+                    onSelect = a.setCam360Rotation
+                )
+            }
+            // This build ships no format selector, so the button looks for one the
+            // vendor left in the APK but never linked to a menu.
+            SettingsRow("360 input format", ui.camFormat) {
+                SettingsButton("Vendor screens", a.camFactory)
+            }
+        }
     }
 )
 

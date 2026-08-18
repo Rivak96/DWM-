@@ -139,11 +139,23 @@ class CameraPanel(
         CameraHost.register(this, CameraIds.resolve(context, camIdPref), owner)
     }
 
+    /**
+     * Release the hardware here rather than trusting `onSurfaceTextureDestroyed` to fire.
+     *
+     * This used to leave the close to the surface callback, which is *usually* true for an
+     * `AndroidView`-hosted panel and was an implicit dependency rather than a release. The
+     * v0.48.0 dump showed the cost: `CameraCaptureSessionImpl.finalize` reaching a dead
+     * `dwm-cam` looper — "sending message to a Handler on a dead thread", twice preceded by
+     * "A resource failed to call release". The finalizer was closing the session because
+     * nothing else had. [closeCamera] is idempotent, so a later surface callback is
+     * harmless.
+     */
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         ui.removeCallbacks(retune)
         stopLightSensor()
         CameraHost.forget(this)
+        closeCamera()
     }
 
     // ---- CameraHost.Client -------------------------------------------------
@@ -394,15 +406,10 @@ class CameraPanel(
      * the feed stretch: the driver silently substitutes its nearest mode and the
      * frame gets squashed into our buffer.
      */
-    private fun choosePreviewSize(cam: CameraDevice): Size? {
-        val mgr = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        val map = runCatching {
-            mgr.getCameraCharacteristics(cam.id)
-                .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-        }.getOrNull() ?: return null
-        val sizes = map.getOutputSizes(android.graphics.SurfaceTexture::class.java)
-            ?.filter { it.width * it.height <= MAX_PREVIEW_PX }
-            ?.takeIf { it.isNotEmpty() } ?: return null
+    private fun choosePreviewSize(camId: String): Size? {
+        val sizes = CameraIds.sizes(context, camId)
+            .filter { it.width * it.height <= MAX_PREVIEW_PX }
+            .takeIf { it.isNotEmpty() } ?: return null
 
         val swapped = rotation == 90 || rotation == 270
         val vw = if (swapped) texture.height else texture.width
@@ -419,7 +426,7 @@ class CameraPanel(
 
     private fun startPreview(cam: CameraDevice) {
         val st = texture.surfaceTexture ?: return
-        val size = choosePreviewSize(cam)
+        val size = choosePreviewSize(cam.id)
         if (size != null) {
             bufW = size.width; bufH = size.height
         } else {

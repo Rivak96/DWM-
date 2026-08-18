@@ -152,6 +152,14 @@ val previewSettings = SettingsUi(
     camDayNight = 0,
     camTrim = "0",
     camPick = "Auto",
+    cam360On = true,
+    // The size list is the whole point of the row, so the fixture carries a real one —
+    // and this is the shape that answers the 720P/1080P question at a glance.
+    cam360Pick = "id 0 · EXTERNAL · 1280x720 640x480 320x240",
+    cam360Rotation = 0,
+    // The real shape of this string on the deck, long on purpose: it is the widest
+    // hint in the Cameras group, and the golden is what catches it ellipsising.
+    camFormat = "persist.sys.camera.mode = MODE_720P_25FPS · no vendor screen openable",
     canStatus = "Bound to the vehicle service. No signals have arrived yet.",
     canScanLabel = "Scan vehicle",
     updateStatus = "Installed: v0.25.0\nRepo: Rivak96/DWM-",
@@ -178,6 +186,14 @@ val previewSettings = SettingsUi(
 
 /** The side camera, with no id set — the deck auto-detects EXTERNAL then BACK. */
 val previewCameraPanel = Panel(PanelType.CAMERA, 0f, 0f, 1f, 1f, label = "Camera")
+
+/**
+ * The 360 kit's four-in-one quad, on camera 0.
+ *
+ * Id `"0"` is not arbitrary: the vendor app's own `TopwayCamera.getSupportCameraId()`
+ * returns 0 for TS18, and `FourCSICamera` opens that index at 1280x720 with four channels.
+ */
+val previewCam360Panel = Panel(PanelType.CAMERA, 0f, 0f, 1f, 1f, label = "360", camId = "0")
 
 /** A door ajar, tyres reporting, reversing onto something. */
 val previewBodyActive = BodyState(

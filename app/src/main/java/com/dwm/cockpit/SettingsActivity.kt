@@ -2,6 +2,7 @@ package com.dwm.cockpit
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -51,6 +52,8 @@ class SettingsActivity : DwmActivity() {
     /* Text the activity computes and the screen displays. */
     private val camTrimState = mutableStateOf("")
     private val camLabelState = mutableStateOf("")
+    private val cam360LabelState = mutableStateOf("")
+    private val camFormatState = mutableStateOf("Checking…")
     private val canStatusState = mutableStateOf("")
     private val modeHintState = mutableStateOf("")
     private val updateStatusState = mutableStateOf("")
@@ -97,6 +100,8 @@ class SettingsActivity : DwmActivity() {
                 .getOrDefault(emptySet())
             runOnUiThread { if (!isFinishing) sniffer.start(this, discovered) }
         }.start()
+
+        refreshCamFormat()
 
         setContent {
             DwmTheme(this) {
@@ -156,6 +161,10 @@ class SettingsActivity : DwmActivity() {
             camDayNight = Prefs.camDayNight(this),
             camTrim = camTrimState.value,
             camPick = camLabelState.value,
+            cam360On = Prefs.cam360On(this),
+            cam360Pick = cam360LabelState.value,
+            cam360Rotation = (Prefs.cam360Rotation(this) / 90).coerceIn(0, 3),
+            camFormat = camFormatState.value,
             canStatus = canStatusState.value,
             canScanLabel = canScanLabelState.value,
             updateStatus = updateStatusState.value,
@@ -238,6 +247,10 @@ class SettingsActivity : DwmActivity() {
         setCamRotation = { setCamRotation(it) },
         setCamDayNight = { setCamDayNight(it) },
         nudgeCamTrim = { nudgeCamTrim(it) },
+        setCam360On = { Prefs.setCam360On(this, it); restartCameraPanels(); bump() },
+        scanCam360 = { scanCam360() },
+        setCam360Rotation = { setCam360Rotation(it) },
+        camFactory = { camFactoryPrompt() },
         canScan = { canScanTapped() },
         canSerial = { serialReadPrompt() },
         canApk = { exportApkPrompt() },
@@ -387,6 +400,16 @@ class SettingsActivity : DwmActivity() {
         Prefs.setCamRotation(this, deg)
         bump()
         Toast.makeText(this, "Dashboard camera: $deg°", Toast.LENGTH_SHORT).show()
+        restartCameraPanels()
+    }
+
+    /** The quad's own rotation. Separate from the dashboard camera's for the same reason
+     *  that one is separate from the overlays': different feed, different shape. */
+    private fun setCam360Rotation(quarters: Int) {
+        val deg = ((quarters % 4) + 4) % 4 * 90
+        Prefs.setCam360Rotation(this, deg)
+        bump()
+        Toast.makeText(this, "360 quad: $deg°", Toast.LENGTH_SHORT).show()
         restartCameraPanels()
     }
 
@@ -552,6 +575,145 @@ class SettingsActivity : DwmActivity() {
             .setItems(labels.toTypedArray()) { _, which -> exportApk(pkgs[which]) }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    /**
+     * The 360 format headline, read once and cached in state.
+     *
+     * Off the main thread and out of `readUi` deliberately: this shells out to
+     * `getprop` and walks every installed package's activity list, and `readUi` runs
+     * on every recomposition. Putting it there would re-run both on every keystroke
+     * in Settings.
+     */
+    private fun refreshCamFormat() {
+        Thread {
+            val props = runCatching { VehicleProbe.props() }.getOrDefault(emptyMap())
+            val mode = props.entries.firstOrNull { (k, v) ->
+                VehicleProbe.looksCameraRelated(k, v) &&
+                    (v.contains("720", true) || v.contains("1080", true))
+            }
+            val open = runCatching { VehicleProbe.cameraActivities(this).count { it.reachable } }
+                .getOrDefault(0)
+            val text = buildString {
+                append(mode?.let { "${it.key} = ${it.value}" } ?: "No format value in any readable property")
+                append(" · ")
+                append(
+                    when (open) {
+                        0 -> "no vendor screen openable"
+                        1 -> "1 vendor screen openable"
+                        else -> "$open vendor screens openable"
+                    }
+                )
+            }
+            runOnUiThread { if (!isFinishing) camFormatState.value = text }
+        }.start()
+    }
+
+    /**
+     * Look for a vendor screen that can change the 360 module's input format.
+     *
+     * The kit is fixed AHD 1080P, the deck decodes 720P25, and this firmware ships no
+     * selector — but "the menu is not in the settings list" and "the menu is not in
+     * the build" are different facts with opposite answers. A factory screen reached
+     * by explicit `ComponentName` from inside its own app declares no intent filter,
+     * so neither the launcher nor [VehicleProbe.manifestScan] would ever show it;
+     * [VehicleProbe.activityScan] asks the package manager directly and sees it.
+     *
+     * Only *exported, enabled, unguarded* activities can be started by an ordinary
+     * app. The rest are listed anyway, greyed by their reason: knowing the screen
+     * exists but needs a shell is itself the answer to whether this is fixable here,
+     * and this deck has no USB device port to get a shell from.
+     */
+    private fun camFactoryPrompt() {
+        Ui.dialog(this)
+            .setTitle("Vendor camera / factory screens")
+            .setMessage(
+                "The 360 cameras are 1080P and the deck decodes 720P25, which is why the " +
+                    "stitched view stripes. This build has no format selector — but the " +
+                    "screen may still be in the vendor's app with nothing linking to it.\n\n" +
+                    "This lists every vendor screen the deck has, and opens the ones Android " +
+                    "will let DWM open. Nothing is changed; it only opens a screen. If a " +
+                    "format list appears, that is the fix."
+            )
+            .setPositiveButton("Look") { _, _ -> camFactoryPicker() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun camFactoryPicker() {
+        Toast.makeText(this, "Scanning vendor apps…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val all = runCatching { VehicleProbe.cameraActivities(this) }.getOrDefault(emptyList())
+            // Openable first — the whole point is which ones can actually be tried.
+            val acts = all.sortedByDescending { it.reachable }.take(40)
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                if (acts.isEmpty()) {
+                    Ui.dialog(this)
+                        .setTitle("Nothing found")
+                        .setMessage(
+                            "No vendor app declares a camera or factory screen. That is a real " +
+                                "result: it means the format is not chosen anywhere on the " +
+                                "Android side, so the MCU or the 360 module owns it and no " +
+                                "on-device change will move it."
+                        )
+                        .setPositiveButton("OK", null)
+                        .show()
+                    return@runOnUiThread
+                }
+                val labels = acts.map {
+                    val why = when {
+                        it.reachable -> "open"
+                        !it.enabled -> "disabled"
+                        !it.exported -> "needs adb"
+                        else -> "needs ${it.permission?.substringAfterLast('.')}"
+                    }
+                    "[$why] ${it.pkg}\n${it.name.substringAfterLast('.')}"
+                }
+                Ui.dialog(this)
+                    .setTitle("${acts.count { it.reachable }} of ${all.size} can be opened")
+                    .setItems(labels.toTypedArray()) { _, which -> openVendorScreen(acts[which]) }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }.start()
+    }
+
+    /**
+     * Start a vendor screen by explicit component.
+     *
+     * `NEW_TASK` only — never `MULTIPLE_TASK`, which spawns duplicate copies that this
+     * 2 GB deck then kills, and which presented as "apps closing by themselves".
+     */
+    private fun openVendorScreen(a: VehicleProbe.VendorActivity) {
+        if (!a.reachable) {
+            Ui.dialog(this)
+                .setTitle("Can't open this one")
+                .setMessage(
+                    "${a.pkg}/${a.name}\n\n" +
+                        when {
+                            !a.enabled -> "The ROM ships this screen but has it disabled. " +
+                                "Re-enabling needs a shell, and this deck has no USB device port."
+                            !a.exported -> "Not exported, so only a shell can start it " +
+                                "(adb am start). This deck has no USB device port."
+                            else -> "Guarded by ${a.permission}, which DWM cannot hold."
+                        } +
+                        "\n\nIt existing is still worth knowing — tell me and it goes in the notes."
+                )
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
+        val ok = runCatching {
+            startActivity(
+                Intent()
+                    .setComponent(ComponentName(a.pkg, a.name))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }.isSuccess
+        if (!ok) {
+            Toast.makeText(this, "The deck refused to open it.", Toast.LENGTH_LONG).show()
+        }
     }
 
     /**
@@ -891,7 +1053,25 @@ class SettingsActivity : DwmActivity() {
      * different cameras" impossible to express, which is exactly what [CameraHost] needs
      * to be told in order to let both run at once.
      */
-    private fun scanCameras() {
+    private fun scanCameras() = pickCamera("Dashboard camera", Prefs.camId(this)) {
+        Prefs.setCamId(this, it)
+    }
+
+    private fun scanCam360() = pickCamera("360 camera", Prefs.cam360Id(this)) {
+        Prefs.setCam360Id(this, it)
+    }
+
+    /**
+     * One picker for both feeds. The dashboard camera and the 360 quad ask the identical
+     * question of the identical device list, and the only thing that differed was which
+     * preference the answer landed in.
+     *
+     * Each row now carries the sizes the input advertises, which is the line that matters
+     * for the 360: the kit is fixed AHD 1080P and the deck decodes 720P25, so **whether an
+     * id offers 1920x1080 at all** is the difference between "DWM can drive this properly"
+     * and "the decoder is the wall". Nothing in DWM asked that question until now.
+     */
+    private fun pickCamera(title: String, current: String?, store: (String?) -> Unit) {
         if (!granted(android.Manifest.permission.CAMERA)) {
             requestPermissions(arrayOf(android.Manifest.permission.CAMERA), REQ_CAM)
             return
@@ -910,37 +1090,46 @@ class SettingsActivity : DwmActivity() {
             return
         }
 
-        val current = Prefs.camId(this)
         // Auto first, so the default stays one tap away and reads as a real choice.
         val ids = listOf<String?>(null) + cams.map { it.first }
         val labels = (listOf("Auto (external, then rear)") +
-            cams.map { (id, facing) -> "id $id · $facing" })
+            cams.map { (id, facing) -> "id $id · $facing · ${sizeHint(id)}" })
             .mapIndexed { i, s -> if (ids[i] == current) "$s   ✓" else s }
             .toTypedArray()
 
         Ui.dialog(this)
-            .setTitle("Dashboard camera")
+            .setTitle(title)
             .setItems(labels) { _, which ->
-                Prefs.setCamId(this, ids[which])
+                store(ids[which])
                 refreshCamLabel()
                 // Camera panels read their id when they attach, so bounce the overlays
                 // and reload the cockpit rather than waiting for the next cold start.
                 restartCameraPanels()
-                Toast.makeText(this, "Dashboard camera: ${labels[which].removeSuffix("   ✓")}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "$title: ${labels[which].removeSuffix("   ✓")}", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancel", null)
             .show()
     }
 
-    private fun refreshCamLabel() {
-        camLabelState.value = camLabel()
+    /** The largest few sizes an input advertises — enough to see whether 1080p is there. */
+    private fun sizeHint(id: String): String {
+        val sizes = CameraIds.sizes(this, id)
+        if (sizes.isEmpty()) return "no sizes"
+        val shown = sizes.take(3).joinToString(" ") { "${it.width}x${it.height}" }
+        return if (sizes.size > 3) "$shown …" else shown
     }
 
-    /** The value only — the row it sits under is already titled "Dashboard camera". */
-    private fun camLabel(): String {
-        val id = Prefs.camId(this) ?: return "Auto"
+    private fun refreshCamLabel() {
+        camLabelState.value = camLabel(Prefs.camId(this))
+        cam360LabelState.value = camLabel(Prefs.cam360Id(this))
+    }
+
+    /** The value only — the row it sits under is already titled. */
+    private fun camLabel(id: String?): String {
+        if (id == null) return "Auto"
         val facing = CameraIds.list(this).firstOrNull { it.first == id }?.second
-        return if (facing != null) "id $id · $facing" else "id $id (not present)"
+            ?: return "id $id (not present)"
+        return "id $id · $facing · ${sizeHint(id)}"
     }
 
     private fun granted(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED

@@ -97,6 +97,82 @@ object VehicleProbe {
         "location_", "device_provisioned", "airplane", "notification_", "ringer"
     )
 
+    // ---- system properties ------------------------------------------------
+
+    /**
+     * The deck's system properties — the *other* key/value store, and the half
+     * [snapshot] has never been able to see.
+     *
+     * `getprop` with no arguments needs no permission and no adb: it prints every
+     * property this UID's SELinux context may read, which on an API 29 vendor ROM is
+     * essentially all of `ro.*` and most of `persist.sys.*`. That is exactly where a
+     * vendor parks a value like the 360 module's input mode, so a store we were not
+     * reading was a store the answer could be hiding in.
+     *
+     * **Reading is all we get, and that asymmetry is the point.** An ordinary app
+     * cannot `setprop`: the property service authorises writes by the caller's
+     * SELinux context and `untrusted_app` may write essentially nothing. So a value
+     * found here is *diagnosable* but not *fixable* without a shell — which, given
+     * this deck has no USB device port, is a finding rather than a step.
+     */
+    fun props(): Map<String, String> {
+        val text = runCatching {
+            val p = ProcessBuilder("getprop").redirectErrorStream(true).start()
+            val s = p.inputStream.bufferedReader().use { it.readText() }
+            p.waitFor()
+            s
+        }.getOrNull() ?: return emptyMap()
+        return parseProps(text)
+    }
+
+    /**
+     * `getprop` prints one `[key]: [value]` per line. Split out from [props] so it
+     * can be tested on the JVM against captured output — the deck is not attachable
+     * to a debugger, and a regex that silently matches nothing would present as
+     * "this ROM has no camera properties", which is the one wrong answer that would
+     * end the investigation early.
+     *
+     * Values may contain spaces and brackets; keys may not, so the key group stops
+     * at the first `]` and the value group takes everything to the last one.
+     */
+    internal fun parseProps(text: String): Map<String, String> {
+        val out = LinkedHashMap<String, String>()
+        for (raw in text.lineSequence()) {
+            val m = PROP_LINE.matchEntire(raw.trim()) ?: continue
+            out[m.groupValues[1]] = m.groupValues[2]
+        }
+        return out
+    }
+
+    private val PROP_LINE = Regex("""\[([^\]]+)]:\s*\[(.*)]""")
+
+    /**
+     * What a name or a value has to look like to be hoisted into [cameraReport].
+     *
+     * Matched against **keys and values both** — deliberately. The string this whole
+     * investigation is chasing, `MODE_720P_25FPS`, is a *value*; whatever key holds
+     * it may be called something with no camera vocabulary in it at all. Hoisting on
+     * key names alone is the mistake [VENDOR_HINTS]' own comment records making, and
+     * it would miss the one line that matters.
+     *
+     * `pal` and `ntsc` are bounded because `pal` otherwise matches "palette" and
+     * "principal"; the rest are substring stems. The bound is a **letter-only
+     * lookaround, not `\b`** — `\w` includes the underscore, so `\bpal\b` would fail
+     * on exactly the key shape a vendor actually writes (`persist.sys.video_pal`)
+     * while still matching the words it was meant to exclude. Nothing here *hides*
+     * anything — the full dump follows underneath — so a false positive costs a line
+     * and a false negative costs the answer.
+     */
+    internal val CAM_HINT = Regex(
+        "cam|ahd|360|avm|panoram|birdview|surround|aroundview|video|revs?erse|rear|" +
+            "cvbs|(?<![a-z])ntsc(?![a-z])|(?<![a-z])pal(?![a-z])|decoder|720|1080|fps|" +
+            "resolution|mode_",
+        RegexOption.IGNORE_CASE
+    )
+
+    internal fun looksCameraRelated(key: String, value: String?): Boolean =
+        CAM_HINT.containsMatchIn(key) || (value != null && CAM_HINT.containsMatchIn(value))
+
     // ---- vendor apps ------------------------------------------------------
 
     /**
@@ -321,6 +397,69 @@ object VehicleProbe {
         }
         return sb.toString().ifBlank { "Nothing outside AOSP." }
     }
+
+    data class VendorActivity(
+        val pkg: String,
+        val name: String,
+        val exported: Boolean,
+        val enabled: Boolean,
+        val permission: String?
+    ) {
+        /** The only question that matters: can DWM start this with `startActivity`?
+         *  A non-exported activity needs `am start` from a shell, and this deck has
+         *  no USB device port to get one from. */
+        val reachable: Boolean get() = exported && enabled && permission == null
+    }
+
+    /**
+     * Every activity of every non-AOSP package — **including the ones with no intent
+     * filter, no launcher entry, and no way in from the vendor's own UI.**
+     *
+     * [nonAospDump] asks for `GET_PROVIDERS or GET_RECEIVERS or GET_SERVICES` and
+     * [manifestScan] only sees components that declare an `<intent-filter>`, so
+     * between them activities were the one component type this app has never
+     * enumerated. That is precisely the blind spot here: a factory screen reached by
+     * explicit `ComponentName` from inside its own app declares no filter and would
+     * be invisible to both.
+     *
+     * `MATCH_DISABLED_COMPONENTS` is included because it splits a question that
+     * otherwise stays ambiguous. A camera-config screen the ROM never built and one
+     * the ROM shipped and then disabled look identical from the settings menu, and
+     * they have opposite answers — the second is still in the APK.
+     */
+    fun activityScan(c: Context): List<VendorActivity> {
+        val pm = c.packageManager
+        val pkgs = runCatching { pm.getInstalledPackages(0) }.getOrDefault(emptyList())
+            .map { it.packageName }
+            .filterNot { p -> AOSP_PREFIXES.any { p == it || p.startsWith("$it.") } }
+            .sorted()
+        val out = ArrayList<VendorActivity>()
+        for (p in pkgs) {
+            runCatching {
+                pm.getPackageInfo(
+                    p,
+                    PackageManager.GET_ACTIVITIES or PackageManager.MATCH_DISABLED_COMPONENTS
+                ).activities?.forEach {
+                    out += VendorActivity(p, it.name, it.exported, it.enabled, it.permission)
+                }
+            }
+        }
+        return out
+    }
+
+    /** Activities whose package or class name reads like a factory, engineering or
+     *  camera screen — the shortlist worth trying to open. */
+    fun cameraActivities(c: Context): List<VendorActivity> =
+        activityScan(c).filter {
+            looksCameraRelated(it.name, null) ||
+                FACTORY_HINTS.any { h -> it.name.contains(h, true) || it.pkg.contains(h, true) }
+        }
+
+    /** Names a vendor gives the screens that are not meant for the owner. */
+    private val FACTORY_HINTS = listOf(
+        "factory", "engineer", "settings", "setting", "config", "debug", "test",
+        "develop", "hidden", "secret", "adjust", "calibrat"
+    )
 
     private val AOSP_PREFIXES = listOf(
         "android", "com.android", "com.google", "androidx", "org.chromium",
@@ -721,9 +860,167 @@ object VehicleProbe {
      *
      * Listing ids does NOT need the CAMERA permission — only opening a device
      * does — so this runs unconditionally as part of a scan.
+     *
+     * Each id carries the sizes it advertises, largest first. That line is the point of
+     * this section now: the whole 360 investigation turns on a 720P/1080P mismatch, and
+     * until this was added nothing in DWM had ever asked an input what it actually
+     * offers. An input that lists **1920x1080** can be driven at 1080P by DWM's own
+     * `CameraPanel` whatever the vendor app does with it; one that lists only 1280x720
+     * says the decoder is the wall and the replacement cameras are the entire fix.
+     * Sizes are capped in the print because a USB webcam can advertise dozens.
      */
     fun cameraInputs(c: Context): List<String> =
-        CameraIds.list(c).map { (id, facing) -> "id $id · $facing" }
+        CameraIds.list(c).map { (id, facing) ->
+            val sizes = CameraIds.sizes(c, id)
+            val shown = sizes.take(MAX_SIZES).joinToString(" ") { "${it.width}x${it.height}" }
+            val more = if (sizes.size > MAX_SIZES) " (+${sizes.size - MAX_SIZES} more)" else ""
+            val geom = if (sizes.isEmpty()) "no sizes reported" else shown + more
+            "id $id · $facing · $geom"
+        }
+
+    /** Enough to see whether 1080p is on the list without burying the section. */
+    private const val MAX_SIZES = 12
+
+    /**
+     * Everything that bears on **who owns the 360 module's input format**.
+     *
+     * The deck reports `MODE_720P_25FPS` under About → Hardware information while
+     * the fitted cameras are fixed AHD 1080P, which is why the video layer stripes
+     * while the overlay layer draws correctly. This build has no UI that selects the
+     * format, and the question is whether anything on the Android side can change it.
+     *
+     * That question has exactly one useful decomposition — *which store holds the
+     * value* — because each answer has a fixed verdict, and only two of them are
+     * writable by an app with no adb and no root:
+     *
+     *  - an **exported, enabled, unguarded** vendor activity that still contains the
+     *    menu → DWM can start it and the vendor's own code does the write, which is
+     *    safer than us setting one key and hoping it is the only one;
+     *  - a **`Settings.System`** key → writable under a user-granted "Modify system
+     *    settings", the same shape of toggle as the overlay permission DWM already asks for;
+     *  - a `Settings.Secure`/`Global` key → `WRITE_SECURE_SETTINGS`, shell only;
+     *  - a **system property** → no app can `setprop`, see [props];
+     *  - a **non-exported** activity → needs `am start`, shell only;
+     *  - **nothing on the Android side** → the MCU or the module owns it, and the
+     *    answer is a clean no.
+     *
+     * So this collects all five stores in one pass and says which bucket the evidence
+     * puts us in. It deliberately only *reads*.
+     */
+    fun cameraReport(c: Context): String {
+        val sb = StringBuilder()
+
+        val props = props()
+        val hotProps = props.filter { (k, v) -> looksCameraRelated(k, v) }
+        sb.append("-- properties matching camera vocabulary (").append(hotProps.size)
+            .append(" of ").append(props.size).append(" readable) --\n")
+        if (props.isEmpty())
+            sb.append("(getprop returned nothing — it may be blocked for this UID)\n")
+        else if (hotProps.isEmpty()) sb.append("(none)\n")
+        else hotProps.forEach { (k, v) -> sb.append(k).append(" = ").append(redact(k, v)).append('\n') }
+
+        val settings = snapshot(c)
+        val hotSettings = settings.filter { (k, v) -> looksCameraRelated(k, v) }
+        sb.append("\n-- settings keys matching camera vocabulary (").append(hotSettings.size)
+            .append(" of ").append(settings.size).append(" readable) --\n")
+        sb.append("(namespace prefix decides writability: system/ is gettable, secure/ and global/ are not)\n")
+        if (hotSettings.isEmpty()) sb.append("(none)\n")
+        else hotSettings.forEach { (k, v) -> sb.append(k).append(" = ").append(redact(k, v)).append('\n') }
+
+        val acts = runCatching { cameraActivities(c) }.getOrDefault(emptyList())
+        val reachable = acts.filter { it.reachable }
+        sb.append("\n-- camera / factory activities (").append(acts.size)
+            .append(" candidates, ").append(reachable.size).append(" startable by DWM) --\n")
+        if (acts.isEmpty()) sb.append("(none)\n")
+        else for (a in acts.sortedByDescending { it.reachable }) {
+            sb.append(if (a.reachable) "  [OPENABLE] " else "  [blocked  ] ")
+            sb.append(a.pkg).append('/').append(a.name)
+            if (!a.exported) sb.append("  not-exported")
+            if (!a.enabled) sb.append("  DISABLED-BUT-PRESENT")
+            a.permission?.let { sb.append("  needs ").append(it) }
+            sb.append('\n')
+        }
+
+        sb.append("\n-- video nodes --\n").append(videoNodes()).append('\n')
+        sb.append("\n-- Camera2 inputs --\n")
+        sb.append(cameraInputs(c).joinToString("\n").ifBlank { "No Camera2 devices exposed." })
+        sb.append('\n')
+
+        sb.append("\n-- verdict --\n").append(verdict(hotProps, hotSettings, reachable))
+        return sb.toString()
+    }
+
+    /**
+     * Which bucket the evidence lands in, stated in the dump itself.
+     *
+     * Written down rather than left to be re-derived, because "the 360 view stripes"
+     * has several causes that look identical on the glass and this is the section
+     * that names which one — the same reason [StageHost.snapshot] exists.
+     */
+    private fun verdict(
+        hotProps: Map<String, String>,
+        hotSettings: Map<String, String>,
+        reachable: List<VendorActivity>
+    ): String {
+        val sb = StringBuilder()
+        val mode = (hotProps.entries + hotSettings.entries)
+            .filter { it.value.contains("720", true) || it.value.contains("1080", true) }
+        if (mode.isNotEmpty()) {
+            sb.append("A store holds a resolution-shaped VALUE — this is the lead:\n")
+            mode.forEach { sb.append("    ").append(it.key).append(" = ").append(it.value).append('\n') }
+            val writable = mode.filter { it.key.startsWith("system/") }
+            sb.append(
+                if (writable.isNotEmpty())
+                    "  -> in Settings.System: WRITABLE by DWM under a granted WRITE_SETTINGS.\n"
+                else
+                    "  -> not in Settings.System: needs a shell, which this deck cannot give.\n"
+            )
+        } else {
+            sb.append("No store holds a 720/1080-shaped value.\n")
+        }
+        sb.append(
+            if (reachable.isNotEmpty())
+                "A vendor camera/factory screen IS startable by DWM — try it before writing anything.\n"
+            else
+                "No vendor camera/factory screen is startable by DWM.\n"
+        )
+        if (mode.isEmpty() && reachable.isEmpty())
+            sb.append(
+                "Both negative: nothing on the Android side owns the format, so the MCU or the\n" +
+                    "360 module does, and no on-device change will move it. The 720P cameras are the fix.\n"
+            )
+        return sb.toString()
+    }
+
+    /**
+     * The property store as a safety net, split the same way the settings section
+     * splits: values for the half a vendor actually configures, names only for the
+     * rest.
+     *
+     * The split is what keeps this proportionate. A vendor ROM carries ~1000
+     * properties and the great majority are build metadata that says nothing about
+     * this deck; dumping all of them with values would add tens of kilobytes to a
+     * file that already carries two logcat buffers and often uploads over a phone
+     * hotspot. But name-matching is exactly what [VENDOR_HINTS]' own comment records
+     * getting wrong, so the names of everything are kept — a key we did not think to
+     * match is still visible, and can be asked for by name in the next dump.
+     *
+     * Separate from [cameraReport] so a cap applied here can never eat the analysis.
+     */
+    fun propDump(): String {
+        val all = props()
+        if (all.isEmpty()) return "(getprop returned nothing — it may be blocked for this UID)"
+        val (config, rest) = all.entries.partition { (k, _) ->
+            k.startsWith("persist.") || k.contains("vendor") || k.startsWith("sys.")
+        }
+        return buildString {
+            append("-- persist/vendor/sys properties, with values (").append(config.size).append(") --\n")
+            config.forEach { (k, v) -> append(k).append(" = ").append(redact(k, v)).append('\n') }
+            append("\n-- every other readable property NAME, no values (").append(rest.size).append(") --\n")
+            append(rest.joinToString(", ") { it.key })
+            append('\n')
+        }
+    }
 
     /** Try reading an exported provider straight out. */
     fun probeProvider(c: Context, authority: String): String {

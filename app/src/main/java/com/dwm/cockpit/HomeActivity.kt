@@ -62,6 +62,8 @@ class HomeActivity : DwmActivity() {
      *  long-press menu and the overlay pill write to, so all three stay in step. */
     private val favouritesState = mutableStateOf<List<HomeApp>>(emptyList())
     private val cameraPanelState = mutableStateOf(Panel(PanelType.CAMERA, 0f, 0f, 1f, 1f, label = "Camera"))
+    /** The 360 quad, or null when it is switched off. Built in [loadCamera]. */
+    private val cam360PanelState = mutableStateOf<Panel?>(null)
 
     /** Label of the app hosted in the box, or null for the grid. */
     private val stageLabelState = mutableStateOf<String?>(null)
@@ -107,6 +109,9 @@ class HomeActivity : DwmActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // One-shot, and here because this is the first thing the deck starts.
+        Prefs.migrateCamFit(this)
+
         // Registered on the application context and never torn down: DWM is the
         // launcher, so its process outlives every activity, and reverse gear is
         // only useful if we were already listening when it engaged.
@@ -151,6 +156,7 @@ class HomeActivity : DwmActivity() {
                     } else {
                         CockpitHome(
                             cameraPanel = cameraPanelState.value,
+                            cam360Panel = cam360PanelState.value,
                             allApps = allAppsState.value,
                             overlaysOn = overlaysOnState.value,
                             actions = actions,
@@ -563,6 +569,16 @@ class HomeActivity : DwmActivity() {
             camId = Prefs.camId(this),
             rotation = Prefs.camRotation(this)
         )
+        // A second ordinary camera panel, not a second camera *system*: the 360 kit
+        // multiplexes its four fisheyes into one CSI input, so the quad is one feed.
+        // CameraHost arbitrates per device id, so this and the panel above coexist as
+        // long as they are different ids — which is the whole reason it groups by id.
+        cam360PanelState.value = if (!Prefs.cam360On(this)) null else Panel(
+            PanelType.CAMERA, 0f, 0f, 1f, 1f,
+            label = "360",
+            camId = Prefs.cam360Id(this),
+            rotation = Prefs.cam360Rotation(this)
+        )
     }
 
     // The wallpaper loader lived here. The SYNC-style home is flat dark by design,
@@ -753,7 +769,11 @@ class HomeActivity : DwmActivity() {
     private fun ensurePermissions() {
         val panels = Prefs.panels(this)
         val need = ArrayList<String>()
-        if (panels.any { it.type == PanelType.CAMERA } && !granted(Manifest.permission.CAMERA))
+        // The 360 quad is a dashboard feed, not a legacy canvas panel, so it is not in
+        // `panels` and would otherwise never trigger the request — the grant only ever
+        // happened here because this deck also has a camera panel on the old canvas.
+        if ((panels.any { it.type == PanelType.CAMERA } || Prefs.cam360On(this)) &&
+            !granted(Manifest.permission.CAMERA))
             need.add(Manifest.permission.CAMERA)
         if (panels.any { it.type == PanelType.SPEED } && !granted(Manifest.permission.ACCESS_FINE_LOCATION))
             need.add(Manifest.permission.ACCESS_FINE_LOCATION)

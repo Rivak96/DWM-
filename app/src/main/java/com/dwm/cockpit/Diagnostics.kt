@@ -60,11 +60,37 @@ object Diagnostics {
         append("\n---- settings ----\n")
         append(prefs(c))
 
+        append("\n---- camera ----\n")
+        append(camera(c))
+
         append("\n---- logcat: this app, main ----\n")
         append(cap(logcat("-d", "-v", "time", "--pid=${Process.myPid()}"), MAX_LOG_BYTES))
 
         append("\n---- logcat: this app, crash ----\n")
         append(cap(logcat("-d", "-v", "time", "-b", "crash", "--pid=${Process.myPid()}"), MAX_LOG_BYTES))
+    }
+
+    /**
+     * The 360 camera's input format: which store, if any, owns it.
+     *
+     * The deck reports `MODE_720P_25FPS` while the fitted cameras are fixed AHD 1080P,
+     * and this firmware build ships no UI that selects the format. Whether that is
+     * fixable at all comes down to which store holds the value, and every candidate
+     * store is readable without a permission — so the answer is collectable by one tap
+     * on the dump button, which matters because **this deck has no USB device port**
+     * and the adb route CLAUDE.md used to describe does not exist.
+     *
+     * [VehicleProbe.cameraReport] carries the reasoning and states the verdict; the
+     * property dump underneath it is the safety net for a key whose name we did not
+     * think to match, and is capped because it is the only part that can grow without
+     * bound.
+     */
+    private fun camera(c: Context): String = buildString {
+        append(runCatching { VehicleProbe.cameraReport(c) }
+            .getOrElse { "camera report failed: $it\n" })
+        append("\n-- all readable properties --\n")
+        append(cap(runCatching { VehicleProbe.propDump() }.getOrElse { "prop dump failed: $it" },
+            MAX_LOG_BYTES))
     }
 
     /**

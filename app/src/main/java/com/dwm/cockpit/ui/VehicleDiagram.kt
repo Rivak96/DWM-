@@ -94,9 +94,20 @@ fun VehicleDiagram(body: BodyState, modifier: Modifier = Modifier) {
                 // card height, which is the whole point of putting them at corners.
                 val band = minOf(maxHeight, region / VEHICLE_ASPECT)
 
+                // Bound the *width* the same way [band] bounds the height, and for the
+                // same reason. Height alone was enough while this card was 673dp tall:
+                // the drawing filled 471 of the 493dp available, so corner-anchored tyre
+                // figures landed ~11dp outboard of their wheels and read as attached.
+                // With the 360 quad above, the card is 370dp and the drawing narrows to
+                // ~210dp — leaving the figures stranded ~140dp out in empty card, which
+                // is the same defect the [band] comment describes, arriving on the other
+                // axis. [TYRE_SPREAD] is set so this clamps to [maxWidth] whenever the
+                // quad is absent, leaving that card exactly as it was.
+                val spread = minOf(maxWidth, region * TYRE_SPREAD)
+
                 Box(
                     Modifier
-                        .fillMaxWidth()
+                        .width(spread)
                         .height(band)
                         .align(Alignment.Center)
                 ) {
@@ -168,6 +179,18 @@ private fun statusWord(
  * that is what a vehicle looks like from above. */
 /** Portrait: no wider than this fraction of its height. */
 private const val VEHICLE_ASPECT = 0.70f
+
+/**
+ * How far outboard of the drawing the corner tyre figures may sit, as a multiple of the
+ * drawing's width.
+ *
+ * Sized to leave the *tall* card alone. Without the 360 quad the drawing is ~420dp inside
+ * ~493dp of card, so anything at or above 1.18 overshoots, the clamp to `maxWidth` wins,
+ * and that layout is untouched — 1.20 with a little margin. It only bites once the card
+ * gets short enough for the drawing to narrow, which is exactly when the figures would
+ * otherwise drift away from their wheels.
+ */
+private const val TYRE_SPREAD = 1.20f
 
 private const val BX0 = 0.22f
 private const val BX1 = 0.78f

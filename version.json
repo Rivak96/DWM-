@@ -1,7 +1,7 @@
 {
-    "versionCode":  67,
-    "versionName":  "0.48.0",
-    "tag":  "v0.48.0",
+    "versionCode":  68,
+    "versionName":  "0.49.0",
+    "tag":  "v0.49.0",
     "apk":  "app-release.apk",
-    "notes":  "Fixes the black bar that stayed across the top of the screen after the system navigation bar minimised. The system bar backgrounds were painted solid black over DWM\u0027s own window, and nothing re-hid the bars while a live app in the box held focus."
+    "notes":  "Adds the 360 cameras to the dashboard: a new card at the top right shows all four fisheye views as the kit tiles them (not the stitched bird\u0027s-eye view). It is off until you switch it on in Settings \u003e Vehicle \u003e 360 view. Camera feeds that were set to Stretch are moved back to Fill, and the dump now reports the 360 input format plus every vendor screen that might change it."
 }

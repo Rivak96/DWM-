@@ -68,6 +68,45 @@ object Prefs {
     fun camId(c: Context): String? = sp(c).getString("cam_id", null)
     fun setCamId(c: Context, v: String?) = sp(c).edit().putString("cam_id", v).apply()
 
+    // ---- the 360 quad, in the right rail's reserved top slot ------------------
+
+    /**
+     * Show the 360 kit's four cameras on the dashboard.
+     *
+     * The four AHD fisheyes are multiplexed into **one** CSI input, so this is a single
+     * ordinary Camera2 feed carrying a 2x2 quad — not four opens, and not the vendor's
+     * stitched bird's-eye, which lives in `cn.cardoor.zt360`'s native libraries with
+     * per-vehicle calibration and is not something DWM can reproduce. What lands here is
+     * the four raw fisheye views as the hardware tiles them.
+     *
+     * **Off by default**, and deliberately: at the time of writing the deck decodes
+     * `MODE_720P_25FPS` against fixed 1080P cameras, so the feed may be the documented
+     * stripe pattern. A dashboard that comes up broken on first install is worse than one
+     * that comes up as it always did.
+     */
+    fun cam360On(c: Context) = sp(c).getBoolean("cam360_on", false)
+    fun setCam360On(c: Context, v: Boolean) =
+        sp(c).edit().putBoolean("cam360_on", v).apply()
+
+    /**
+     * Which Camera2 device carries the quad. Defaults to `"0"`.
+     *
+     * That default is not a guess: the vendor app's own `TopwayCamera.getSupportCameraId()`
+     * returns 0 for TS18 (this deck, matched on `Build.MODEL == "s9863a1h10_Natv"`), and
+     * `FourCSICamera.openCamera()` opens index 0 at 1280x720 with four channels enabled.
+     * It is still only the *legacy* API's index, which is not guaranteed to equal a Camera2
+     * string id — hence a picker, and hence the sizes now printed by
+     * [VehicleProbe.cameraInputs]. A configured id that does not exist falls through to
+     * [CameraIds.resolve]'s auto-pick, same as [camId].
+     */
+    fun cam360Id(c: Context): String? = sp(c).getString("cam360_id", "0")
+    fun setCam360Id(c: Context, v: String?) = sp(c).edit().putString("cam360_id", v).apply()
+
+    /** Preview rotation for the quad, 0/90/180/270. See [camRotation]. */
+    fun cam360Rotation(c: Context) = sp(c).getInt("cam360_rot", 0)
+    fun setCam360Rotation(c: Context, v: Int) =
+        sp(c).edit().putInt("cam360_rot", ((v % 360) + 360) % 360).apply()
+
     // ---- the stage: one live app in the home screen's box --------------------
 
     /** Package hosted in the box, or null for the app grid. See [LaunchEngine.launchInBox]. */
@@ -253,6 +292,26 @@ object Prefs {
      *  2 = stretch (old behaviour — distorts). */
     fun camFit(c: Context) = sp(c).getInt("cam_fit", 0)
     fun setCamFit(c: Context, v: Int) = sp(c).edit().putInt("cam_fit", v).apply()
+
+    /**
+     * Move a stored `stretch` off stretch, once.
+     *
+     * The *default* has been fill for a long time, but a deck that was set to stretch
+     * before that keeps it forever — a stored value is not a default, and this one was
+     * still distorting every camera feed on the van, which the v0.48.0 dump is what
+     * finally showed (`cam_fit = 2`). Stretch is never the right answer for a camera: it
+     * is non-uniform scaling, so the picture is simply the wrong shape.
+     *
+     * Guarded by its own flag rather than by the value, so choosing stretch deliberately
+     * after this has run is respected and never silently undone.
+     */
+    fun migrateCamFit(c: Context) {
+        val p = sp(c)
+        if (p.getBoolean("cam_fit_migrated", false)) return
+        val e = p.edit().putBoolean("cam_fit_migrated", true)
+        if (p.getInt("cam_fit", 0) == 2) e.putInt("cam_fit", 0)
+        e.apply()
+    }
 
     /** Camera day/night tone: 0 = auto · 1 = force day · 2 = force night. */
     fun camDayNight(c: Context) = sp(c).getInt("cam_dn", 0)

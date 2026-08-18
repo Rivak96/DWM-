@@ -171,6 +171,11 @@ class HomeActions(
 fun CockpitHome(
     /** The camera for the right-hand column. */
     cameraPanel: Panel,
+    /**
+     * The 360 kit's four-in-one quad, in the rail's top slot, or null to leave the rail
+     * as it was. Off by default — see `Prefs.cam360On`.
+     */
+    cam360Panel: Panel? = null,
     allApps: List<HomeApp>,
     overlaysOn: Boolean,
     actions: HomeActions,
@@ -443,14 +448,39 @@ fun CockpitHome(
                     // exactly what the vehicle bar now needs on this side. The favourites
                     // dock comes out ahead rather than behind.
                     //
-                    // The top slot is held for the 360 bird's-eye feed — see
-                    // [VehicleDiagram]. It is the emptiest card on the screen and it is
-                    // meant to be; the hardware is not fitted yet.
+                    // The top slot was held for the 360 feed, and [cam360Panel] is it.
+                    // What arrives is not the vendor's stitched bird's-eye — that lives in
+                    // native code with per-vehicle calibration — but the four fisheye
+                    // views as the hardware tiles them: the kit multiplexes all four into
+                    // one CSI input, so this is one ordinary Camera2 feed carrying a 2x2
+                    // quad.
+                    //
+                    // Four 16:9 views tile 2x2 to 16:9 again, so the quad is the same
+                    // shape as the camera below it and the arithmetic closes exactly:
+                    // 291 + 12 + 370 + 12 + 291 = 976, the rail's content height. The
+                    // diagram is not displaced, it takes the smaller residual — which is
+                    // what "the diagram takes whatever is left" below always meant.
+                    //
+                    // Null when the feed is switched off or the deck has no such device,
+                    // and then the rail is exactly what it was: diagram over camera.
                     Column(
                         Modifier
                             .width(DwmGrid.span(content, 4))
                             .fillMaxHeight()
                     ) {
+                        if (cam360Panel != null) {
+                            CameraBox(
+                                panel = cam360Panel,
+                                label = "360",
+                                drawnView = drawnView,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(16f / 9f)
+                            )
+
+                            Spacer(Modifier.height(DwmGrid.gutter))
+                        }
+
                         VehicleDiagram(
                             body = body,
                             modifier = Modifier

@@ -100,6 +100,15 @@ class SettingsUi(
     val camDayNight: Int,
     val camTrim: String,
     val camPick: String,
+    /** The 360 quad in the dashboard's reserved top-right card. Off by default. */
+    val cam360On: Boolean,
+    val cam360Pick: String,
+    /** Quarter turns, 0..3 — `Prefs.cam360Rotation / 90`. */
+    val cam360Rotation: Int,
+    /** What the deck says the 360 module's input format is, and whether any vendor
+     *  screen that could change it is reachable. Read once off the main thread —
+     *  it shells out to `getprop` and walks every installed package. */
+    val camFormat: String,
     val canStatus: String,
     val canScanLabel: String,
     val updateStatus: String,
@@ -147,6 +156,11 @@ class SettingsActions(
     val setCamRotation: (Int) -> Unit = {},
     val setCamDayNight: (Int) -> Unit = {},
     val nudgeCamTrim: (Int) -> Unit = {},
+    val setCam360On: (Boolean) -> Unit = {},
+    val scanCam360: () -> Unit = {},
+    /** Quarter turns, 0..3. */
+    val setCam360Rotation: (Int) -> Unit = {},
+    val camFactory: () -> Unit = {},
     val canScan: () -> Unit = {},
     val canSerial: () -> Unit = {},
     val canApk: () -> Unit = {},

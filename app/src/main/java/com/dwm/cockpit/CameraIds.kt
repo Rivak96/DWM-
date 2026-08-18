@@ -1,8 +1,10 @@
 package com.dwm.cockpit
 
 import android.content.Context
+import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.util.Size
 
 /**
  * Which camera device a panel would actually take.
@@ -23,18 +25,6 @@ import android.hardware.camera2.CameraManager
  */
 object CameraIds {
 
-    /**
-     * The device id a panel configured with [pref] would open, or `null` if this deck
-     * exposes no Camera2 device at all.
-     *
-     * A configured id that is not in `cameraIdList` falls through to the auto-pick
-     * rather than failing — the behaviour `openCamera` has always had. It is worth
-     * knowing that this is why two panels with *different* configured ids can still
-     * collide: if neither id exists, both auto-pick the same device.
-     *
-     * Auto order is EXTERNAL, then BACK, then whatever is first. A wired analog input
-     * on this deck usually reports as EXTERNAL, which is the feed worth having.
-     */
     /**
      * Every exposed device as `id to label`, for pickers and the scan report.
      *
@@ -57,6 +47,43 @@ object CameraIds {
         }
     }
 
+    /**
+     * Every preview size [id] advertises, largest first. Empty if the device is gone or
+     * says nothing.
+     *
+     * This is a characteristics read, so like [list] it needs no CAMERA permission and no
+     * open device — which is the whole reason it belongs here rather than staying buried
+     * in `CameraPanel.choosePreviewSize`, where the answer only existed for the winner and
+     * was thrown away immediately.
+     *
+     * It is reported in the dump. The 360 investigation spent four releases on a 720P/1080P
+     * mismatch while nothing in DWM had ever asked an input what it actually offers, and
+     * `VehicleProbe.cameraInputs` printing this is how that question finally gets answered
+     * without a shell.
+     */
+    fun sizes(c: Context, id: String): List<Size> {
+        val mgr = c.getSystemService(Context.CAMERA_SERVICE) as? CameraManager ?: return emptyList()
+        val map = runCatching {
+            mgr.getCameraCharacteristics(id)
+                .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+        }.getOrNull() ?: return emptyList()
+        return runCatching { map.getOutputSizes(SurfaceTexture::class.java)?.toList() }
+            .getOrNull().orEmpty()
+            .sortedByDescending { it.width.toLong() * it.height }
+    }
+
+    /**
+     * The device id a panel configured with [pref] would open, or `null` if this deck
+     * exposes no Camera2 device at all.
+     *
+     * A configured id that is not in `cameraIdList` falls through to the auto-pick
+     * rather than failing — the behaviour `openCamera` has always had. It is worth
+     * knowing that this is why two panels with *different* configured ids can still
+     * collide: if neither id exists, both auto-pick the same device.
+     *
+     * Auto order is EXTERNAL, then BACK, then whatever is first. A wired analog input
+     * on this deck usually reports as EXTERNAL, which is the feed worth having.
+     */
     fun resolve(c: Context, pref: String?): String? {
         val mgr = c.getSystemService(Context.CAMERA_SERVICE) as? CameraManager ?: return null
         val ids = runCatching { mgr.cameraIdList }.getOrDefault(emptyArray())

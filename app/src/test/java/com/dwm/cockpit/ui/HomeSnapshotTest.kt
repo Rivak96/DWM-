@@ -105,6 +105,32 @@ class HomeSnapshotTest {
         )
     }
 
+    /**
+     * The 360 quad in the rail's reserved top slot.
+     *
+     * The arithmetic is the thing to look at, not the picture: the quad is aspect-locked
+     * to 16:9 like the camera below it, so the rail is 291 + 12 + 370 + 12 + 291 = 976,
+     * and the vehicle diagram takes the smaller residual rather than being displaced.
+     * What this golden is really for is whether the diagram still *reads* at 370dp — its
+     * canvas clamps to `min(width, height * 0.70)`, so the schematic drops from ~426dp
+     * wide to ~214dp, and that is a judgement only the PNG can settle.
+     *
+     * The feed itself is the grey stand-in from `previewDrawnView`; off-device there is no
+     * camera, and this golden is about the layout, never the image.
+     */
+    @Test
+    fun `cockpit with the 360 quad`() = snap {
+        CockpitHome(
+            cameraPanel = previewCameraPanel,
+            cam360Panel = previewCam360Panel,
+            allApps = previewFavourites,
+            overlaysOn = true,
+            actions = previewActions,
+            vehicle = previewVehicleIdle,
+            drawnView = drawn
+        )
+    }
+
     @Test
     fun `cockpit reversing`() = snap {
         CockpitHome(
